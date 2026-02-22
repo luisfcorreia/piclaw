@@ -90,8 +90,21 @@ Piclaw is a persistent orchestrator that connects WhatsApp to pi:
 
 1. WhatsApp messages arrive via Baileys
 2. Messages matching `@pi` trigger are stored in SQLite
-3. Poll loop detects new messages, invokes `pi --print`
+3. Poll loop detects new messages, sends prompt to persistent agent session
 4. Pi's output is sent back to the chat
+
+### Agent Pool (Warm Start)
+
+Piclaw uses the pi SDK directly instead of spawning `pi --print` subprocesses.
+A pool of persistent `AgentSession` instances (one per chat JID) stays alive in
+memory:
+
+- *First message* pays the warm-up cost (resource discovery, model init)
+- *Subsequent messages* reuse the live session — no startup overhead, full
+  conversation context already loaded
+- Sessions auto-compact when context gets large
+- Idle sessions are evicted after 10 minutes to free memory
+- All sessions are gracefully disposed on shutdown
 
 ```bash
 # Inside the container

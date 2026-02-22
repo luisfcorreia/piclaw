@@ -16,6 +16,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.54.0",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "cron-parser": "^5.5.0",
     "qrcode-terminal": "^0.12.0"

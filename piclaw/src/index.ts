@@ -4,7 +4,7 @@ import { join } from "path";
 
 import { ASSISTANT_NAME, DATA_DIR, POLL_INTERVAL, PUSHOVER_APP_TOKEN, PUSHOVER_DEVICE, PUSHOVER_PRIORITY, PUSHOVER_SOUND, PUSHOVER_USER_KEY, STORE_DIR, TRIGGER_PATTERN, WORKSPACE_DIR } from "./config.js";
 import { initDatabase, getMessagesSince, getNewMessages, getRouterState, setRouterState, storeMessage, storeChatMetadata } from "./db.js";
-import { runAgent } from "./agent-runner.js";
+import { AgentPool } from "./agent-pool.js";
 import { AgentQueue } from "./queue.js";
 import { startIpcWatcher } from "./ipc.js";
 import { startSchedulerLoop } from "./task-scheduler.js";
@@ -53,6 +53,7 @@ handleCliOptions();
 let lastTimestamp = "";
 let lastAgentTimestamp: Record<string, string> = {};
 const queue = new AgentQueue();
+const agentPool = new AgentPool();
 let whatsapp: WhatsAppChannel;
 let web: WebChannel;
 let pushover: PushoverChannel | null = null;
@@ -103,7 +104,7 @@ async function processMessages(chatJid: string): Promise<boolean> {
 
   await whatsapp.setTyping(chatJid, true);
 
-  const output = await runAgent(prompt, chatJid);
+  const output = await agentPool.runAgent(prompt, chatJid);
 
   await whatsapp.setTyping(chatJid, false);
 
@@ -164,6 +165,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     console.log(`[piclaw] ${signal} received, shutting down...`);
     await queue.shutdown(5000);
+    await agentPool.shutdown();
     await whatsapp.disconnect();
     await web?.stop();
     await pushover?.stop();
@@ -172,7 +174,7 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
-  web = new WebChannel({ queue });
+  web = new WebChannel({ queue, agentPool });
   await web.start();
 
   if (PUSHOVER_APP_TOKEN && PUSHOVER_USER_KEY) {
@@ -224,6 +226,7 @@ async function main(): Promise<void> {
 
   startSchedulerLoop({
     queue,
+    agentPool,
     sendMessage,
     sendNudge,
   });

@@ -1,6 +1,7 @@
 import { extname, resolve } from "path";
 
 import { AgentQueue } from "../queue.js";
+import type { AgentPool } from "../agent-pool.js";
 import { ASSISTANT_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT } from "../config.js";
 import {
   attachMediaToMessage,
@@ -19,7 +20,6 @@ import {
   storeChatMetadata,
   storeMessage,
 } from "../db.js";
-import { runAgent } from "../agent-runner.js";
 import { formatMessages, formatOutbound } from "../router.js";
 import type { InteractionRow } from "../db.js";
 import type { NewMessage } from "../types.js";
@@ -46,6 +46,7 @@ const MIME_TYPES: Record<string, string> = {
 
 export interface WebChannelOpts {
   queue: AgentQueue;
+  agentPool: AgentPool;
 }
 
 interface PendingClient {
@@ -55,12 +56,14 @@ interface PendingClient {
 
 export class WebChannel {
   private queue: AgentQueue;
+  private agentPool: AgentPool;
   private server: ReturnType<typeof Bun.serve> | null = null;
   private lastAgentTimestamp: Record<string, string> = {};
   private clients: Set<PendingClient> = new Set();
 
   constructor(opts: WebChannelOpts) {
     this.queue = opts.queue;
+    this.agentPool = opts.agentPool;
   }
 
   async start(): Promise<void> {
@@ -341,7 +344,7 @@ export class WebChannel {
       title: "Thinking...",
     });
 
-    const output = await runAgent(prompt, chatJid);
+    const output = await this.agentPool.runAgent(prompt, chatJid);
 
     if (output.status === "error") {
       this.lastAgentTimestamp[chatJid] = prevCursor;
