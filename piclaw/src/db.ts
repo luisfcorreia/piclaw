@@ -75,6 +75,22 @@ function createSchema(database: Database): void {
     CREATE INDEX IF NOT EXISTS idx_message_media_message_rowid ON message_media(message_rowid);
     CREATE INDEX IF NOT EXISTS idx_message_media_media_id ON message_media(media_id);
 
+    CREATE TABLE IF NOT EXISTS tool_outputs (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      source TEXT,
+      size_bytes INTEGER,
+      line_count INTEGER,
+      summary TEXT,
+      path TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_tool_outputs_created_at ON tool_outputs(created_at);
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS tool_outputs_fts USING fts5(
+      content,
+      output_id UNINDEXED
+    );
+
     CREATE TABLE IF NOT EXISTS scheduled_tasks (
       id TEXT PRIMARY KEY,
       chat_jid TEXT NOT NULL,
@@ -488,6 +504,63 @@ export function getTaskRunLogs(taskId: string): TaskRunLog[] {
   return db
     .prepare("SELECT * FROM task_run_logs WHERE task_id = ? ORDER BY run_at")
     .all(taskId) as TaskRunLog[];
+}
+
+export interface ToolOutputRecord {
+  id: string;
+  created_at: string;
+  source: string | null;
+  size_bytes: number | null;
+  line_count: number | null;
+  summary: string | null;
+  path: string | null;
+}
+
+export function storeToolOutput(record: ToolOutputRecord): void {
+  db.prepare(
+    `INSERT OR REPLACE INTO tool_outputs (id, created_at, source, size_bytes, line_count, summary, path)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    record.id,
+    record.created_at,
+    record.source,
+    record.size_bytes,
+    record.line_count,
+    record.summary,
+    record.path
+  );
+}
+
+export function insertToolOutputChunk(outputId: string, content: string): void {
+  db.prepare("INSERT INTO tool_outputs_fts (content, output_id) VALUES (?, ?)")
+    .run(content, outputId);
+}
+
+export function getToolOutputById(id: string): ToolOutputRecord | undefined {
+  return db.prepare("SELECT * FROM tool_outputs WHERE id = ?").get(id) as ToolOutputRecord | undefined;
+}
+
+export function deleteToolOutputById(id: string): void {
+  db.prepare("DELETE FROM tool_outputs WHERE id = ?").run(id);
+  db.prepare("DELETE FROM tool_outputs_fts WHERE output_id = ?").run(id);
+}
+
+export function deleteToolOutputsBefore(cutoffIso: string): ToolOutputRecord[] {
+  const rows = db
+    .prepare("SELECT * FROM tool_outputs WHERE created_at < ?")
+    .all(cutoffIso) as ToolOutputRecord[];
+  for (const row of rows) {
+    deleteToolOutputById(row.id);
+  }
+  return rows;
+}
+
+export function searchToolOutputSnippets(outputId: string, query: string, limit = 5): string[] {
+  const stmt = db.prepare(
+    "SELECT snippet(tool_outputs_fts, 0, '[', ']', '…', 12) as snippet FROM tool_outputs_fts WHERE tool_outputs_fts MATCH ? AND output_id = ? LIMIT ?"
+  );
+  const rows = stmt.all(query, outputId, limit) as Array<{ snippet: string }>;
+  return rows.map((row) => row.snippet);
 }
 
 // --- Router state accessors ---

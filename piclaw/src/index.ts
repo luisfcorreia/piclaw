@@ -2,7 +2,7 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 
-import { ASSISTANT_NAME, DATA_DIR, POLL_INTERVAL, PUSHOVER_APP_TOKEN, PUSHOVER_DEVICE, PUSHOVER_PRIORITY, PUSHOVER_SOUND, PUSHOVER_USER_KEY, STORE_DIR, TRIGGER_PATTERN, WORKSPACE_DIR } from "./config.js";
+import { ASSISTANT_NAME, DATA_DIR, POLL_INTERVAL, PUSHOVER_APP_TOKEN, PUSHOVER_DEVICE, PUSHOVER_PRIORITY, PUSHOVER_SOUND, PUSHOVER_USER_KEY, STORE_DIR, TRIGGER_PATTERN, WORKSPACE_DIR, TOOL_OUTPUT_RETENTION_DAYS, TOOL_OUTPUT_CLEANUP_INTERVAL_MS } from "./config.js";
 import { initDatabase, getMessagesSince, getNewMessages, getRouterState, setRouterState, storeMessage, storeChatMetadata } from "./db.js";
 import { AgentPool } from "./agent-pool.js";
 import { AgentQueue } from "./queue.js";
@@ -12,6 +12,7 @@ import { WhatsAppChannel } from "./channels/whatsapp.js";
 import { WebChannel } from "./channels/web.js";
 import { PushoverChannel } from "./channels/pushover.js";
 import { formatMessages, formatOutbound } from "./router.js";
+import { startToolOutputCleanup } from "./tool-output.js";
 
 const HELP_TEXT = `piclaw - Pi Coding Agent Assistant
 
@@ -156,6 +157,7 @@ async function main(): Promise<void> {
   mkdirSync(WORKSPACE_DIR, { recursive: true });
 
   initDatabase();
+  startToolOutputCleanup(TOOL_OUTPUT_RETENTION_DAYS, TOOL_OUTPUT_CLEANUP_INTERVAL_MS);
   loadState();
   loadChats();
 

@@ -199,9 +199,9 @@ const title = `Tokens last ${targetDays} days • total ${sumValue.toLocaleStrin
 const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${title}">
   <style>
-    svg { --text: #0f1419; --grid: #e8ebed; --bar-uncached: #1d9bf0; --bar-cached: #8ac5f5; --muted: #536471; }
+    svg { --text: #0f1419; --grid: #e8ebed; --bar-uncached: #1d9bf0; --bar-cached: #2ecc71; --muted: #536471; }
     @media (prefers-color-scheme: dark) {
-      svg { --text: #e7e9ea; --grid: #2f3336; --bar-uncached: #1d9bf0; --bar-cached: #4f9cd6; --muted: #71767b; }
+      svg { --text: #e7e9ea; --grid: #2f3336; --bar-uncached: #1d9bf0; --bar-cached: #27ae60; --muted: #71767b; }
     }
     .title { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--text); }
     .label { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: var(--muted); }
