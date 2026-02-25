@@ -138,10 +138,43 @@ async function processMessages(chatJid: string): Promise<boolean> {
   if (!hasTrigger) return true;
 
   const channel = detectChannel(chatJid);
-  const prompt = formatMessages(promptMessages, channel);
   const prevCursor = lastAgentTimestamp[chatJid] || "";
   lastAgentTimestamp[chatJid] = messages[messages.length - 1].timestamp;
   saveState();
+
+  const stripTrigger = (text: string): string => {
+    if (!text) return "";
+    const flags = TRIGGER_PATTERN.flags.includes("g")
+      ? TRIGGER_PATTERN.flags
+      : `${TRIGGER_PATTERN.flags}g`;
+    const pattern = new RegExp(TRIGGER_PATTERN.source, flags);
+    return text.replace(pattern, " ").trim();
+  };
+
+  const lastPrompt = promptMessages[promptMessages.length - 1];
+  const cleaned = lastPrompt ? stripTrigger(lastPrompt.content) : "";
+  if (promptMessages.length === 1 && cleaned.startsWith("/")) {
+    console.log(`[piclaw] Executing slash command from ${chatJid}`);
+    await whatsapp.setTyping(chatJid, true);
+    const result = await agentPool.applySlashCommand(chatJid, cleaned);
+    await whatsapp.setTyping(chatJid, false);
+
+    if (result.status === "error") {
+      lastAgentTimestamp[chatJid] = prevCursor;
+      saveState();
+      console.error(`[piclaw] Agent error: ${result.message}`);
+      return false;
+    }
+
+    if (result.message) {
+      const text = formatOutbound(result.message, channel);
+      if (text) await whatsapp.sendMessage(chatJid, text);
+    }
+
+    return true;
+  }
+
+  const prompt = formatMessages(promptMessages, channel);
 
   console.log(`[piclaw] Processing ${promptMessages.length} messages from ${chatJid}`);
 
