@@ -57,6 +57,10 @@ test("parseControlCommand parses model and thinking commands", () => {
 
   const restartCmd = parseControlCommand("/restart");
   expect(restartCmd?.type).toBe("restart");
+
+  const shellCmd = parseControlCommand("/shell ls -la");
+  expect(shellCmd?.type).toBe("shell");
+  expect(shellCmd && "command" in shellCmd ? shellCmd.command : null).toBe("ls -la");
 });
 
 test("applyControlCommand switches model and thinking level", async () => {
