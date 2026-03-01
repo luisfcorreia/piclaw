@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { html, useEffect, useMemo, useState } from '../vendor/preact-htm.js';
+import { html, useEffect, useMemo, useRef, useState } from '../vendor/preact-htm.js';
 import {
     attachWorkspaceFile,
     getMediaInfo,
@@ -79,14 +79,25 @@ export function WorkspaceExplorer() {
     const [downloadId, setDownloadId] = useState(null);
     const [loadingTree, setLoadingTree] = useState(false);
     const [loadingPreview, setLoadingPreview] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState(null);
+    const lastTreeRef = useRef('');
 
     const loadTree = async () => {
-        setLoadingTree(true);
+        const initialLoad = !tree;
+        if (initialLoad) {
+            setLoadingTree(true);
+        } else {
+            setIsRefreshing(true);
+        }
         setError(null);
         try {
             const data = await getWorkspaceTree('', 3);
-            setTree(data.root);
+            const serialized = JSON.stringify(data.root || {});
+            if (serialized && serialized !== lastTreeRef.current) {
+                setTree(data.root);
+                lastTreeRef.current = serialized;
+            }
             if (data.root?.path) {
                 setExpanded((prev) => {
                     const next = new Set(prev);
@@ -97,7 +108,8 @@ export function WorkspaceExplorer() {
         } catch (err) {
             setError(err.message || 'Failed to load workspace');
         } finally {
-            setLoadingTree(false);
+            if (initialLoad) setLoadingTree(false);
+            setIsRefreshing(false);
         }
     };
 
@@ -157,8 +169,8 @@ export function WorkspaceExplorer() {
         <aside class="workspace-sidebar">
             <div class="workspace-header">
                 <span>Workspace</span>
-                <button class="workspace-refresh" onClick=${loadTree} title="Refresh">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <button class=${`workspace-refresh ${isRefreshing ? 'is-refreshing' : ''}`} onClick=${loadTree} title="Refresh">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <polyline points="23 4 23 10 17 10" />
                         <path d="M20.49 15a9 9 0 1 1 2.13-9" />
                     </svg>
@@ -178,7 +190,7 @@ export function WorkspaceExplorer() {
                             const isDir = node.type === 'dir';
                             const expandedDir = isDir && expanded.has(node.path);
                             const caret = isDir ? (expandedDir ? '▾' : '▸') : '';
-                            const caretWidth = 10;
+                            const caretWidth = 14;
                             const iconSize = 16;
                             const iconX = x + caretWidth;
                             const iconY = y - iconSize / 2;
@@ -186,7 +198,7 @@ export function WorkspaceExplorer() {
                             return html`
                                 <g class="workspace-row" onClick=${() => handleSelect(node)}>
                                     <rect x="0" y=${y - 14} width=${TREE_WIDTH} height=${ROW_HEIGHT} class=${`workspace-row-bg ${isSelected ? 'selected' : ''}`} />
-                                    ${caret && html`<text class="workspace-caret" x=${x + 1} y=${y}>${caret}</text>`}
+                                    ${caret && html`<text class="workspace-caret" x=${x} y=${y}>${caret}</text>`}
                                     <svg
                                         class=${`workspace-icon ${isDir ? 'folder' : 'file'}`}
                                         x=${iconX}
@@ -211,7 +223,13 @@ export function WorkspaceExplorer() {
                 <div class="workspace-preview">
                     <div class="workspace-preview-header">
                         <span class="workspace-preview-title">${selectedPath}</span>
-                        <button class="workspace-download" onClick=${handleDownload}>Download</button>
+                        <button class="workspace-download" onClick=${handleDownload} title="Download">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
                     </div>
                     ${loadingPreview && html`<div class="workspace-loading">Loading preview…</div>`}
                     ${preview?.error && html`<div class="workspace-error">${preview.error}</div>`}
@@ -227,7 +245,10 @@ export function WorkspaceExplorer() {
                             </div>
                         `}
                         ${preview.kind === 'text' && html`
-                            <div class="workspace-preview-text" dangerouslySetInnerHTML=${{ __html: renderMarkdown(preview.text || '') }} />
+                            ${preview.content_type === 'text/markdown'
+                                ? html`<div class="workspace-preview-text" dangerouslySetInnerHTML=${{ __html: renderMarkdown(preview.text || '') }} />`
+                                : html`<pre class="workspace-preview-text"><code>${preview.text || ''}</code></pre>`
+                            }
                         `}
                         ${preview.kind === 'binary' && html`
                             <div class="workspace-preview-text">Binary file. Download to view.</div>

@@ -52,6 +52,8 @@ function contentTypeForPath(filePath: string): string {
     case ".conf":
     case ".ini":
       return "text/plain";
+    case ".sh":
+      return "text/x-shellscript";
     case ".json":
       return "application/json";
     case ".yaml":

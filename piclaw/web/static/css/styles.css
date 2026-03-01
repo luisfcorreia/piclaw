@@ -151,17 +151,26 @@ body {
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     font-size: 12px;
-    padding: 4px 8px;
+    padding: 4px;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 28px;
+    height: 28px;
+    box-sizing: border-box;
 }
 
-.workspace-refresh svg {
-    width: 14px;
-    height: 14px;
+.workspace-refresh svg,
+.workspace-download svg {
+    width: 16px;
+    height: 16px;
     display: block;
+    overflow: visible;
+}
+
+.workspace-refresh.is-refreshing svg {
+    animation: workspaceSpin 0.9s linear infinite;
 }
 
 .workspace-refresh:hover,
@@ -201,12 +210,15 @@ body {
 
 .workspace-caret {
     fill: var(--text-secondary);
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 700;
     dominant-baseline: middle;
 }
 
 .workspace-icon {
     color: var(--text-secondary);
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .workspace-preview {
@@ -623,6 +635,11 @@ body {
 @keyframes searchHighlightFade {
     0% { background-color: var(--search-highlight-color); }
     100% { background-color: transparent; }
+}
+
+@keyframes workspaceSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
 .post.search-highlight {
