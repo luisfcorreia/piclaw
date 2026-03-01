@@ -1,5 +1,6 @@
 import {
   deleteMessageByRowId,
+  deleteThreadByRowId,
   getMessageByRowId,
   getMessagesByHashtag,
   getTimeline,
@@ -46,16 +47,24 @@ export function getThreadResponse(chatJid: string, id: number | null): { status:
   return { status: 200, body: { thread: [thread] } };
 }
 
-export function deletePostResponse(chatJid: string, id: number | null): {
+export function deletePostResponse(
+  chatJid: string,
+  id: number | null,
+  cascade = false
+): {
   status: number;
   body: unknown;
-  deletedId?: number;
+  deletedIds: number[];
 } {
-  if (!id) return { status: 404, body: { error: "Post not found" } };
-  const deleted = deleteMessageByRowId(chatJid, id);
+  if (!id) return { status: 404, body: { error: "Post not found" }, deletedIds: [] };
+  const deletedIds = cascade
+    ? deleteThreadByRowId(chatJid, id)
+    : deleteMessageByRowId(chatJid, id)
+      ? [id]
+      : [];
   return {
     status: 200,
-    body: { deleted: deleted ? 1 : 0, ids: deleted ? [id] : [] },
-    deletedId: deleted ? id : undefined,
+    body: { deleted: deletedIds.length, ids: deletedIds },
+    deletedIds,
   };
 }

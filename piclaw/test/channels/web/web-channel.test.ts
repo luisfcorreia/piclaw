@@ -123,3 +123,51 @@ test("web channel handles /model command without queueing agent", async () => {
   expect(timeline.length).toBeGreaterThanOrEqual(2);
   expect(timeline[timeline.length - 1].data.content).toContain("Model set to openai/gpt-test.");
 });
+
+test("web channel delete post cascades thread replies", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  const rootRowId = db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "root",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "reply",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+    thread_id: rootRowId,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: { runAgent: async () => ({ status: "success", result: "ok" }) },
+  });
+
+  const res = await (web as any).handleRequest(
+    new Request(`http://test/post/${rootRowId}?cascade=true`, { method: "DELETE" })
+  );
+  const json = await res.json();
+  expect(json.deleted).toBe(2);
+
+  const remaining = db.getTimeline("web:default", 10);
+  expect(remaining.length).toBe(0);
+});

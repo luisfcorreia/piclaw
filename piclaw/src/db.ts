@@ -6,6 +6,7 @@ export {
   getMessageByRowId,
   getMessageRowIdById,
   deleteMessageByRowId,
+  deleteThreadByRowId,
   getTimeline,
   hasOlderMessages,
   getMessagesByHashtag,

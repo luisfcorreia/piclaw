@@ -193,10 +193,10 @@ export class WebChannel {
     return this.json(result.body, result.status);
   }
 
-  handleDeletePost(id: number | null): Response {
-    const result = deletePostResponse(DEFAULT_CHAT_JID, id);
-    if (result.deletedId !== undefined) {
-      this.broadcastEvent("interaction_deleted", { ids: [result.deletedId] });
+  handleDeletePost(id: number | null, cascade = false): Response {
+    const result = deletePostResponse(DEFAULT_CHAT_JID, id, cascade);
+    if (result.deletedIds.length > 0) {
+      this.broadcastEvent("interaction_deleted", { ids: result.deletedIds });
     }
     return this.json(result.body, result.status);
   }
