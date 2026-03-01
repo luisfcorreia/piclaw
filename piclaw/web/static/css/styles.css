@@ -153,6 +153,15 @@ body {
     font-size: 12px;
     padding: 4px 8px;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.workspace-refresh svg {
+    width: 14px;
+    height: 14px;
+    display: block;
 }
 
 .workspace-refresh:hover,

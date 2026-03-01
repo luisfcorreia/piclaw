@@ -157,7 +157,12 @@ export function WorkspaceExplorer() {
         <aside class="workspace-sidebar">
             <div class="workspace-header">
                 <span>Workspace</span>
-                <button class="workspace-refresh" onClick=${loadTree} title="Refresh">⟳</button>
+                <button class="workspace-refresh" onClick=${loadTree} title="Refresh">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <polyline points="23 4 23 10 17 10" />
+                        <path d="M20.49 15a9 9 0 1 1 2.13-9" />
+                    </svg>
+                </button>
             </div>
             <div class="workspace-tree">
                 ${loadingTree && html`<div class="workspace-loading">Loading…</div>`}
