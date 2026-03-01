@@ -61,12 +61,14 @@ function flattenTree(node, expanded, depth = 0, rows = []) {
     return rows;
 }
 
-function treeSignature(node) {
+function treeSignature(node, expanded) {
     if (!node) return '';
     const walk = (item) => ({
         path: item.path,
         type: item.type,
-        children: item.children ? item.children.map(walk) : null,
+        children: item.children && expanded?.has(item.path)
+            ? item.children.map(walk)
+            : null,
     });
     return JSON.stringify(walk(node));
 }
@@ -134,6 +136,7 @@ export function WorkspaceExplorer({ onFileSelect }) {
     const lastTreeRef = useRef('');
     const pendingTreeRef = useRef(null);
     const treeRafRef = useRef(0);
+    const expandedRef = useRef(expanded);
 
     const loadTree = async () => {
         const initialLoad = !tree;
@@ -142,7 +145,7 @@ export function WorkspaceExplorer({ onFileSelect }) {
         }
         try {
             const data = await getWorkspaceTree('', 3);
-            const signature = treeSignature(data.root);
+            const signature = treeSignature(data.root, expandedRef.current);
             if (signature && signature !== lastTreeRef.current) {
                 lastTreeRef.current = signature;
                 pendingTreeRef.current = data.root;
@@ -184,6 +187,10 @@ export function WorkspaceExplorer({ onFileSelect }) {
     };
 
     useEffect(() => {
+        expandedRef.current = expanded;
+    }, [expanded]);
+
+    useEffect(() => {
         loadTree();
         const timer = setInterval(loadTree, REFRESH_INTERVAL_MS);
         return () => {
@@ -217,6 +224,11 @@ export function WorkspaceExplorer({ onFileSelect }) {
         onFileSelect?.(node.path, node);
         loadPreview(node.path);
     };
+
+    useEffect(() => {
+        if (!tree) return;
+        loadTree();
+    }, [expanded]);
 
     const handleDownload = async () => {
         if (!selectedPath) return;
