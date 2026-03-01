@@ -70,7 +70,7 @@ The built-in UI is single-user, mobile-friendly, and streams updates over SSE:
 
 ### Workspace explorer
 
-![Screenshot showing explorer](docs/explorer.jpg)
+![Screenshot showing explorer](docs/screenshot-explorer-light.jpg)
 
 
 The workspace sidebar shows an SVG tree of `/workspace` (auto-refreshes every 15s and only re-renders when the tree changes). Click a file to:
