@@ -91,19 +91,26 @@ export function WorkspaceExplorer({ onFileSelect }) {
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [error, setError] = useState(null);
     const lastTreeRef = useRef('');
+    const pendingTreeRef = useRef(null);
+    const treeRafRef = useRef(0);
 
     const loadTree = async () => {
         const initialLoad = !tree;
         if (initialLoad) {
             setLoadingTree(true);
         }
-        setError(null);
         try {
             const data = await getWorkspaceTree('', 3);
             const signature = treeSignature(data.root);
             if (signature && signature !== lastTreeRef.current) {
                 lastTreeRef.current = signature;
-                requestAnimationFrame(() => setTree(data.root));
+                pendingTreeRef.current = data.root;
+                if (!treeRafRef.current) {
+                    treeRafRef.current = requestAnimationFrame(() => {
+                        treeRafRef.current = 0;
+                        setTree(pendingTreeRef.current);
+                    });
+                }
             }
             if (data.root?.path) {
                 setExpanded((prev) => {
@@ -113,6 +120,7 @@ export function WorkspaceExplorer({ onFileSelect }) {
                     return next;
                 });
             }
+            setError((prev) => (prev ? null : prev));
         } catch (err) {
             setError(err.message || 'Failed to load workspace');
         } finally {
@@ -137,7 +145,13 @@ export function WorkspaceExplorer({ onFileSelect }) {
     useEffect(() => {
         loadTree();
         const timer = setInterval(loadTree, REFRESH_INTERVAL_MS);
-        return () => clearInterval(timer);
+        return () => {
+            clearInterval(timer);
+            if (treeRafRef.current) {
+                cancelAnimationFrame(treeRafRef.current);
+                treeRafRef.current = 0;
+            }
+        };
     }, []);
 
     const rows = useMemo(() => flattenTree(tree, expanded), [tree, expanded]);
@@ -179,8 +193,8 @@ export function WorkspaceExplorer({ onFileSelect }) {
                 <span>Workspace</span>
                 <button class="workspace-refresh" onClick=${loadTree} title="Refresh">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="8.5" />
                         <polyline points="23 4 23 10 17 10" />
-                        <path d="M20.49 15a9 9 0 1 1 2.13-9.36L23 10" />
                     </svg>
                 </button>
             </div>
@@ -207,7 +221,7 @@ export function WorkspaceExplorer({ onFileSelect }) {
                             const iconY = y - iconSize / 2 - (isDir ? 1 : 0);
                             const textX = x + caretWidth + iconSlot + 4;
                             return html`
-                                <g class="workspace-row" onClick=${() => handleSelect(node)}>
+                                <g key=${node.path} class="workspace-row" onClick=${() => handleSelect(node)}>
                                     <rect x="0" y=${y - 14} width=${TREE_WIDTH} height=${ROW_HEIGHT} class=${`workspace-row-bg ${isSelected ? 'selected' : ''}`} />
                                     ${caret && html`
                                         <svg class="workspace-caret-icon" x=${x} y=${caretY} width=${caretSize} height=${caretSize} viewBox="0 0 14 14" aria-hidden="true">
