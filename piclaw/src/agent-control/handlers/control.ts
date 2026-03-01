@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { formatCompactNumber } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { formatCompactNumber } from "../agent-control-helpers.js";
 import { killTrackedProcesses } from "../../process-tracker.js";
 
 type RestartCommand = Extract<AgentControlCommand, { type: "restart" }>;

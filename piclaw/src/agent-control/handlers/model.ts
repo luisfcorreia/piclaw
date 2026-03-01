@@ -1,8 +1,8 @@
 import type { AgentSession, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { THINKING_LEVELS, normalizeModelMatch } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { THINKING_LEVELS, normalizeModelMatch } from "../agent-control-helpers.js";
 
 type ModelCommand = Extract<AgentControlCommand, { type: "model" }>;
 type ThinkingCommand = Extract<AgentControlCommand, { type: "thinking" }>;

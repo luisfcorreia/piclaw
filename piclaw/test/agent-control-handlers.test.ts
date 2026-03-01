@@ -210,7 +210,7 @@ class RichSession {
 }
 
 async function getControl() {
-  const mod = await import("../src/agent-control.js");
+  const mod = await import("../src/agent-control/index.js");
   return mod.applyControlCommand as (session: any, registry: any, command: any) => Promise<any>;
 }
 

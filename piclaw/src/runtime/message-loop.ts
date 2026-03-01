@@ -2,7 +2,7 @@ import type { AgentPool } from "../agent-pool.js";
 import type { AgentQueue } from "../queue.js";
 import type { WhatsAppChannel } from "../channels/whatsapp.js";
 import { getMessagesSince, getNewMessages } from "../db.js";
-import { parseControlCommand, type AgentControlCommand } from "../agent-control.js";
+import { parseControlCommand, type AgentControlCommand } from "../agent-control/index.js";
 import { detectChannel, formatMessages, formatOutbound } from "../router.js";
 import type { RuntimeState } from "./state.js";
 

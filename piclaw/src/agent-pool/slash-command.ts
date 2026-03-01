@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 
-import type { AgentControlResult } from "../agent-control-types.js";
+import type { AgentControlResult } from "../agent-control/agent-control-types.js";
 import { AGENT_TIMEOUT } from "../config.js";
 import { detectChannel } from "../router.js";
 import { withChatContext } from "../chat-context.js";

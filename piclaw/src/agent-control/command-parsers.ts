@@ -1,4 +1,4 @@
-import type { AgentControlCommand } from "../agent-control-types.js";
+import type { AgentControlCommand } from "./agent-control-types.js";
 import { parseQueueMode, parseToggle, parseTreeArgs, splitArgs } from "./parser-utils.js";
 
 export type CommandParser = (args: string, raw: string) => AgentControlCommand;

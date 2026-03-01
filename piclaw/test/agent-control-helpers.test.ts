@@ -8,7 +8,7 @@ import {
   normalizeModelMatch,
   runPromptAndCapture,
   truncateText,
-} from "../src/agent-control-helpers.js";
+} from "../src/agent-control/agent-control-helpers.js";
 
 class PromptSession {
   private listeners: Array<(event: any) => void> = [];

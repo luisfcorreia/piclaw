@@ -1,7 +1,7 @@
 import { describe, test, expect } from "bun:test";
 import "./helpers.js";
 
-import { parseControlCommand } from "../src/agent-control-parser.js";
+import { parseControlCommand } from "../src/agent-control/agent-control-parser.js";
 
 describe("parseControlCommand", () => {
   test("returns null for empty input", () => {

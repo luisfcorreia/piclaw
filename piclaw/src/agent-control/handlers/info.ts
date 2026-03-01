@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { formatCompactNumber, formatCurrency } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { formatCompactNumber, formatCurrency } from "../agent-control-helpers.js";
 import { CONTROL_COMMAND_DEFINITIONS } from "../command-registry.js";
 
 type StateCommand = Extract<AgentControlCommand, { type: "state" }>;

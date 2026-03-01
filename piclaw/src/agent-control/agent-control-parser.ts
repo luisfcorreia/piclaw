@@ -1,7 +1,7 @@
 import type { AgentControlCommand } from "./agent-control-types.js";
-import { normalizeControlCommandName } from "./agent-control/command-registry.js";
-import { stripTrigger } from "./agent-control/parser-utils.js";
-import { COMMAND_PARSERS } from "./agent-control/command-parsers.js";
+import { normalizeControlCommandName } from "./command-registry.js";
+import { stripTrigger } from "./parser-utils.js";
+import { COMMAND_PARSERS } from "./command-parsers.js";
 
 export function parseControlCommand(text: string, triggerPattern?: RegExp): AgentControlCommand | null {
   if (!text) return null;

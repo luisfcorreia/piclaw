@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { truncateText } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { truncateText } from "../agent-control-helpers.js";
 
 type SessionNameCommand = Extract<AgentControlCommand, { type: "session_name" }>;
 type NewSessionCommand = Extract<AgentControlCommand, { type: "new_session" }>;

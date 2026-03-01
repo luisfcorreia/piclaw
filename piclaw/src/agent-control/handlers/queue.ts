@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { runPromptAndCapture } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { runPromptAndCapture } from "../agent-control-helpers.js";
 
 type QueueCommand = Extract<AgentControlCommand, { type: "queue" | "queue_all" }>;
 type SteeringCommand = Extract<AgentControlCommand, { type: "steering_mode" }>;

@@ -8,23 +8,23 @@ import {
   handleAutoRetry,
   handleCompact,
   handleRestart,
-} from "./agent-control/handlers/control.js";
-import { handleAgentAvatar, handleAgentName } from "./agent-control/handlers/agent.js";
+} from "./handlers/control.js";
+import { handleAgentAvatar, handleAgentName } from "./handlers/agent.js";
 import {
   handleCommands,
   handleContext,
   handleLast,
   handleState,
   handleStats,
-} from "./agent-control/handlers/info.js";
+} from "./handlers/info.js";
 import {
   handleCycleModel,
   handleCycleThinking,
   handleModel,
   handleThinking,
-} from "./agent-control/handlers/model.js";
-import { handleBash, handleShell } from "./agent-control/handlers/operations.js";
-import { handleFollowupMode, handleQueue, handleSteeringMode } from "./agent-control/handlers/queue.js";
+} from "./handlers/model.js";
+import { handleBash, handleShell } from "./handlers/operations.js";
+import { handleFollowupMode, handleQueue, handleSteeringMode } from "./handlers/queue.js";
 import {
   handleExportHtml,
   handleFork,
@@ -32,8 +32,8 @@ import {
   handleNewSession,
   handleSessionName,
   handleSwitchSession,
-} from "./agent-control/handlers/session.js";
-import { handleLabel, handleLabels, handleTree } from "./agent-control/handlers/tree.js";
+} from "./handlers/session.js";
+import { handleLabel, handleLabels, handleTree } from "./handlers/tree.js";
 
 export async function applyControlCommand(
   session: AgentSession,

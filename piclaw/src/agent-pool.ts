@@ -13,7 +13,7 @@ import {
   getAgentDir,
 } from "@mariozechner/pi-coding-agent";
 
-import { applyControlCommand, type AgentControlCommand, type AgentControlResult } from "./agent-control.js";
+import { applyControlCommand, type AgentControlCommand, type AgentControlResult } from "./agent-control/index.js";
 import { AGENT_TIMEOUT, SESSIONS_DIR, WORKSPACE_DIR } from "./config.js";
 import { detectChannel } from "./router.js";
 import { createTrackedBashOperations } from "./tools/tracked-bash.js";

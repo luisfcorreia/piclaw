@@ -1,7 +1,7 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { ASSISTANT_AVATAR, ASSISTANT_NAME, setAssistantAvatar, setAssistantName } from "../../config.js";
-import { updateAssistantConfig } from "../../agent-control-helpers.js";
+import { updateAssistantConfig } from "../agent-control-helpers.js";
 
 type AgentNameCommand = Extract<AgentControlCommand, { type: "agent_name" }>;
 type AgentAvatarCommand = Extract<AgentControlCommand, { type: "agent_avatar" }>;

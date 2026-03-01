@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { applyControlCommand, parseControlCommand } from "../src/agent-control.js";
+import { applyControlCommand, parseControlCommand } from "../src/agent-control/index.js";
 
 const modelReasoning = { provider: "openai", id: "gpt-test", reasoning: true } as any;
 const modelSimple = { provider: "anthropic", id: "claude-test", reasoning: false } as any;

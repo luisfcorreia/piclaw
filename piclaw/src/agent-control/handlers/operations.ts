@@ -1,7 +1,7 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
 import { createTrackedBashOperations } from "../../tools/tracked-bash.js";
-import { formatShellBlock, resolveShellCwd } from "../../agent-control-helpers.js";
+import { formatShellBlock, resolveShellCwd } from "../agent-control-helpers.js";
 
 const SHELL_OUTPUT_LIMIT = 20000;
 const SHELL_TIMEOUT_SECONDS = 30;

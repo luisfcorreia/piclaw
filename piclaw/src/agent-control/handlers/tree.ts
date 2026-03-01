@@ -1,6 +1,6 @@
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import type { AgentControlCommand, AgentControlResult } from "../../agent-control-types.js";
-import { extractTextFromContent, formatCompactNumber, truncateText } from "../../agent-control-helpers.js";
+import type { AgentControlCommand, AgentControlResult } from "../agent-control-types.js";
+import { extractTextFromContent, formatCompactNumber, truncateText } from "../agent-control-helpers.js";
 
 type TreeCommand = Extract<AgentControlCommand, { type: "tree" }>;
 type LabelCommand = Extract<AgentControlCommand, { type: "label" }>;
