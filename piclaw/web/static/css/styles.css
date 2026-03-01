@@ -174,10 +174,6 @@ body {
     height: 18px;
 }
 
-.workspace-refresh.is-refreshing svg {
-    animation: workspaceSpin 0.9s linear infinite;
-}
-
 .workspace-refresh:hover,
 .workspace-download:hover {
     color: var(--text-primary);
@@ -693,11 +689,6 @@ body {
 @keyframes searchHighlightFade {
     0% { background-color: var(--search-highlight-color); }
     100% { background-color: transparent; }
-}
-
-@keyframes workspaceSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
 }
 
 .post.search-highlight {

@@ -89,7 +89,6 @@ export function WorkspaceExplorer({ onFileSelect }) {
     const [downloadId, setDownloadId] = useState(null);
     const [loadingTree, setLoadingTree] = useState(false);
     const [loadingPreview, setLoadingPreview] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState(null);
     const lastTreeRef = useRef('');
 
@@ -97,8 +96,6 @@ export function WorkspaceExplorer({ onFileSelect }) {
         const initialLoad = !tree;
         if (initialLoad) {
             setLoadingTree(true);
-        } else {
-            setIsRefreshing(true);
         }
         setError(null);
         try {
@@ -120,7 +117,6 @@ export function WorkspaceExplorer({ onFileSelect }) {
             setError(err.message || 'Failed to load workspace');
         } finally {
             if (initialLoad) setLoadingTree(false);
-            setIsRefreshing(false);
         }
     };
 
@@ -181,15 +177,15 @@ export function WorkspaceExplorer({ onFileSelect }) {
         <aside class="workspace-sidebar">
             <div class="workspace-header">
                 <span>Workspace</span>
-                <button class=${`workspace-refresh ${isRefreshing ? 'is-refreshing' : ''}`} onClick=${loadTree} title="Refresh">
+                <button class="workspace-refresh" onClick=${loadTree} title="Refresh">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <polyline points="23 4 23 10 17 10" />
-                        <path d="M3 12a9 9 0 0 1 15-6.7L23 10" />
+                        <path d="M20.49 15a9 9 0 1 1 2.13-9.36L23 10" />
                     </svg>
                 </button>
             </div>
             <div class="workspace-tree">
-                ${loadingTree && html`<div class="workspace-loading">Loading…</div>`}
+                ${loadingTree && !tree && html`<div class="workspace-loading">Loading…</div>`}
                 ${error && html`<div class="workspace-error">${error}</div>`}
                 ${!loadingTree && tree && html`
                     <svg class="workspace-tree-svg" viewBox=${`0 0 ${TREE_WIDTH} ${svgHeight}`} width="100%" height=${svgHeight}>
@@ -204,20 +200,20 @@ export function WorkspaceExplorer({ onFileSelect }) {
                             const caret = isDir ? (expandedDir ? 'down' : 'right') : null;
                             const caretSize = 14;
                             const caretWidth = caretSize;
-                            const caretY = y - caretSize / 2;
+                            const caretY = y - caretSize / 2 - 1;
                             const iconSlot = 20;
                             const iconSize = isDir ? 20 : 16;
                             const iconX = x + caretWidth + (iconSlot - iconSize) / 2;
                             const iconY = y - iconSize / 2 - (isDir ? 1 : 0);
-                            const textX = x + caretWidth + iconSlot + 6;
+                            const textX = x + caretWidth + iconSlot + 4;
                             return html`
                                 <g class="workspace-row" onClick=${() => handleSelect(node)}>
                                     <rect x="0" y=${y - 14} width=${TREE_WIDTH} height=${ROW_HEIGHT} class=${`workspace-row-bg ${isSelected ? 'selected' : ''}`} />
                                     ${caret && html`
                                         <svg class="workspace-caret-icon" x=${x} y=${caretY} width=${caretSize} height=${caretSize} viewBox="0 0 14 14" aria-hidden="true">
                                             ${caret === 'down'
-                                                ? html`<polygon points="2 4 12 4 7 12" />`
-                                                : html`<polygon points="4 2 12 7 4 12" />`
+                                                ? html`<polygon points="1 3 13 3 7 13" />`
+                                                : html`<polygon points="3 1 13 7 3 13" />`
                                             }
                                         </svg>
                                     `}
@@ -231,6 +227,8 @@ export function WorkspaceExplorer({ onFileSelect }) {
                                         fill="none"
                                         stroke="currentColor"
                                         stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
                                     >
                                         ${iconPath(node.type)}
                                     </svg>
