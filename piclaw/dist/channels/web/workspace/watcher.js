@@ -1,5 +1,5 @@
 import path from "path";
-import chokidar from "chokidar";
+import { readdirSync, statSync, watch } from "fs";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { buildTree, compressPaths } from "./tree.js";
 import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
@@ -47,6 +47,8 @@ export function startWorkspaceWatcher(onUpdate, includeHidden) {
     const pending = new Set();
     let flushTimer = null;
     const throttler = createWorkspaceUpdateThrottle(onUpdate, 1000);
+    const watchers = new Map();
+    const maxDepth = 8;
     const queuePath = (absPath) => {
         if (shouldIgnorePath(absPath))
             return;
@@ -81,17 +83,68 @@ export function startWorkspaceWatcher(onUpdate, includeHidden) {
             throttler.schedule(updates);
         }, 300);
     };
-    const watcher = chokidar.watch(WORKSPACE_DIR, {
-        ignoreInitial: true,
-        depth: 8,
-        awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
-        ignored: (p) => shouldIgnorePath(p),
-    });
-    watcher.on("add", queuePath);
-    watcher.on("addDir", queuePath);
-    watcher.on("unlink", queuePath);
-    watcher.on("unlinkDir", queuePath);
-    watcher.on("change", queuePath);
+    const removeWatcher = (dir) => {
+        for (const [key, watcher] of Array.from(watchers.entries())) {
+            if (key === dir || key.startsWith(`${dir}${path.sep}`)) {
+                try {
+                    watcher.close();
+                }
+                catch { }
+                watchers.delete(key);
+            }
+        }
+    };
+    const addWatcher = (dir, depth) => {
+        if (depth < 0)
+            return;
+        if (shouldIgnorePath(dir))
+            return;
+        if (watchers.has(dir))
+            return;
+        try {
+            const watcher = watch(dir, { persistent: true }, (eventType, filename) => {
+                const name = filename ? filename.toString() : "";
+                const targetPath = name ? path.join(dir, name) : dir;
+                queuePath(targetPath);
+                if (eventType === "rename" && name) {
+                    try {
+                        const stats = statSync(targetPath);
+                        if (stats.isDirectory()) {
+                            addWatcher(targetPath, depth - 1);
+                        }
+                    }
+                    catch {
+                        removeWatcher(targetPath);
+                    }
+                }
+            });
+            watcher.on("error", (err) => {
+                console.warn("[workspace] fs.watch error:", err);
+                removeWatcher(dir);
+            });
+            watchers.set(dir, watcher);
+        }
+        catch (err) {
+            console.warn("[workspace] Failed to watch directory:", dir, err);
+            return;
+        }
+        if (depth === 0)
+            return;
+        let entries = [];
+        try {
+            entries = readdirSync(dir, { withFileTypes: true });
+        }
+        catch {
+            return;
+        }
+        for (const entry of entries) {
+            if (!entry.isDirectory())
+                continue;
+            const child = path.join(dir, entry.name);
+            addWatcher(child, depth - 1);
+        }
+    };
+    addWatcher(WORKSPACE_DIR, maxDepth);
     return {
         close: async () => {
             if (flushTimer) {
@@ -100,10 +153,13 @@ export function startWorkspaceWatcher(onUpdate, includeHidden) {
             }
             throttler.clear();
             pending.clear();
-            try {
-                await watcher.close();
+            for (const watcher of watchers.values()) {
+                try {
+                    watcher.close();
+                }
+                catch { }
             }
-            catch { }
+            watchers.clear();
         },
     };
 }

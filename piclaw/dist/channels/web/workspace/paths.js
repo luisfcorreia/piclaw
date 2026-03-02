@@ -1,6 +1,7 @@
 import path from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { EXCLUDE_DIRS } from "./constants.js";
+const WATCH_IGNORE_DIRS = new Set(["logs"]);
 export function resolveWorkspacePath(input) {
     const raw = (input || "").trim();
     const resolved = path.resolve(WORKSPACE_DIR, raw);
@@ -28,7 +29,7 @@ export function shouldIgnorePath(absPath) {
     for (const part of parts) {
         if (!part || part === ".")
             continue;
-        if (EXCLUDE_DIRS.has(part))
+        if (EXCLUDE_DIRS.has(part) || WATCH_IGNORE_DIRS.has(part))
             return true;
     }
     return false;

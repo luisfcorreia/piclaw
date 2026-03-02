@@ -815,6 +815,37 @@ body {
     font-size: var(--font-size-sm);
 }
 
+.post-file-refs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+}
+
+.post-file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    padding: 2px 8px;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    max-width: 100%;
+}
+
+.post-file-pill svg {
+    display: block;
+}
+
+.post-file-name {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @keyframes searchHighlightFade {
     0% { background-color: var(--search-highlight-color); }
     100% { background-color: transparent; }

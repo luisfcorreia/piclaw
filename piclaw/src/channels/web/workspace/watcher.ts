@@ -1,5 +1,6 @@
 import path from "path";
-import chokidar from "chokidar";
+import { readdirSync, statSync, watch } from "fs";
+import type { FSWatcher } from "fs";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { buildTree, compressPaths } from "./tree.js";
@@ -59,6 +60,8 @@ export function startWorkspaceWatcher(
   const pending = new Set<string>();
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   const throttler = createWorkspaceUpdateThrottle(onUpdate, 1000);
+  const watchers = new Map<string, FSWatcher>();
+  const maxDepth = 8;
 
   const queuePath = (absPath: string) => {
     if (shouldIgnorePath(absPath)) return;
@@ -89,18 +92,64 @@ export function startWorkspaceWatcher(
     }, 300);
   };
 
-  const watcher = chokidar.watch(WORKSPACE_DIR, {
-    ignoreInitial: true,
-    depth: 8,
-    awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
-    ignored: (p) => shouldIgnorePath(p),
-  });
+  const removeWatcher = (dir: string) => {
+    for (const [key, watcher] of Array.from(watchers.entries())) {
+      if (key === dir || key.startsWith(`${dir}${path.sep}`)) {
+        try { watcher.close(); } catch {}
+        watchers.delete(key);
+      }
+    }
+  };
 
-  watcher.on("add", queuePath);
-  watcher.on("addDir", queuePath);
-  watcher.on("unlink", queuePath);
-  watcher.on("unlinkDir", queuePath);
-  watcher.on("change", queuePath);
+  const addWatcher = (dir: string, depth: number) => {
+    if (depth < 0) return;
+    if (shouldIgnorePath(dir)) return;
+    if (watchers.has(dir)) return;
+
+    try {
+      const watcher = watch(dir, { persistent: true }, (eventType, filename: string | Buffer | null) => {
+        const name = filename ? filename.toString() : "";
+        const targetPath = name ? path.join(dir, name) : dir;
+        queuePath(targetPath);
+
+        if (eventType === "rename" && name) {
+          try {
+            const stats = statSync(targetPath);
+            if (stats.isDirectory()) {
+              addWatcher(targetPath, depth - 1);
+            }
+          } catch {
+            removeWatcher(targetPath);
+          }
+        }
+      });
+
+      watcher.on("error", (err) => {
+        console.warn("[workspace] fs.watch error:", err);
+        removeWatcher(dir);
+      });
+
+      watchers.set(dir, watcher);
+    } catch (err) {
+      console.warn("[workspace] Failed to watch directory:", dir, err);
+      return;
+    }
+
+    if (depth === 0) return;
+    let entries: Array<{ name: string; isDirectory: () => boolean }> = [];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true }) as Array<{ name: string; isDirectory: () => boolean }>;
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const child = path.join(dir, entry.name);
+      addWatcher(child, depth - 1);
+    }
+  };
+
+  addWatcher(WORKSPACE_DIR, maxDepth);
 
   return {
     close: async () => {
@@ -110,7 +159,10 @@ export function startWorkspaceWatcher(
       }
       throttler.clear();
       pending.clear();
-      try { await watcher.close(); } catch {}
+      for (const watcher of watchers.values()) {
+        try { watcher.close(); } catch {}
+      }
+      watchers.clear();
     },
   };
 }

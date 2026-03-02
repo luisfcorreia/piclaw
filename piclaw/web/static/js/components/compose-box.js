@@ -67,7 +67,7 @@ export function ComposeBox({
             const fileBlock = fileRefs.length
                 ? `Files:\n${fileRefs.map((path) => `- ${path}`).join('\n')}`
                 : '';
-            const message = [fileBlock, baseContent].filter(Boolean).join('\n\n');
+            const message = [baseContent, fileBlock].filter(Boolean).join('\n\n');
 
             // Send to agent by default
             await sendAgentMessage('default', message, null, mediaIds);
