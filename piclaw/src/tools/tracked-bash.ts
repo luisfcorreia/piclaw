@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
 import { existsSync } from "fs";
 import type { BashOperations } from "@mariozechner/pi-coding-agent";
+import { resolveKeychainEnv } from "../secure/keychain.js";
 import { killProcessTree, registerProcess, unregisterProcess } from "../utils/process-tracker.js";
 
 function resolveShellConfig(): { shell: string; args: string[] } {
@@ -20,85 +21,95 @@ export function createTrackedBashOperations(): BashOperations {
   return {
     exec: (command, cwd, { onData, signal, timeout, env }) => {
       return new Promise((resolve, reject) => {
-        const { shell, args } = resolveShellConfig();
+        (async () => {
+          const { shell, args } = resolveShellConfig();
 
-        if (!existsSync(cwd)) {
-          reject(new Error(`Working directory does not exist: ${cwd}\nCannot execute bash commands.`));
-          return;
-        }
+          if (!existsSync(cwd)) {
+            reject(new Error(`Working directory does not exist: ${cwd}\nCannot execute bash commands.`));
+            return;
+          }
 
-        const child = spawn(shell, [...args, command], {
-          cwd,
-          detached: true,
-          env: env ?? { ...process.env },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+          let resolvedEnv: NodeJS.ProcessEnv;
+          try {
+            resolvedEnv = env ? await resolveKeychainEnv(env) : { ...process.env };
+          } catch (error) {
+            reject(error as Error);
+            return;
+          }
 
-        if (child.pid) {
-          registerProcess(child.pid);
-        }
+          const child = spawn(shell, [...args, command], {
+            cwd,
+            detached: true,
+            env: resolvedEnv,
+            stdio: ["ignore", "pipe", "pipe"],
+          });
 
-        let timedOut = false;
-        let aborted = false;
+          if (child.pid) {
+            registerProcess(child.pid);
+          }
 
-        let timeoutHandle: NodeJS.Timeout | undefined;
-        if (timeout !== undefined && timeout > 0) {
-          timeoutHandle = setTimeout(() => {
-            timedOut = true;
+          let timedOut = false;
+          let aborted = false;
+
+          let timeoutHandle: NodeJS.Timeout | undefined;
+          if (timeout !== undefined && timeout > 0) {
+            timeoutHandle = setTimeout(() => {
+              timedOut = true;
+              if (child.pid) {
+                killProcessTree(child.pid);
+              }
+            }, timeout * 1000);
+          }
+
+          const cleanup = () => {
+            if (timeoutHandle) clearTimeout(timeoutHandle);
+            if (signal) signal.removeEventListener("abort", onAbort);
+            if (child.pid) unregisterProcess(child.pid);
+          };
+
+          const onAbort = () => {
+            aborted = true;
             if (child.pid) {
               killProcessTree(child.pid);
             }
-          }, timeout * 1000);
-        }
+          };
 
-        const cleanup = () => {
-          if (timeoutHandle) clearTimeout(timeoutHandle);
-          if (signal) signal.removeEventListener("abort", onAbort);
-          if (child.pid) unregisterProcess(child.pid);
-        };
-
-        const onAbort = () => {
-          aborted = true;
-          if (child.pid) {
-            killProcessTree(child.pid);
-          }
-        };
-
-        if (signal) {
-          if (signal.aborted) {
-            onAbort();
-          } else {
-            signal.addEventListener("abort", onAbort, { once: true });
-          }
-        }
-
-        if (child.stdout) {
-          child.stdout.on("data", onData);
-        }
-        if (child.stderr) {
-          child.stderr.on("data", onData);
-        }
-
-        child.on("error", (err) => {
-          cleanup();
-          reject(err);
-        });
-
-        child.on("close", (code) => {
-          cleanup();
-
-          if (aborted || signal?.aborted) {
-            reject(new Error("aborted"));
-            return;
+          if (signal) {
+            if (signal.aborted) {
+              onAbort();
+            } else {
+              signal.addEventListener("abort", onAbort, { once: true });
+            }
           }
 
-          if (timedOut) {
-            reject(new Error(`timeout:${timeout}`));
-            return;
+          if (child.stdout) {
+            child.stdout.on("data", onData);
+          }
+          if (child.stderr) {
+            child.stderr.on("data", onData);
           }
 
-          resolve({ exitCode: code });
-        });
+          child.on("error", (err) => {
+            cleanup();
+            reject(err);
+          });
+
+          child.on("close", (code) => {
+            cleanup();
+
+            if (aborted || signal?.aborted) {
+              reject(new Error("aborted"));
+              return;
+            }
+
+            if (timedOut) {
+              reject(new Error(`timeout:${timeout}`));
+              return;
+            }
+
+            resolve({ exitCode: code });
+          });
+        })();
       });
     },
   };

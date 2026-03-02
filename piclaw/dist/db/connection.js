@@ -152,6 +152,20 @@ function createSchema(database) {
     CREATE INDEX IF NOT EXISTS idx_token_usage_chat_jid ON token_usage(chat_jid);
     CREATE INDEX IF NOT EXISTS idx_token_usage_run_at ON token_usage(run_at);
     CREATE INDEX IF NOT EXISTS idx_token_usage_chat_jid_run_at ON token_usage(chat_jid, run_at);
+
+    CREATE TABLE IF NOT EXISTS keychain_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL,
+      ciphertext BLOB NOT NULL,
+      nonce BLOB NOT NULL,
+      salt BLOB NOT NULL,
+      kdf TEXT NOT NULL,
+      kdf_iterations INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_keychain_entries_type ON keychain_entries(type);
   `);
 }
 function ensureMessageColumns(database) {
@@ -197,6 +211,7 @@ export function initDatabase() {
     db = new Database(dbPath);
     db.exec("PRAGMA journal_mode = WAL;");
     db.exec("PRAGMA busy_timeout = 5000;");
+    db.exec("PRAGMA secure_delete = ON;");
     createSchema(db);
     ensureMessageColumns(db);
     ensureScheduledTaskColumns(db);
