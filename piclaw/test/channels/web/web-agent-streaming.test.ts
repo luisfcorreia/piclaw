@@ -82,7 +82,8 @@ describe("web agent streaming", () => {
     expect(eventTypes).toContain("agent_status");
     expect(eventTypes).toContain("agent_thought");
     expect(eventTypes).toContain("agent_draft");
-    expect(eventTypes).toContain("agent_draft_delta");
+    expect(eventTypes).not.toContain("agent_draft_delta");
+    expect(eventTypes).not.toContain("agent_thought_delta");
     expect(eventTypes).toContain("agent_response");
 
     const toolStatus = events.find(

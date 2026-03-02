@@ -17,6 +17,7 @@ export function createStreamingEventHandler(options) {
     let draftBuffer = "";
     let thoughtHasDelta = false;
     let thoughtDeltaActive = false;
+    let draftDeltaActive = false;
     const { remember, lookup, forget } = createToolTitleTracker();
     const base = {
         thread_id: options.threadId,
@@ -100,6 +101,7 @@ export function createStreamingEventHandler(options) {
             }
             if (messageEvent.type === "text_start") {
                 draftBuffer = "";
+                draftDeltaActive = false;
                 options.onDraftBuffer?.(draftBuffer, 0);
                 options.emitter.draft({
                     ...base,
@@ -108,31 +110,44 @@ export function createStreamingEventHandler(options) {
                     kind: "draft",
                     mode: "replace",
                 });
-                options.emitter.draftDelta({
-                    ...base,
-                    delta: "",
-                    reset: true,
-                });
+                if (options.includeDraftFull?.()) {
+                    draftDeltaActive = true;
+                    options.emitter.draftDelta({
+                        ...base,
+                        delta: "",
+                        reset: true,
+                    });
+                }
             }
             if (messageEvent.type === "text_delta") {
                 draftBuffer += messageEvent.delta;
                 const { preview, totalLines } = buildPreview(draftBuffer, draftPreviewLines, previewMaxCharsPerLine);
                 options.onDraftBuffer?.(draftBuffer, totalLines);
-                const payload = {
+                options.emitter.draft({
                     ...base,
                     text: preview,
                     total_lines: totalLines,
                     kind: "draft",
                     mode: "replace",
-                };
-                if (options.includeDraftFull?.()) {
-                    payload.full_text = draftBuffer;
-                }
-                options.emitter.draft(payload);
-                options.emitter.draftDelta({
-                    ...base,
-                    delta: messageEvent.delta,
                 });
+                const shouldSendDelta = Boolean(options.includeDraftFull?.());
+                if (shouldSendDelta && !draftDeltaActive) {
+                    draftDeltaActive = true;
+                    options.emitter.draftDelta({
+                        ...base,
+                        delta: draftBuffer,
+                        reset: true,
+                    });
+                }
+                else if (shouldSendDelta) {
+                    options.emitter.draftDelta({
+                        ...base,
+                        delta: messageEvent.delta,
+                    });
+                }
+                else {
+                    draftDeltaActive = false;
+                }
             }
         }
         if (event.type === "tool_execution_start") {

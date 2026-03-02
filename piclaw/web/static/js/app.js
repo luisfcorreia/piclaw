@@ -82,6 +82,14 @@ const dedupePosts = (items) => {
     });
 };
 
+const estimatePreviewLines = (text, maxCharsPerLine = 160) => {
+    const value = String(text || '').replace(/\r\n/g, '\n');
+    if (!value) return 0;
+    return value
+        .split('\n')
+        .reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / maxCharsPerLine)), 0);
+};
+
 /**
  * Main App component
  */
@@ -204,11 +212,27 @@ function App() {
             return;
         }
         draftExpandedRef.current = expanded;
+        if (turnId) {
+            try {
+                await setAgentThoughtVisibility(turnId, 'draft', expanded);
+            } catch (error) {
+                console.warn('Failed to update draft visibility:', error);
+            }
+        }
         if (!expanded) return;
-        setAgentDraft((prev) => ({
-            ...(prev || { text: '', totalLines: 0 }),
-            fullText: draftBufferRef.current || prev?.fullText || '',
-        }));
+        try {
+            const data = turnId ? await getAgentThought(turnId, 'draft') : null;
+            if (data?.text) {
+                draftBufferRef.current = data.text;
+            }
+            setAgentDraft((prev) => ({
+                ...(prev || { text: '', totalLines: 0 }),
+                fullText: draftBufferRef.current || prev?.fullText || '',
+                totalLines: Number.isFinite(data?.total_lines) ? data.total_lines : prev?.totalLines || 0,
+            }));
+        } catch (error) {
+            console.warn('Failed to fetch full draft:', error);
+        }
     }, []);
 
     const removeStalledPost = useCallback(() => {
@@ -585,10 +609,11 @@ function App() {
                 draftBufferRef.current += data.delta;
             }
             if (draftExpandedRef.current) {
+                const fullText = draftBufferRef.current;
                 setAgentDraft((prev) => ({
                     text: prev?.text || '',
-                    totalLines: prev?.totalLines || 0,
-                    fullText: draftBufferRef.current,
+                    totalLines: estimatePreviewLines(fullText),
+                    fullText,
                 }));
             }
             return;
@@ -611,12 +636,9 @@ function App() {
             if (data.kind === 'plan') {
                 if (mode === 'replace') setAgentPlan(text);
                 else setAgentPlan((prev) => (prev || '') + text);
-            } else {
-                setAgentDraft((prev) => ({
-                    text,
-                    totalLines: inferredTotal,
-                    fullText: prev?.fullText || '',
-                }));
+            } else if (!draftExpandedRef.current) {
+                draftBufferRef.current = text;
+                setAgentDraft({ text, totalLines: inferredTotal });
             }
             return;
         }
@@ -636,10 +658,11 @@ function App() {
                 thoughtBufferRef.current += data.delta;
             }
             if (thoughtExpandedRef.current) {
+                const fullText = thoughtBufferRef.current;
                 setAgentThought((prev) => ({
                     text: prev?.text || '',
-                    totalLines: prev?.totalLines || 0,
-                    fullText: thoughtBufferRef.current,
+                    totalLines: estimatePreviewLines(fullText),
+                    fullText,
                 }));
             }
             return;
@@ -657,11 +680,10 @@ function App() {
             const inferredTotal = Number.isFinite(data.total_lines)
                 ? data.total_lines
                 : (text ? text.replace(/\r\n/g, '\n').split('\n').length : 0);
-            setAgentThought((prev) => ({
-                text,
-                totalLines: inferredTotal,
-                fullText: prev?.fullText || '',
-            }));
+            if (!thoughtExpandedRef.current) {
+                thoughtBufferRef.current = text;
+                setAgentThought({ text, totalLines: inferredTotal });
+            }
             return;
         }
 

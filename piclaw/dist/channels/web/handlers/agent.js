@@ -114,6 +114,7 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         draftPreviewLines: DRAFT_PREVIEW_LINES,
         previewMaxCharsPerLine: PREVIEW_MAX_CHARS_PER_LINE,
         includeThoughtFull: () => channel.isPanelExpanded(turnId, "thought"),
+        includeDraftFull: () => channel.isPanelExpanded(turnId, "draft"),
         onThoughtBuffer: (text, totalLines) => channel.updateThoughtBuffer(turnId, text, totalLines),
         onDraftBuffer: (text, totalLines) => channel.updateDraftBuffer(turnId, text, totalLines),
     });
