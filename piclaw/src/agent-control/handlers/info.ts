@@ -71,24 +71,63 @@ export async function handleLast(session: AgentSession, _command: LastCommand): 
 }
 
 export async function handleCommands(session: AgentSession, _command: CommandsCommand): Promise<AgentControlResult> {
-  type CommandEntry = { name: string; description?: string };
+  type CommandSource = "core" | "extension" | "pi-extension" | "template" | "skill";
+  type ExtensionMeta = { source: CommandSource; detail?: string };
+  interface CommandEntry {
+    name: string;
+    description?: string;
+    source: CommandSource;
+    detail?: string;
+    extensions: ExtensionMeta[];
+  }
+
+  const describeSource = (source: CommandSource, detail?: string): string => {
+    const base =
+      source === "core" ? "core"
+        : source === "extension" ? "workspace extension"
+          : source === "pi-extension" ? "pi extension"
+            : source === "template" ? "prompt template"
+              : "skill";
+    return detail ? `${base} (${detail})` : base;
+  };
+
   const entries = new Map<string, CommandEntry>();
-  const addEntry = (name: string, description?: string) => {
+  const addEntry = (name: string, description: string | undefined, source: CommandSource, detail?: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     const key = trimmed.toLowerCase();
     const existing = entries.get(key);
-    if (existing) {
-      if (!existing.description && description) {
-        existing.description = description;
-      }
+    if (!existing) {
+      entries.set(key, { name: trimmed, description, source, detail, extensions: [] });
       return;
     }
-    entries.set(key, { name: trimmed, description });
+
+    if (!existing.description && description) {
+      existing.description = description;
+    }
+
+    if (existing.source === "core") {
+      existing.extensions.push({ source, detail });
+      return;
+    }
+
+    if (source === "core") {
+      const previous: ExtensionMeta = { source: existing.source, detail: existing.detail };
+      entries.set(key, {
+        name: trimmed,
+        description: description ?? existing.description,
+        source: "core",
+        detail: undefined,
+        extensions: [...existing.extensions, previous],
+      });
+      return;
+    }
+
+    existing.extensions.push({ source, detail });
   };
 
   for (const command of CONTROL_COMMAND_DEFINITIONS) {
-    addEntry(command.name, command.description);
+    addEntry(command.name, command.description, "core");
   }
 
   const extensionRunner = session.extensionRunner;
@@ -101,28 +140,37 @@ export async function handleCommands(session: AgentSession, _command: CommandsCo
     for (const entry of extCommands) {
       const name = entry.command?.name;
       if (!name) continue;
-      if (isPiBuiltin(entry.extensionPath)) continue;
       const description = entry.command.description || `extension (${entry.extensionPath})`;
-      addEntry(`/${name}`, description);
+      const source: CommandSource = isPiBuiltin(entry.extensionPath) ? "pi-extension" : "extension";
+      addEntry(`/${name}`, description, source, entry.extensionPath || undefined);
     }
   }
 
   for (const template of session.promptTemplates) {
     const description = template.description || "prompt template";
-    addEntry(`/${template.name}`, description);
+    addEntry(`/${template.name}`, description, "template", template.name);
   }
 
   const skills = session.resourceLoader.getSkills().skills;
   for (const skill of skills) {
     const description = skill.description || "skill";
-    addEntry(`/skill:${skill.name}`, description);
+    addEntry(`/skill:${skill.name}`, description, "skill", skill.name);
   }
 
   const sorted = Array.from(entries.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
   const lines: string[] = ["Available commands:"];
   for (const entry of sorted) {
     const suffix = entry.description ? ` - ${entry.description}` : "";
-    lines.push(`• ${entry.name}${suffix}`);
+    const notes: string[] = [];
+    if (entry.source !== "core") {
+      notes.push(describeSource(entry.source, entry.detail));
+    }
+    if (entry.extensions.length) {
+      const extNotes = entry.extensions.map((ext) => describeSource(ext.source, ext.detail));
+      notes.push(`extended by ${extNotes.join(", ")}`);
+    }
+    const noteText = notes.length ? ` [${notes.join("; ")}]` : "";
+    lines.push(`• ${entry.name}${suffix}${noteText}`);
   }
 
   return {
