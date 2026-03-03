@@ -65,7 +65,14 @@ export async function handleAgentMessage(channel, req, pathname, chatJid, defaul
     // If message looks like an extension slash command (starts with '/'), execute it directly
     const trimmed = (normalized.content || "").trim();
     if (trimmed.startsWith("/")) {
-        const cmdResult = await channel.agentPool.applySlashCommand(chatJid, trimmed);
+        channel.lastCommandInteractionId = interaction.id;
+        let cmdResult;
+        try {
+            cmdResult = await channel.agentPool.applySlashCommand(chatJid, trimmed);
+        }
+        finally {
+            channel.lastCommandInteractionId = null;
+        }
         try {
             const formatted = formatOutbound(cmdResult.message || "", "web");
             if (formatted)

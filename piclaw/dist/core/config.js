@@ -23,6 +23,11 @@ const envConfig = readEnvFile([
     "PUSHOVER_SOUND",
     "PICLAW_WEB_TLS_CERT",
     "PICLAW_WEB_TLS_KEY",
+    "PICLAW_WEB_TOTP_SECRET",
+    "PICLAW_WEB_TOTP_WINDOW",
+    "PICLAW_WEB_SESSION_TTL",
+    "PICLAW_WEB_INTERNAL_SECRET",
+    "PICLAW_INTERNAL_SECRET",
 ]);
 function pickString(config, keys) {
     for (const key of keys) {
@@ -66,6 +71,9 @@ const assistantConfig = piclawConfig.assistant && typeof piclawConfig.assistant 
 const userConfig = piclawConfig.user && typeof piclawConfig.user === "object"
     ? piclawConfig.user
     : piclawConfig;
+const webConfig = piclawConfig.web && typeof piclawConfig.web === "object"
+    ? piclawConfig.web
+    : piclawConfig;
 const configAppToken = pickString(pushoverConfig, ["appToken", "app_token", "PUSHOVER_APP_TOKEN"]);
 const configUserKey = pickString(pushoverConfig, ["userKey", "user_key", "PUSHOVER_USER_KEY"]);
 const configDevice = pickString(pushoverConfig, ["device", "PUSHOVER_DEVICE"]);
@@ -108,6 +116,36 @@ const configUserAvatarBackground = pickString(userConfig, [
     "avatarBackground",
     "avatar_background",
     "PICLAW_USER_AVATAR_BACKGROUND",
+]);
+const configWebTotpSecret = pickString(webConfig, [
+    "totpSecret",
+    "totp_secret",
+    "webTotpSecret",
+    "web_totp_secret",
+    "PICLAW_WEB_TOTP_SECRET",
+    "PICLAW_TOTP_SECRET",
+]);
+const configWebTotpWindow = pickNumber(webConfig, [
+    "totpWindow",
+    "totp_window",
+    "webTotpWindow",
+    "web_totp_window",
+    "PICLAW_WEB_TOTP_WINDOW",
+]);
+const configWebSessionTtl = pickNumber(webConfig, [
+    "sessionTtl",
+    "session_ttl",
+    "webSessionTtl",
+    "web_session_ttl",
+    "PICLAW_WEB_SESSION_TTL",
+]);
+const configWebInternalSecret = pickString(webConfig, [
+    "internalSecret",
+    "internal_secret",
+    "webInternalSecret",
+    "web_internal_secret",
+    "PICLAW_WEB_INTERNAL_SECRET",
+    "PICLAW_INTERNAL_SECRET",
 ]);
 function warnDeprecatedEnv(oldName, newName) {
     const oldValue = process.env[oldName] ?? envConfig[oldName];
@@ -195,6 +233,22 @@ export const WEB_TLS_KEY = CLI_WEB_TLS_KEY ||
     process.env.PICLAW_WEB_TLS_KEY ||
     envConfig.PICLAW_WEB_TLS_KEY ||
     (HAS_DEFAULT_TLS ? DEFAULT_TLS_KEY_PATH : "");
+export const WEB_TOTP_SECRET = process.env.PICLAW_WEB_TOTP_SECRET ||
+    envConfig.PICLAW_WEB_TOTP_SECRET ||
+    configWebTotpSecret ||
+    "";
+export const WEB_TOTP_WINDOW = parseInt(process.env.PICLAW_WEB_TOTP_WINDOW ||
+    envConfig.PICLAW_WEB_TOTP_WINDOW ||
+    (configWebTotpWindow !== undefined ? String(configWebTotpWindow) : "1"), 10);
+export const WEB_SESSION_TTL = parseInt(process.env.PICLAW_WEB_SESSION_TTL ||
+    envConfig.PICLAW_WEB_SESSION_TTL ||
+    (configWebSessionTtl !== undefined ? String(configWebSessionTtl) : String(7 * 24 * 60 * 60)), 10);
+export const WEB_INTERNAL_SECRET = process.env.PICLAW_INTERNAL_SECRET ||
+    process.env.PICLAW_WEB_INTERNAL_SECRET ||
+    envConfig.PICLAW_INTERNAL_SECRET ||
+    envConfig.PICLAW_WEB_INTERNAL_SECRET ||
+    configWebInternalSecret ||
+    "";
 export const SESSIONS_DIR = resolve(DATA_DIR, "sessions");
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

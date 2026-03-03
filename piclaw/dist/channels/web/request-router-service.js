@@ -5,6 +5,13 @@ const STATIC_MIME_TYPES = {
     ".ico": "image/x-icon",
     ".json": "application/manifest+json; charset=utf-8",
 };
+const APPLE_ICON_PATHS = new Set([
+    "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png",
+    "/apple-touch-icon-180x180.png",
+    "/apple-touch-icon-167x167.png",
+    "/apple-touch-icon-152x152.png",
+]);
 export class RequestRouterService {
     channel;
     constructor(channel) {
@@ -35,27 +42,65 @@ export class RequestRouterService {
         const url = new URL(req.url);
         const pathname = url.pathname;
         const isGetOrHead = req.method === "GET" || req.method === "HEAD";
-        if (isGetOrHead && (pathname === "/" || pathname === "/index.html")) {
+        const authEnabled = this.channel.isAuthEnabled();
+        const internalSecretEnabled = this.channel.isInternalSecretEnabled();
+        const isLoginPage = isGetOrHead && (pathname === "/login" || pathname === "/login.html");
+        const isAuthVerify = req.method === "POST" && pathname === "/auth/verify";
+        const isInternalPost = req.method === "POST" && pathname === "/internal/post";
+        const isInternalPatch = req.method === "PATCH" && pathname.startsWith("/post/");
+        const isIndex = isGetOrHead && (pathname === "/" || pathname === "/index.html");
+        const isManifest = isGetOrHead && pathname === "/manifest.json";
+        const isFavicon = isGetOrHead && pathname === "/favicon.ico";
+        const isAppleIcon = isGetOrHead && APPLE_ICON_PATHS.has(pathname);
+        const isStaticAsset = pathname.startsWith("/static/");
+        const isDocsAsset = pathname.startsWith("/docs/");
+        const isAvatar = isGetOrHead && pathname === "/avatar/agent";
+        if (internalSecretEnabled && (isInternalPost || isInternalPatch)) {
+            if (!this.channel.verifyInternalSecret(req)) {
+                return this.channel.json({ error: "Unauthorized" }, 401);
+            }
+        }
+        if (!authEnabled && isAuthVerify) {
+            return this.channel.json({ error: "Auth disabled" }, 404);
+        }
+        const skipAuthCheck = isLoginPage || isAuthVerify || isManifest || isFavicon || isAppleIcon || isStaticAsset || isDocsAsset || isAvatar;
+        if (authEnabled) {
+            if (isAuthVerify) {
+                return this.channel.handleAuthVerify(req);
+            }
+            if (isLoginPage) {
+                return this.channel.serveLoginPage();
+            }
+            if (!skipAuthCheck && !this.channel.isAuthenticated(req) && !isInternalPost && !isInternalPatch) {
+                if (isIndex) {
+                    return this.channel.serveLoginPage();
+                }
+                if (isGetOrHead) {
+                    return this.channel.redirectToLogin();
+                }
+                return this.channel.json({ error: "Unauthorized" }, 401);
+            }
+        }
+        else if (isLoginPage) {
+            return this.channel.json({ error: "Not found" }, 404);
+        }
+        if (isIndex) {
             return this.channel.serveStatic("index.html");
         }
-        if (isGetOrHead && pathname === "/manifest.json") {
+        if (isManifest) {
             return this.channel.handleManifest(req);
         }
-        if (isGetOrHead && pathname === "/favicon.ico") {
+        if (isFavicon) {
             return this.serveStaticAsset(req, "favicon.ico");
         }
-        if (isGetOrHead && (pathname === "/apple-touch-icon.png"
-            || pathname === "/apple-touch-icon-precomposed.png"
-            || pathname === "/apple-touch-icon-180x180.png"
-            || pathname === "/apple-touch-icon-167x167.png"
-            || pathname === "/apple-touch-icon-152x152.png")) {
+        if (isAppleIcon) {
             return this.serveStaticAsset(req, pathname.slice(1));
         }
-        if (pathname.startsWith("/static/")) {
+        if (isStaticAsset) {
             const rel = pathname.replace("/static/", "");
             return this.channel.serveStatic(rel);
         }
-        if (pathname.startsWith("/docs/")) {
+        if (isDocsAsset) {
             const rel = pathname.replace("/docs/", "");
             return this.channel.serveDocsStatic(rel);
         }
@@ -65,9 +110,11 @@ export class RequestRouterService {
         if (req.method === "GET" && pathname === "/agents") {
             return await this.channel.handleAgents();
         }
-        if (isGetOrHead && (pathname === "/avatar/agent" || pathname === "/avatar/user")) {
-            const kind = pathname.endsWith("/user") ? "user" : "agent";
-            return await this.channel.handleAvatar(kind, req);
+        if (isAvatar) {
+            return await this.channel.handleAvatar("agent", req);
+        }
+        if (isGetOrHead && pathname === "/avatar/user") {
+            return await this.channel.handleAvatar("user", req);
         }
         if (req.method === "GET" && pathname === "/timeline") {
             const limit = this.channel.clampInt(url.searchParams.get("limit"), 10, 1, 100);
@@ -113,12 +160,15 @@ export class RequestRouterService {
         if (req.method === "POST" && pathname === "/reply") {
             return this.channel.handlePost(req, true);
         }
+        if (req.method === "PATCH" && pathname.startsWith("/post/")) {
+            const id = this.channel.parseOptionalInt(pathname.replace("/post/", ""));
+            return this.channel.handleUpdatePost(req, id);
+        }
         if (req.method === "GET" && pathname.startsWith("/thread/")) {
             const id = this.channel.parseOptionalInt(pathname.replace("/thread/", ""));
             return this.channel.handleThread(id);
         }
         if (req.method === "GET" && pathname === "/agent/thought") {
-            const url = new URL(req.url);
             const turnId = url.searchParams.get("turn_id");
             const panel = url.searchParams.get("panel");
             return this.channel.handleThought(panel, turnId);
@@ -128,9 +178,11 @@ export class RequestRouterService {
         }
         if (req.method === "DELETE" && pathname.startsWith("/post/")) {
             const id = this.channel.parseOptionalInt(pathname.replace("/post/", ""));
-            const url = new URL(req.url);
             const cascade = url.searchParams.get("cascade") === "true" || url.searchParams.get("cascade") === "1";
             return this.channel.handleDeletePost(id, cascade);
+        }
+        if (req.method === "POST" && pathname === "/internal/post") {
+            return this.channel.handleInternalPost(req);
         }
         if (req.method === "POST" && pathname.startsWith("/agent/") && pathname.endsWith("/message")) {
             return this.channel.handleAgentMessage(req, pathname);
