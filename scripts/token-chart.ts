@@ -1,4 +1,12 @@
 #!/usr/bin/env bun
+/**
+ * scripts/token-chart.ts – Standalone copy of the token chart skill.
+ *
+ * Aggregates token usage from the SQLite DB and generates an SVG bar
+ * chart. This is the repo-level copy; the runtime uses the version
+ * under piclaw/skills/token-chart/.
+ */
+
 import { readdirSync, statSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import Database from "bun:sqlite";

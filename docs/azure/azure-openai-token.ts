@@ -1,3 +1,11 @@
+/**
+ * docs/azure/azure-openai-token.ts – Azure OpenAI provider implementation.
+ *
+ * Reference/example code showing how to implement a custom pi-ai Model
+ * provider that talks to Azure OpenAI endpoints using token-based auth
+ * instead of API keys. Supports streaming, tool calls, and thinking levels.
+ */
+
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import OpenAI from "openai";
 import {

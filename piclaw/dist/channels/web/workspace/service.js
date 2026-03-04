@@ -1,3 +1,11 @@
+/**
+ * web/workspace/service.ts – High-level workspace explorer service.
+ *
+ * Composes the file service, tree cache, and filesystem watcher into a
+ * single service that the workspace HTTP handlers interact with.
+ *
+ * Consumers: web/handlers/workspace.ts creates and uses a WorkspaceService.
+ */
 import { WorkspaceFileService } from "./file-service.js";
 import { WorkspaceTreeCache } from "./tree-cache.js";
 import { startWorkspaceWatcher } from "./watcher.js";

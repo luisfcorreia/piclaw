@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# scripts/docker/install-agent-runtime.sh – Install Homebrew and system tools.
+#
+# Used during Docker image build to install Homebrew (with optional mirror),
+# core CLI tools (ripgrep, jq, tree, etc.), and configure the agent user's
+# shell environment.
 set -euo pipefail
 
 DEFAULT_BREW_REMOTE="https://github.com/Homebrew/brew.git"

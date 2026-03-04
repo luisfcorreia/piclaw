@@ -1,3 +1,11 @@
+/**
+ * web/sse.ts – Server-Sent Events (SSE) primitives.
+ *
+ * Provides low-level SSE stream creation, event encoding, client
+ * lifecycle management, and broadcast helpers.
+ *
+ * Consumers: web/sse-hub.ts builds on these primitives.
+ */
 const encoder = new TextEncoder();
 export function handleSse(channel) {
     let clientRef = null;

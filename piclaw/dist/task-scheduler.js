@@ -1,7 +1,33 @@
+/**
+ * task-scheduler.ts – Polls for due scheduled tasks and executes them.
+ *
+ * Runs a periodic loop (every SCHEDULER_POLL_INTERVAL ms) that queries the
+ * database for active tasks whose `next_run` is in the past, then enqueues
+ * each task on the AgentQueue for serial execution.
+ *
+ * Each task run:
+ *   1. Saves the current session tree position so the user's conversation
+ *      context is not polluted.
+ *   2. Optionally switches the LLM model if the task specifies one.
+ *   3. Runs the agent with the task's prompt.
+ *   4. Sends the response to the task's chat and triggers a nudge notification.
+ *   5. Restores the original session position and model.
+ *   6. Logs the run result and computes the next_run timestamp.
+ *
+ * Consumers:
+ *   - runtime.ts calls startSchedulerLoop() at startup.
+ *   - The AgentQueue (queue.ts) serialises task execution with user messages.
+ */
 import { CronExpressionParser } from "cron-parser";
 import { SCHEDULER_POLL_INTERVAL, TIMEZONE } from "./core/config.js";
 import { getDueTasks, getTaskById, logTaskRun, updateTaskAfterRun } from "./db.js";
 import { detectChannel, formatOutbound } from "./router.js";
+/**
+ * Compute the next execution time for a task based on its schedule type:
+ *   - cron: parse the expression and return the next occurrence.
+ *   - interval: add the interval (ms) to now.
+ *   - once: return null (no further runs).
+ */
 export function computeNextRun(scheduleType, scheduleValue) {
     if (scheduleType === "cron") {
         try {
@@ -22,6 +48,7 @@ export function computeNextRun(scheduleType, scheduleValue) {
     }
     return null;
 }
+/** Parse a "provider/modelId" label into its components. */
 function parseModelLabel(label) {
     const trimmed = label.trim();
     const slash = trimmed.indexOf("/");
@@ -33,6 +60,7 @@ function parseModelLabel(label) {
     }
     return { provider: undefined, modelId: trimmed };
 }
+/** Apply a model label to the agent pool for a specific chat. */
 async function applyModelLabel(agentPool, chatJid, label) {
     const { provider, modelId } = parseModelLabel(label);
     return agentPool.applyControlCommand(chatJid, {
@@ -42,6 +70,10 @@ async function applyModelLabel(agentPool, chatJid, label) {
         raw: `/model ${label}`,
     });
 }
+/**
+ * Switch the agent to the task's model override.
+ * Returns an error message string on failure, or null on success.
+ */
 async function switchTaskModel(task, deps) {
     if (!task.model)
         return null;
@@ -51,6 +83,7 @@ async function switchTaskModel(task, deps) {
     }
     return null;
 }
+/** Restore the agent's model to what it was before the task ran. */
 async function restoreOriginalModel(task, deps, savedModel) {
     if (!task.model || !savedModel || savedModel === task.model)
         return;
@@ -59,8 +92,12 @@ async function restoreOriginalModel(task, deps, savedModel) {
         console.error(`[scheduler] Failed to restore model ${savedModel}: ${control.message}`);
     }
 }
+/**
+ * Execute a single scheduled task: run the agent, deliver the response,
+ * log the result, and update the task's next_run.
+ */
 export async function runScheduledTask(task, deps) {
-    // Re-check task status (may have been paused/cancelled while queued)
+    // Re-check task status (may have been paused/cancelled while queued).
     const fresh = getTaskById(task.id);
     if (!fresh || fresh.status !== "active")
         return;
@@ -73,7 +110,7 @@ export async function runScheduledTask(task, deps) {
     const savedLeafId = await deps.agentPool.saveSessionPosition(task.chat_jid);
     const savedModel = await deps.agentPool.getCurrentModelLabel(task.chat_jid);
     try {
-        // Switch model if task specifies one
+        // Switch model if task specifies one.
         if (task.model) {
             if (!savedModel || savedModel !== task.model) {
                 error = await switchTaskModel(task, deps);
@@ -101,9 +138,10 @@ export async function runScheduledTask(task, deps) {
         // Navigate back to the saved position — the task's prompt and response
         // stay in a side branch and won't pollute the user's conversation context.
         await deps.agentPool.restoreSessionPosition(task.chat_jid, savedLeafId);
-        // Restore the original model if it was changed
+        // Restore the original model if it was changed.
         await restoreOriginalModel(task, deps, savedModel);
     }
+    // Record the run in the task_run_logs table.
     logTaskRun({
         task_id: task.id,
         run_at: new Date().toISOString(),
@@ -112,10 +150,18 @@ export async function runScheduledTask(task, deps) {
         result,
         error,
     });
+    // Compute and persist the next execution time (null for one-shot tasks).
     const nextRun = computeNextRun(task.schedule_type, task.schedule_value);
     updateTaskAfterRun(task.id, nextRun, error ? `Error: ${error}` : (result?.slice(0, 200) || "Completed"));
 }
+/** Guard to prevent starting the loop more than once. */
 let started = false;
+/**
+ * Start the scheduler polling loop. Checks for due tasks every
+ * SCHEDULER_POLL_INTERVAL ms and enqueues them on the shared AgentQueue.
+ *
+ * Called once by runtime.ts during startup.
+ */
 export function startSchedulerLoop(deps) {
     if (started)
         return;

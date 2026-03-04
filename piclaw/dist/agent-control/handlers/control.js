@@ -1,3 +1,12 @@
+/**
+ * agent-control/handlers/control.ts – Handlers for session lifecycle commands.
+ *
+ * Handles /restart, /compact, /auto-compact, /auto-retry, /abort,
+ * /abort-retry, and /abort-bash commands that control the agent session's
+ * execution state.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to these handlers.
+ */
 import { formatCompactNumber } from "../agent-control-helpers.js";
 import { killTrackedProcesses } from "../../utils/process-tracker.js";
 export async function handleRestart(session, _command) {

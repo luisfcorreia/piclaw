@@ -1,3 +1,11 @@
+/**
+ * agent-control/handlers/operations.ts – Handlers for /shell and /bash commands.
+ *
+ * Executes shell commands from the control interface and returns formatted
+ * output blocks. Uses the tracked-bash infrastructure for process management.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to these handlers.
+ */
 import { createTrackedBashOperations } from "../../tools/tracked-bash.js";
 import { formatShellBlock, resolveShellCwd } from "../agent-control-helpers.js";
 const SHELL_OUTPUT_LIMIT = 20000;

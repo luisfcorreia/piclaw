@@ -1,3 +1,12 @@
+/**
+ * web/workspace/tree-cache.ts – Cached directory tree builder.
+ *
+ * Caches the workspace directory tree for a short TTL to avoid
+ * expensive filesystem traversals on every request. Invalidated
+ * by the filesystem watcher when files change.
+ *
+ * Consumers: web/workspace/service.ts uses TreeCache for GET /workspace/tree.
+ */
 import { buildTree } from "./tree.js";
 import { resolveWorkspacePath } from "./paths.js";
 export class WorkspaceTreeCache {

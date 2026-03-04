@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# supervisor/run-piclaw.sh – Wrapper script that launches piclaw under supervisord.
+#
+# Sets up Bun and Homebrew paths, sources .bashrc for env vars, and
+# execs the piclaw binary. Used as the command in supervisor/conf.d/piclaw.conf.
 set -euo pipefail
 
 export HOME="/home/agent"

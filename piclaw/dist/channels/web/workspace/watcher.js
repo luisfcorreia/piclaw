@@ -1,3 +1,12 @@
+/**
+ * web/workspace/watcher.ts – Filesystem watcher for workspace changes.
+ *
+ * Uses Node's fs.watch() to monitor the workspace directory for file
+ * changes. When a change is detected, it invalidates the tree cache
+ * and broadcasts an SSE event so the web UI can refresh.
+ *
+ * Consumers: web/workspace/service.ts calls startWorkspaceWatcher().
+ */
 import path from "path";
 import { readdirSync, statSync, watch } from "fs";
 import { WORKSPACE_DIR } from "../../../core/config.js";

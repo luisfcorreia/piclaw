@@ -1,3 +1,11 @@
+/**
+ * web/workspace/paths.ts – Workspace path resolution and validation.
+ *
+ * Resolves relative paths against the workspace root and validates that
+ * resolved paths don't escape the workspace boundary (path traversal).
+ *
+ * Consumers: web/workspace/file-service.ts, web/handlers/workspace.ts.
+ */
 import path from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { EXCLUDE_DIRS } from "./constants.js";

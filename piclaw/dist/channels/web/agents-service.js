@@ -1,3 +1,11 @@
+/**
+ * web/agents-service.ts – Serves agent profile information to the web UI.
+ *
+ * Builds the response payload for GET /agents, including the agent's name,
+ * avatar URL, current model, and thinking level.
+ *
+ * Consumers: web/handlers/agent.ts calls getAgentsResponse().
+ */
 export async function getAgentsResponse(agentPool, options) {
     const model = await agentPool.getCurrentModelLabel(options.chatJid).catch(() => null);
     return {

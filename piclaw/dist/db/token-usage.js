@@ -1,4 +1,17 @@
+/**
+ * db/token-usage.ts – Records LLM token consumption and cost per agent run.
+ *
+ * After each agent turn completes, the agent pool (agent-pool/usage.ts)
+ * calls storeTokenUsage() to persist the token counts, cost breakdown, and
+ * model/provider metadata.
+ *
+ * Consumers:
+ *   - agent-pool/usage.ts calls storeTokenUsage() after every agent run.
+ *   - agent-control/handlers/info.ts queries the table for `/usage` reports.
+ *   - The token-chart skill reads the table to generate usage visualisations.
+ */
 import { getDb } from "./connection.js";
+/** Insert a token-usage record for a completed agent run. */
 export function storeTokenUsage(record) {
     const db = getDb();
     db.prepare(`INSERT INTO token_usage (

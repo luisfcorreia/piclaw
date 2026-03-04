@@ -1,3 +1,11 @@
+/**
+ * web/interaction-service.ts – Builds InteractionRow payloads for SSE.
+ *
+ * Converts raw message/response data into the InteractionRow format
+ * expected by the web UI timeline component.
+ *
+ * Consumers: web/agent-message-service.ts, web/posts-service.ts.
+ */
 export function withAgentProfile(interaction, agentName, agentAvatar, userName, userAvatar, userAvatarBackground) {
     return {
         ...interaction,

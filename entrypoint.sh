@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# entrypoint.sh – Docker container entrypoint for the Pibox image.
+#
+# Initialises /home/agent from skel, syncs supervisor configs from
+# workspace defaults, and execs supervisord as PID 1.
+# Idempotent: uses a marker file to skip re-init on container restart.
 set -euo pipefail
 
 MARKER_FILE="/home/agent/.container_initialized"

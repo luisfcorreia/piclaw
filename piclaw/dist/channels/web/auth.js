@@ -1,3 +1,13 @@
+/**
+ * web/auth.ts – TOTP-based authentication for the web UI.
+ *
+ * Implements HMAC-based TOTP (RFC 6238) verification, session token
+ * generation, and cookie-based session management. When WEB_TOTP_SECRET
+ * is configured, all web requests must be authenticated.
+ *
+ * Consumers: channels/web.ts uses these helpers in its request handler
+ *            to gate access to all API and static endpoints.
+ */
 import { createHmac, randomBytes } from "node:crypto";
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 function decodeBase32(value) {

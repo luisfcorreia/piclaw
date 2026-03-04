@@ -1,3 +1,11 @@
+/**
+ * web/http/static.ts – Static file serving for the web UI.
+ *
+ * Serves the bundled HTML, CSS, JS, and font files from the web/static
+ * directory. Handles content-type detection and caching headers.
+ *
+ * Consumers: web/http/response-service.ts and web/request-router.ts.
+ */
 import { extname, resolve } from "path";
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const DOCS_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "docs");

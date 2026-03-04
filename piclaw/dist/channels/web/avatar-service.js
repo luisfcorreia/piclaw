@@ -1,3 +1,12 @@
+/**
+ * web/avatar-service.ts – Manages agent and user avatar images.
+ *
+ * Handles avatar upload, retrieval, and storage on disk. Supports both
+ * URL-based avatars and file-upload avatars stored under the workspace's
+ * .piclaw/data/avatars directory.
+ *
+ * Consumers: web/handlers/agent.ts serves and updates avatar images.
+ */
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "fs";
 import { resolve, extname } from "path";
 import { fileURLToPath } from "url";

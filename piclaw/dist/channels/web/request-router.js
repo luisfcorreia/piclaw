@@ -1,3 +1,12 @@
+/**
+ * web/request-router.ts – HTTP request dispatcher for the web channel.
+ *
+ * Routes incoming HTTP requests to the appropriate handler based on URL
+ * path and method. Maps API endpoints (/timeline, /post, /media, /agents,
+ * /sse, etc.) and static file serving.
+ *
+ * Consumers: channels/web.ts passes each request to handleWebRequest().
+ */
 export async function handleWebRequest(channel, req) {
     const url = new URL(req.url);
     const pathname = url.pathname;

@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# scripts/docker/build-piclaw-package.sh – Build piclaw .tgz inside the container.
+#
+# Runs bun update, tsc, bun pack inside the container and copies the
+# resulting tarball to /tmp for extraction by the Dockerfile.
 set -euo pipefail
 
 export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"

@@ -1,3 +1,11 @@
+/**
+ * web/http/response-service.ts – Unified response builder service.
+ *
+ * Wraps http-utils and static helpers into a cohesive API for handler
+ * modules. Provides JSON responses, static file serving, and doc serving.
+ *
+ * Consumers: web/request-router.ts uses ResponseService methods.
+ */
 import { clampInt, jsonResponse, parseOptionalInt } from "./http-utils.js";
 import { serveDocsStatic, serveStatic } from "./static.js";
 export class ResponseService {

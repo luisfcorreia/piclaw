@@ -1,3 +1,11 @@
+/**
+ * web/workspace/file-service.ts – File read/write operations for the explorer.
+ *
+ * Provides file content retrieval, creation, directory listing, and file
+ * writing with path safety validation (must be within workspace root).
+ *
+ * Consumers: web/handlers/workspace.ts delegates file operations here.
+ */
 import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
 import { readdir } from "fs/promises";
 import path from "path";

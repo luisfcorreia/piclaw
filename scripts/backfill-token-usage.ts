@@ -1,4 +1,13 @@
 #!/usr/bin/env bun
+/**
+ * scripts/backfill-token-usage.ts – Backfill token_usage from session JSON files.
+ *
+ * One-shot migration script that reads session conversation files from
+ * the sessions directory, extracts token usage data from assistant messages,
+ * and inserts them into the token_usage DB table. Safe to re-run (skips
+ * existing entries).
+ */
+
 import { readdirSync, statSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import Database from "bun:sqlite";

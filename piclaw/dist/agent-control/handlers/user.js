@@ -1,3 +1,12 @@
+/**
+ * agent-control/handlers/user.ts – Handlers for user identity commands.
+ *
+ * Handles /user-name, /user-avatar, and /user-github commands that update
+ * the human user's display name, avatar, and GitHub profile settings,
+ * persisting changes to the config file.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to these handlers.
+ */
 import { USER_AVATAR, USER_NAME, setUserAvatar, setUserAvatarBackground, setUserName, } from "../../core/config.js";
 import { updateUserConfig } from "../agent-control-helpers.js";
 const CLEAR_VALUES = ["clear", "none", "off", "default"];

@@ -1,8 +1,46 @@
+/**
+ * db/connection.ts – SQLite database initialisation and schema management.
+ *
+ * Opens (or creates) the main SQLite database at `<STORE_DIR>/messages.db`,
+ * sets pragmas for WAL mode and busy timeout, and ensures all required tables,
+ * indexes, FTS virtual tables, and triggers exist.
+ *
+ * This is the first module that must be called at startup (via `initDatabase()`)
+ * before any other db/* module can function. The singleton `Database` instance
+ * is then retrieved elsewhere with `getDb()`.
+ *
+ * Consumers:
+ *   - db.ts re-exports initDatabase/getDb as the public entry point.
+ *   - All db/* modules (messages, media, tasks, token-usage, tool-outputs,
+ *     router-state, web-content, auto-compaction) call getDb() internally.
+ *   - index.ts / runtime.ts calls initDatabase() during application startup.
+ */
 import Database from "bun:sqlite";
 import fs from "fs";
 import path from "path";
 import { STORE_DIR } from "../core/config.js";
+/** Singleton database handle; set by initDatabase(), accessed via getDb(). */
 let db = null;
+/**
+ * Create all tables, indexes, FTS virtual tables, and triggers if they do
+ * not already exist. Called once during initDatabase().
+ *
+ * Tables created:
+ *   - chats – known chat endpoints (jid, name, last_message_time)
+ *   - messages – individual messages with sender/content/timestamp
+ *   - messages_fts – FTS5 index over message content for full-text search
+ *   - media – binary file storage for attachments
+ *   - message_media – join table linking messages to media records
+ *   - tool_outputs – large tool invocation results (bash output, file reads)
+ *   - tool_outputs_fts – FTS5 index for searching tool output content
+ *   - scheduled_tasks – cron/interval/once task definitions
+ *   - task_run_logs – execution history for scheduled tasks
+ *   - router_state – key-value store for router cursor positions
+ *   - token_usage – per-run LLM token and cost accounting
+ *   - keychain_entries – encrypted credential storage (secure/keychain.ts)
+ *   - workspace_files – file metadata cache for workspace search
+ *   - workspace_fts – FTS5 index over workspace file contents
+ */
 function createSchema(database) {
     database.exec(`
     CREATE TABLE IF NOT EXISTS chats (
@@ -31,6 +69,8 @@ function createSchema(database) {
     CREATE INDEX IF NOT EXISTS idx_messages_chat_jid_timestamp ON messages(chat_jid, timestamp);
     CREATE INDEX IF NOT EXISTS idx_messages_chat_jid_bot_timestamp ON messages(chat_jid, is_bot_message, timestamp);
 
+    -- FTS5 virtual table for full-text search over message content.
+    -- Kept in sync via insert/delete/update triggers below.
     CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
       content,
       chat_jid UNINDEXED,
@@ -42,16 +82,19 @@ function createSchema(database) {
       content_rowid='rowid'
     );
 
+    -- Trigger: populate FTS on message insert.
     CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
       INSERT INTO messages_fts(rowid, content, chat_jid, sender, sender_name, timestamp, is_bot_message)
       VALUES (new.rowid, new.content, new.chat_jid, new.sender, new.sender_name, new.timestamp, new.is_bot_message);
     END;
 
+    -- Trigger: remove FTS entry on message delete.
     CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
       INSERT INTO messages_fts(messages_fts, rowid, content, chat_jid, sender, sender_name, timestamp, is_bot_message)
       VALUES ('delete', old.rowid, old.content, old.chat_jid, old.sender, old.sender_name, old.timestamp, old.is_bot_message);
     END;
 
+    -- Trigger: update FTS entry on message update (delete old + insert new).
     CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
       INSERT INTO messages_fts(messages_fts, rowid, content, chat_jid, sender, sender_name, timestamp, is_bot_message)
       VALUES ('delete', old.rowid, old.content, old.chat_jid, old.sender, old.sender_name, old.timestamp, old.is_bot_message);
@@ -70,6 +113,7 @@ function createSchema(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_media_created_at ON media(created_at);
 
+    -- Join table linking message rows to their media attachments.
     CREATE TABLE IF NOT EXISTS message_media (
       message_rowid INTEGER NOT NULL,
       media_id INTEGER NOT NULL,
@@ -90,6 +134,7 @@ function createSchema(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_tool_outputs_created_at ON tool_outputs(created_at);
 
+    -- FTS5 index for searching tool output content by text.
     CREATE VIRTUAL TABLE IF NOT EXISTS tool_outputs_fts USING fts5(
       content,
       output_id UNINDEXED
@@ -125,6 +170,7 @@ function createSchema(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_task_run_logs ON task_run_logs(task_id, run_at);
 
+    -- Simple key-value store for the router's per-chat cursor positions.
     CREATE TABLE IF NOT EXISTS router_state (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -153,6 +199,7 @@ function createSchema(database) {
     CREATE INDEX IF NOT EXISTS idx_token_usage_run_at ON token_usage(run_at);
     CREATE INDEX IF NOT EXISTS idx_token_usage_chat_jid_run_at ON token_usage(chat_jid, run_at);
 
+    -- Encrypted credential storage for the keychain (secure/keychain.ts).
     CREATE TABLE IF NOT EXISTS keychain_entries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
@@ -167,6 +214,7 @@ function createSchema(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_keychain_entries_type ON keychain_entries(type);
 
+    -- File metadata cache for workspace-search.ts full-text indexing.
     CREATE TABLE IF NOT EXISTS workspace_files (
       path TEXT PRIMARY KEY,
       mtime_ms INTEGER NOT NULL,
@@ -175,6 +223,7 @@ function createSchema(database) {
     );
     CREATE INDEX IF NOT EXISTS idx_workspace_files_indexed_at ON workspace_files(indexed_at);
 
+    -- FTS5 index over workspace file contents for fast grep-like search.
     CREATE VIRTUAL TABLE IF NOT EXISTS workspace_fts USING fts5(
       content,
       path UNINDEXED,
@@ -183,6 +232,12 @@ function createSchema(database) {
     );
   `);
 }
+/**
+ * Add columns that were introduced after the initial schema.
+ * Safe to call repeatedly – skips columns that already exist.
+ * Handles the `content_blocks`, `link_previews`, and `thread_id` columns
+ * added for the web channel's rich-message support.
+ */
 function ensureMessageColumns(database) {
     const columns = database.prepare("PRAGMA table_info(messages)").all();
     const existing = new Set(columns.map((col) => col.name));
@@ -200,6 +255,10 @@ function ensureMessageColumns(database) {
     ensureColumn("link_previews");
     ensureColumn("thread_id", "INTEGER");
 }
+/**
+ * One-time FTS rebuild for databases created before the FTS triggers existed.
+ * Uses PRAGMA user_version as a migration marker so it only runs once.
+ */
 function ensureFts(database) {
     const row = database.prepare("PRAGMA user_version").get();
     const version = typeof row?.user_version === "number" ? row.user_version : 0;
@@ -208,6 +267,10 @@ function ensureFts(database) {
     database.exec("INSERT INTO messages_fts(messages_fts) VALUES('rebuild');");
     database.exec("PRAGMA user_version = 1;");
 }
+/**
+ * Ensure the `model` column exists on `scheduled_tasks` (added in a later
+ * version to allow per-task model overrides).
+ */
 function ensureScheduledTaskColumns(database) {
     const columns = database.prepare("PRAGMA table_info(scheduled_tasks)").all();
     const existing = new Set(columns.map((col) => col.name));
@@ -220,6 +283,12 @@ function ensureScheduledTaskColumns(database) {
         }
     }
 }
+/**
+ * Open (or create) the SQLite database and run all schema migrations.
+ * Must be called once at application startup before any other db/* function.
+ *
+ * Called by index.ts (the application entry point).
+ */
 export function initDatabase() {
     const dbPath = path.join(STORE_DIR, "messages.db");
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -232,6 +301,12 @@ export function initDatabase() {
     ensureScheduledTaskColumns(db);
     ensureFts(db);
 }
+/**
+ * Return the singleton Database instance.
+ * Throws if called before initDatabase().
+ *
+ * Used by every db/* module to obtain the shared connection.
+ */
 export function getDb() {
     if (!db) {
         throw new Error("Database not initialized");

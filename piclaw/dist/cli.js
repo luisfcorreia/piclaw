@@ -1,3 +1,14 @@
+/**
+ * cli.ts – Command-line interface for piclaw sub-commands.
+ *
+ * Handles --help, --version, and the `keychain` sub-command family
+ * (set, get, list, delete). If a CLI sub-command is detected,
+ * handleCliOptions() processes it and returns true so index.ts can
+ * exit without starting the runtime.
+ *
+ * Consumers:
+ *   - index.ts calls handleCliOptions() before main().
+ */
 import { readFileSync } from "fs";
 import { join } from "path";
 import { initDatabase } from "./db.js";

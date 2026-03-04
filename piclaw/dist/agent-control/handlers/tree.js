@@ -1,3 +1,11 @@
+/**
+ * agent-control/handlers/tree.ts – Handler for the /tree command.
+ *
+ * Renders the session message tree in a compact text format, supporting
+ * head/tail modes, pagination, summarisation, and label display.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to this handler.
+ */
 import { extractTextFromContent, formatCompactNumber, truncateText } from "../agent-control-helpers.js";
 export async function handleTree(session, command) {
     const sessionManager = session.sessionManager;

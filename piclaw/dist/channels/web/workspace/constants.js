@@ -1,3 +1,11 @@
+/**
+ * web/workspace/constants.ts – Shared constants for the workspace explorer.
+ *
+ * Defines excluded directories, file extension sets, and size limits
+ * used by the tree builder, file service, and watcher.
+ *
+ * Consumers: All web/workspace/*.ts modules.
+ */
 export const EXCLUDE_DIRS = new Set([
     "node_modules",
     ".git",

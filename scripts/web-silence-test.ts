@@ -1,3 +1,11 @@
+/**
+ * scripts/web-silence-test.ts – Playwright smoke test for web UI silence.
+ *
+ * Launches a headless browser, connects to the local web UI, and verifies
+ * that basic page load, SSE connection, and message posting work without
+ * console errors.
+ */
+
 import { chromium } from "playwright";
 
 const url = "http://localhost:3000";

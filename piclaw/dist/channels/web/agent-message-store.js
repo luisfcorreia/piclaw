@@ -1,3 +1,12 @@
+/**
+ * web/agent-message-store.ts – Tracks in-flight agent responses and attachments.
+ *
+ * Maintains a buffer of the current agent response text, media attachments,
+ * and a pending-post queue. When the agent finishes, the buffered content
+ * is flushed to the database via agent-message-service.ts.
+ *
+ * Consumers: channels/web.ts and web/agent-events.ts write to this store.
+ */
 import { formatOutbound } from "../../router.js";
 function buildAttachmentBlocks(attachments) {
     const mediaIds = attachments.map((a) => a.id);

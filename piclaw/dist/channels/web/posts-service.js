@@ -1,3 +1,12 @@
+/**
+ * web/posts-service.ts – User message (post) creation and validation.
+ *
+ * Parses inbound post payloads from the compose box, stores them as
+ * messages in the database, triggers link preview fetching, and
+ * broadcasts the new post via SSE.
+ *
+ * Consumers: web/handlers/posts.ts calls parsePostPayload() and storePost().
+ */
 export function parsePostPayload(body) {
     if (!body || typeof body !== "object")
         return { ok: false, error: "Invalid JSON" };

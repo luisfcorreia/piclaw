@@ -1,3 +1,12 @@
+/**
+ * web/channel-state.ts – Persistent state for the web channel.
+ *
+ * Stores per-chat state like pending resume prompts, steering queue
+ * timestamps, and followup modes in the router_state DB table.
+ *
+ * Consumers: channels/web.ts reads/writes state during request handling
+ *            and agent run orchestration.
+ */
 import { getRouterState, setRouterState } from "../../db.js";
 export class WebChannelState {
     stateKey;

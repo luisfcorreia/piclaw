@@ -1,4 +1,12 @@
 #!/usr/bin/env bun
+/**
+ * scripts/graphite-power-chart.ts – Standalone copy of the Graphite chart skill.
+ *
+ * Fetches time-series data from a Graphite server and generates an SVG
+ * line chart. This is the repo-level copy; the runtime uses the version
+ * under piclaw/skills/graphite-power-chart/.
+ */
+
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 

@@ -1,3 +1,11 @@
+/**
+ * web/workspace/file-utils.ts – File type detection and path helpers.
+ *
+ * Provides utility functions for detecting text/image files by extension
+ * and for determining if a path is safe for serving.
+ *
+ * Consumers: web/workspace/file-service.ts, web/workspace/tree.ts.
+ */
 import path from "path";
 import { IMAGE_EXTS, TEXT_EXTS } from "./constants.js";
 export function contentTypeForPath(filePath) {

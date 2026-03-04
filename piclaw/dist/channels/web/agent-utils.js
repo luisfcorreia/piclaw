@@ -1,3 +1,11 @@
+/**
+ * web/agent-utils.ts – Utility functions for agent event processing.
+ *
+ * Provides helpers for building previews of agent drafts/thoughts, tracking
+ * tool call titles, and constructing agent profile metadata objects.
+ *
+ * Consumers: web/agent-events.ts, web/agent-message-store.ts.
+ */
 import { buildPreviewLines, countSoftLines, splitLines } from "../../utils/preview.js";
 export function createAgentProfileBuilder(agentName, agentAvatar, userName, userAvatar, userAvatarBackground) {
     return (payload) => ({

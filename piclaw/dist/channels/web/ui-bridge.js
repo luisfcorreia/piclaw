@@ -1,3 +1,13 @@
+/**
+ * web/ui-bridge.ts – Bridges pi-agent's ExtensionUIContext to SSE events.
+ *
+ * Translates extension UI requests (confirmation dialogs, input prompts)
+ * into SSE events for the web UI, and resolves them when the user responds
+ * via the API. This allows agent extensions to interact with the user
+ * through the web UI in real time.
+ *
+ * Consumers: channels/web.ts sets up the UI bridge during agent runs.
+ */
 import { createFallbackTheme } from "./theme.js";
 export class UiBridge {
     channel;

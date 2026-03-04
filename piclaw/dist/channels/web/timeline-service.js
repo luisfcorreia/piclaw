@@ -1,3 +1,11 @@
+/**
+ * web/timeline-service.ts – Timeline data access for the web UI.
+ *
+ * Provides paginated timeline queries, hashtag/search filtering, and
+ * post deletion with cascade handling for threaded replies.
+ *
+ * Consumers: web/handlers/posts.ts delegates timeline operations here.
+ */
 import { deleteMessageByRowId, deleteThreadByRowId, getMessageByRowId, getMessagesByHashtag, getTimeline, hasOlderMessages, searchMessages, } from "../../db.js";
 export function getTimelineResponse(chatJid, limit, before) {
     const posts = getTimeline(chatJid, limit, before ?? undefined);

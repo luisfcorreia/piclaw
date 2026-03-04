@@ -1,3 +1,13 @@
+# Makefile – Top-level build/dev targets for the piclaw project.
+#
+# Targets:
+#   build-piclaw  – Compile TypeScript and copy web frontend to static/.
+#   lint/test     – Run ESLint and bun test suite.
+#   up/down/enter – Docker Compose lifecycle helpers.
+#   sync-version  – Sync package.json version to git tag.
+#   bump-*        – Version bump helpers.
+#   push          – Push Docker image to GHCR.
+
 IMAGE ?= pibox
 TAG ?= latest
 FULL_IMAGE := $(IMAGE):$(TAG)

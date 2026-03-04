@@ -1,3 +1,11 @@
+/**
+ * web/agent-message-service.ts – Stores agent responses as timeline posts.
+ *
+ * After an agent run completes, this service persists the response as a
+ * message in the database and broadcasts it to SSE clients.
+ *
+ * Consumers: channels/web.ts calls this after agent runs complete.
+ */
 import { normalizeMediaIds } from "./posts-service.js";
 export async function parseAgentMessageRequest(req) {
     try {

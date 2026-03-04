@@ -1,3 +1,8 @@
+# skel/Makefile – Skeleton Makefile for new projects created by /skill:setup.
+#
+# Provides stub targets (install, lint, test, check, clean) that the user
+# fills in for their project. Copied into new project directories.
+
 SHELL := /bin/sh
 
 .DEFAULT_GOAL := help

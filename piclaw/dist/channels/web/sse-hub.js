@@ -1,3 +1,12 @@
+/**
+ * web/sse-hub.ts – SSE client connection manager.
+ *
+ * Manages the set of connected SSE clients and provides broadcast()
+ * to push events to all of them simultaneously.
+ *
+ * Consumers: channels/web.ts creates a single SseHub and uses it
+ *            throughout the web channel for real-time event delivery.
+ */
 import { broadcastEvent, handleSse } from "./sse.js";
 export class SseHub {
     clients = new Set();

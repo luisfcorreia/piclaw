@@ -1,3 +1,12 @@
+/**
+ * web/request-router-service.ts – High-level request processing logic.
+ *
+ * Contains the business logic for handling compose-box submissions:
+ * detecting control commands, routing agent runs, managing steering/followup
+ * modes, and coordinating with the agent queue.
+ *
+ * Consumers: web/request-router.ts delegates to functions defined here.
+ */
 import { extname, resolve } from "path";
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const STATIC_MIME_TYPES = {

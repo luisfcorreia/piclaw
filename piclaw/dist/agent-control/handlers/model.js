@@ -1,3 +1,11 @@
+/**
+ * agent-control/handlers/model.ts – Handlers for model and thinking level commands.
+ *
+ * Handles /model (set/list), /cycle-model, /thinking (set/query),
+ * /cycle-thinking, /steering-mode, and /followup-mode commands.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to these handlers.
+ */
 import { THINKING_LEVELS, normalizeModelMatch } from "../agent-control-helpers.js";
 export async function handleModel(session, modelRegistry, command) {
     modelRegistry.refresh();

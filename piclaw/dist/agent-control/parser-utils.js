@@ -1,3 +1,17 @@
+/**
+ * agent-control/parser-utils.ts – Low-level parsing utilities for commands.
+ *
+ * Provides helpers for:
+ *   - stripTrigger(): remove @BotName prefix from messages.
+ *   - parseToggle(): parse on/off/true/false toggle values.
+ *   - parseQueueMode(): parse "all" / "one-at-a-time" mode strings.
+ *   - splitArgs(): split arguments respecting quoted strings.
+ *   - parseTreeArgs(): parse complex /tree command arguments.
+ *
+ * Consumers:
+ *   - agent-control-parser.ts (stripTrigger).
+ *   - command-parsers.ts (all other helpers).
+ */
 export function parseToggle(value) {
     if (!value)
         return undefined;

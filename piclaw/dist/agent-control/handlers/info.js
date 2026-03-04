@@ -1,3 +1,12 @@
+/**
+ * agent-control/handlers/info.ts – Handlers for informational / read-only commands.
+ *
+ * Handles /commands, /state, /stats, /context, /last, /search-workspace,
+ * /labels, and /label. These commands display session state, token usage,
+ * and search results without modifying the session.
+ *
+ * Consumers: agent-control-handlers.ts dispatches to these handlers.
+ */
 import { formatCompactNumber, formatCurrency } from "../agent-control-helpers.js";
 import { CONTROL_COMMAND_DEFINITIONS } from "../command-registry.js";
 import { searchWorkspace } from "../../workspace-search.js";

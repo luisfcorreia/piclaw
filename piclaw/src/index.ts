@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 /**
  * index.ts – Application entry point.
  *
@@ -6,7 +7,6 @@
  * IPC watcher, task scheduler, and web server).
  */
 
-#!/usr/bin/env bun
 import { handleCliOptions } from "./cli.js";
 import { main } from "./runtime.js";
 

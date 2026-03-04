@@ -1,3 +1,19 @@
+/**
+ * agent-pool/slash-command.ts – Execute user slash commands via the agent session.
+ *
+ * When a user sends a message starting with `/`, it may be a skill invocation
+ * (`/skill:web-search`), a prompt template, or an extension command. This module
+ * routes the raw text through the pi-agent session's prompt() method, captures
+ * the streaming output, and returns a structured result.
+ *
+ * The session's event subscription captures both streaming text deltas and
+ * final message_end events to build the complete response text.
+ *
+ * Consumers:
+ *   - agent-pool.ts calls executeSlashCommand() when a message is identified
+ *     as a slash command (starts with "/" and matches a known skill/template/
+ *     extension command).
+ */
 import { AGENT_TIMEOUT } from "../core/config.js";
 import { detectChannel } from "../router.js";
 import { withChatContext } from "../core/chat-context.js";

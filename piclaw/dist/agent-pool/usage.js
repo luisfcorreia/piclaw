@@ -1,3 +1,13 @@
+/**
+ * agent-pool/usage.ts – Extract and persist LLM token usage from agent events.
+ *
+ * Listens for `message_end` events with `role: "assistant"` and usage metadata,
+ * then writes a TokenUsageRecord to the database (db/token-usage.ts).
+ *
+ * Consumers:
+ *   - agent-pool.ts calls recordMessageUsage() inside its event handler for
+ *     each assistant message completion during an agent run.
+ */
 import { storeTokenUsage } from "../db.js";
 /**
  * Extract token usage from an assistant message and store it in the database.

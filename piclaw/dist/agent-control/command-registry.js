@@ -1,3 +1,14 @@
+/**
+ * agent-control/command-registry.ts – Command metadata and alias resolution.
+ *
+ * Defines the list of all known control commands, their descriptions, and
+ * aliases (e.g. /models → /model, /ctx → /context). Provides
+ * normalizeControlCommandName() to resolve aliases before parser lookup.
+ *
+ * Consumers:
+ *   - agent-control-parser.ts uses normalizeControlCommandName().
+ *   - handlers/info.ts uses CONTROL_COMMAND_DEFINITIONS for /commands output.
+ */
 export const CONTROL_COMMAND_DEFINITIONS = [
     { name: "/model", description: "Select model or list available models", aliases: ["/models"] },
     { name: "/cycle-model", description: "Cycle to the next available model" },

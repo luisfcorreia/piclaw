@@ -1,3 +1,13 @@
+/*
+ * styles.css – Main stylesheet for the PiClaw web UI.
+ *
+ * Defines CSS custom properties for theming (light/dark mode), layout
+ * for the timeline, compose box, status bar, workspace explorer, and
+ * post components. Includes responsive breakpoints and animation keyframes.
+ *
+ * Loaded by: index.html via <link> tag.
+ */
+
 /* CSS Variables for theming */
 :root {
     color-scheme: light dark;

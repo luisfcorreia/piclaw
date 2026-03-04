@@ -1,3 +1,17 @@
+/**
+ * agent-control/agent-control-helpers.ts – Shared helpers for control handlers.
+ *
+ * Provides utility functions used across multiple handler modules:
+ *   - THINKING_LEVELS constant array.
+ *   - Shell command formatting (formatShellBlock, resolveShellCwd).
+ *   - Session state inspection (getModelLabel, formatSessionState).
+ *   - Config file persistence for identity changes.
+ *   - Context usage and stats formatting.
+ *
+ * Consumers:
+ *   - All handler modules under handlers/*.ts.
+ *   - agent-pool.ts for model label resolution.
+ */
 import { existsSync } from "fs";
 import { PICLAW_CONFIG_PATH } from "../core/config.js";
 import { readJsonConfig, writeJsonConfig } from "../core/config-store.js";

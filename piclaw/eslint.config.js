@@ -1,3 +1,10 @@
+/**
+ * eslint.config.js – ESLint flat config for the piclaw project.
+ *
+ * Configures TypeScript-aware linting with the recommended rule sets
+ * and a few project-specific overrides (unused vars, any usage).
+ */
+
 import js from "@eslint/js";
 import globals from "globals";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
