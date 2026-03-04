@@ -190,22 +190,11 @@ function renderMath(html_content) {
     const stripped = stripCodeBlocks(html_content);
     let processed = stripped.html;
 
-    // Process display math first ($$...$$) - must not be inside code blocks
-    processed = processed.replace(/\$\$([\s\S]+?)\$\$/g, (match, tex) => {
+    // Process display math first ($$...$$) - require block delimiters on their own line
+    processed = processed.replace(/(^|\n|<br\s*\/?\s*>|<p>|<\/p>)\s*\$\$([\s\S]+?)\$\$\s*(?=\n|<br\s*\/?\s*>|<\/p>|$)/gi, (match, leading, tex) => {
         try {
-            return katex.renderToString(decodeMath(tex.trim()), { displayMode: true, throwOnError: false });
-        } catch (e) {
-            return `<span class="math-error" title="${e.message}">${match}</span>`;
-        }
-    });
-
-    // Process inline math ($...$) - avoid matching $$, shell expansions, or currency
-    processed = processed.replace(/(?<!\$)\$(?!\$|\(|\{|\[)([^\$\n]+?)\$(?!\$)/g, (match, tex) => {
-        const trimmed = tex.trim();
-        // Skip if it looks like currency ($ followed by number)
-        if (/^\d/.test(trimmed)) return match;
-        try {
-            return katex.renderToString(decodeMath(tex.trim()), { displayMode: false, throwOnError: false });
+            const rendered = katex.renderToString(decodeMath(tex.trim()), { displayMode: true, throwOnError: false });
+            return `${leading}${rendered}`;
         } catch (e) {
             return `<span class="math-error" title="${e.message}">${match}</span>`;
         }
