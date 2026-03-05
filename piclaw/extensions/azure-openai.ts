@@ -72,14 +72,18 @@ const FOUNDRY_IMAGE_BASE_URL = process.env.FOUNDRY_IMAGE_BASE_URL || "";
 const FOUNDRY_TEXT_MODEL_IDS = FOUNDRY_MODEL_IDS.filter(
   (id) => id !== FOUNDRY_IMAGE_MODEL_ID && !id.startsWith("flux-")
 );
-// Managed identity only: fetch AAD tokens from the VM metadata service.
-// This extension ONLY works with AAD managed identity (Azure OpenAI + Foundry), not API key auth.
+// Auth: managed identity by default — fetches AAD tokens from the VM metadata service.
+// When AOAI_API_KEY is set, uses the static key instead (proxy mode — a remote proxy
+// handles MI auth and this instance just passes the shared secret as a Bearer token).
 const IMDS_URL = "http://169.254.169.254/metadata/identity/oauth2/token";
 const IMDS_API_VERSION = "2018-02-01";
 const RESOURCE = process.env.AOAI_RESOURCE || process.env.FOUNDRY_RESOURCE || "https://cognitiveservices.azure.com/";
 const CACHE_DIR = process.env.AOAI_TOKEN_CACHE_DIR || "/workspace/.piclaw/cache";
 const CACHE_FILE = process.env.AOAI_TOKEN_CACHE_FILE || `${CACHE_DIR}/aoai-token.json`;
 const SKEW_SECONDS = Number(process.env.AOAI_TOKEN_SKEW_SECONDS || "300");
+// When AOAI_API_KEY is set, use it directly instead of fetching managed-identity tokens.
+// This is used when connecting through a proxy that handles MI auth on our behalf.
+const STATIC_API_KEY = process.env.AOAI_API_KEY || "";
 const TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode", PROVIDER, FOUNDRY_PROVIDER]);
 const DISABLE_TOOLS = /^(1|true|yes)$/i.test(process.env.AOAI_DISABLE_TOOLS || "");
 const DISABLE_REASONING = /^(1|true|yes)$/i.test(process.env.AOAI_DISABLE_REASONING || "");
@@ -118,6 +122,7 @@ function logExtensionLoaded(): void {
     foundryBaseUrl: FOUNDRY_BASE_URL,
     modelIds: MODEL_IDS,
     foundryModelIds: FOUNDRY_MODEL_IDS,
+    authMode: STATIC_API_KEY ? "api-key (proxy)" : "managed-identity",
     disableTools: DISABLE_TOOLS,
     disableReasoning: DISABLE_REASONING,
     disableReasoningModels: Array.from(DISABLE_REASONING_MODELS),
@@ -363,6 +368,9 @@ async function ensureToken(force = false): Promise<TokenCache> {
 }
 
 async function getAccessToken(): Promise<string> {
+  // When a static API key is configured (proxy mode), skip IMDS entirely.
+  if (STATIC_API_KEY) return STATIC_API_KEY;
+
   const token = await ensureToken();
   if (!token.accessToken) {
     throw new Error("Missing Azure access token. Ensure IMDS is available.");
@@ -482,10 +490,7 @@ function parseSize(size?: string): { width: number; height: number } {
 }
 
 async function generateFoundryImage(model: string, args: ImageArgs) {
-  const token = await ensureToken();
-  if (!token.accessToken) {
-    throw new Error("Missing Azure access token. Ensure IMDS is available.");
-  }
+  const accessToken = await getAccessToken();
 
   const endpoint = getFoundryImageEndpoint();
   const url = `${endpoint}/providers/blackforestlabs/v1/${encodeURIComponent(model)}?api-version=${encodeURIComponent(FOUNDRY_IMAGE_API_VERSION)}`;
@@ -501,7 +506,7 @@ async function generateFoundryImage(model: string, args: ImageArgs) {
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token.accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -721,7 +726,8 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
         openaiStream = await createStream();
       } catch (error) {
         if (!isAuthError(error)) throw error;
-        await ensureToken(true);
+        // Force-refresh MI token on auth errors (no-op in proxy/api-key mode)
+        if (!STATIC_API_KEY) await ensureToken(true);
         openaiStream = await createStream();
       }
 
@@ -978,6 +984,12 @@ export default function (pi: ExtensionAPI) {
 
   const refresh = async () => {
     logExtensionLoaded();
+    // In proxy/api-key mode, register once with the static key and don't
+    // schedule periodic refreshes — the remote proxy handles MI tokens.
+    if (STATIC_API_KEY) {
+      registerProvider(pi, STATIC_API_KEY);
+      return;
+    }
     const cache = await ensureToken();
     if (cache.accessToken) {
       registerProvider(pi, cache.accessToken);
