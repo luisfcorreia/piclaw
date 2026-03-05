@@ -140,16 +140,19 @@ export class RequestRouterService {
         // Rate-limit auth endpoints to prevent brute-force attacks.
         if (isAuthVerify) {
             if (isRateLimited(req, "auth/verify", AUTH_RATE_WINDOW_MS, AUTH_RATE_LIMIT)) {
+                console.warn(`[auth] Rate limit exceeded for /auth/verify (ip=${getClientKey(req)})`);
                 return this.channel.json({ error: "Too many login attempts. Try again later." }, 429);
             }
         }
         if (isWebauthnLoginStart || isWebauthnLoginFinish) {
             if (isRateLimited(req, "webauthn/login", AUTH_RATE_WINDOW_MS, AUTH_RATE_LIMIT)) {
+                console.warn(`[auth] Rate limit exceeded for WebAuthn login (ip=${getClientKey(req)})`);
                 return this.channel.json({ error: "Too many login attempts. Try again later." }, 429);
             }
         }
         if (isWebauthnEnrollPage || isWebauthnRegisterStart || isWebauthnRegisterFinish) {
             if (isRateLimited(req, "webauthn/enrol", ENROLL_RATE_WINDOW_MS, ENROLL_RATE_LIMIT)) {
+                console.warn(`[auth] Rate limit exceeded for WebAuthn enrol (ip=${getClientKey(req)})`);
                 return this.channel.json({ error: "Too many enrol attempts. Try again later." }, 429);
             }
         }
