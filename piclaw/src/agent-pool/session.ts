@@ -14,7 +14,8 @@
  */
 
 import { mkdirSync } from "fs";
-import { join } from "path";
+import { join, resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 import {
   type AgentSession,
   createAgentSession,
@@ -28,6 +29,23 @@ import {
 
 import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { builtinExtensionFactories } from "../extensions/index.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Bundled extension paths that are loaded when their activation env vars
+ * are present.  The files live inside the piclaw package tree so that
+ * node_modules resolution (for @mariozechner/pi-ai internals etc.) works.
+ */
+const OPTIONAL_EXTENSIONS: { path: string; envGate: string }[] = [
+  { path: resolve(__dirname, "../../extensions/azure-openai.ts"), envGate: "AOAI_BASE_URL" },
+];
+
+function getBundledExtensionPaths(): string[] {
+  return OPTIONAL_EXTENSIONS
+    .filter(({ envGate }) => !!process.env[envGate])
+    .map(({ path }) => path);
+}
 
 /** Ensure the session directory exists for a chat and return its path. */
 export function ensureSessionDir(chatJid: string): string {
@@ -56,6 +74,7 @@ export async function createDefaultSession(
     agentDir: getAgentDir(),
     settingsManager: options.settingsManager,
     extensionFactories: builtinExtensionFactories,
+    additionalExtensionPaths: getBundledExtensionPaths(),
   });
   await resourceLoader.reload();
 
