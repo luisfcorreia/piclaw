@@ -1307,12 +1307,12 @@ body {
 }
 
 .compose-actions .icon-btn {
-    padding: 2px;
+    padding: var(--spacing-xs);
 }
 
 .compose-actions .icon-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
 }
 
 .compose-actions.search-mode .icon-btn {
