@@ -163,7 +163,11 @@ export class WorkspaceFileService {
     }
   }
 
-  async uploadFile(pathParam: string | null, file: File): Promise<{ status: number; body: unknown }> {
+  async uploadFile(
+    pathParam: string | null,
+    file: File,
+    overwrite = false
+  ): Promise<{ status: number; body: unknown }> {
     const targetDir = resolveWorkspacePath(pathParam);
     if (!targetDir) return { status: 400, body: { error: "Invalid path" } };
 
@@ -186,8 +190,15 @@ export class WorkspaceFileService {
     }
 
     const destPath = path.join(targetDir, filename);
-    if (existsSync(destPath)) {
-      return { status: 409, body: { error: "File already exists" } };
+    const existed = existsSync(destPath);
+    if (existed && !overwrite) {
+      return { status: 409, body: { error: "File already exists", code: "file_exists" } };
+    }
+    if (existed) {
+      const existing = statSync(destPath);
+      if (existing.isDirectory()) {
+        return { status: 400, body: { error: "Path is a directory" } };
+      }
     }
 
     try {
@@ -203,6 +214,7 @@ export class WorkspaceFileService {
           path: relPath,
           name: filename,
           size: buffer.length,
+          overwritten: existed,
         },
       };
     } catch {

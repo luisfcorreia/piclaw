@@ -98,7 +98,8 @@ export async function handleWorkspaceUpload(_channel: WebChannel, req: Request):
     return jsonResponse({ error: "Missing file" }, 400);
   }
 
-  const result = await workspaceService.uploadFile(url.searchParams.get("path"), file);
+  const overwrite = url.searchParams.get("overwrite") === "1" || url.searchParams.get("overwrite") === "true";
+  const result = await workspaceService.uploadFile(url.searchParams.get("path"), file, overwrite);
   return jsonResponse(result.body, result.status);
 }
 

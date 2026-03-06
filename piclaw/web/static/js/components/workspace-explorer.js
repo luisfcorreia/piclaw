@@ -554,11 +554,25 @@ export function WorkspaceExplorer({ onFileSelect, visible = true, onOpenEditor }
         const files = Array.from(event?.dataTransfer?.files || []);
         if (files.length === 0) return;
         const target = dropTargetRef.current || resolveDropTargetPath();
+        const targetLabel = target && target !== '.' ? target : 'workspace root';
         setUploading(true);
         try {
             let lastResult = null;
             for (const file of files) {
-                lastResult = await uploadWorkspaceFile(file, target);
+                try {
+                    lastResult = await uploadWorkspaceFile(file, target);
+                } catch (err) {
+                    const status = err?.status;
+                    const code = err?.code;
+                    if (status === 409 || code === 'file_exists') {
+                        const name = file?.name || 'file';
+                        const confirmOverwrite = window.confirm(`"${name}" already exists in ${targetLabel}. Overwrite?`);
+                        if (!confirmOverwrite) continue;
+                        lastResult = await uploadWorkspaceFile(file, target, { overwrite: true });
+                    } else {
+                        throw err;
+                    }
+                }
             }
             if (lastResult?.path) {
                 setSelectedPath(lastResult.path);

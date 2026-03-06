@@ -79,7 +79,8 @@ export async function handleWorkspaceUpload(_channel, req) {
     if (!(file instanceof File)) {
         return jsonResponse({ error: "Missing file" }, 400);
     }
-    const result = await workspaceService.uploadFile(url.searchParams.get("path"), file);
+    const overwrite = url.searchParams.get("overwrite") === "1" || url.searchParams.get("overwrite") === "true";
+    const result = await workspaceService.uploadFile(url.searchParams.get("path"), file, overwrite);
     return jsonResponse(result.body, result.status);
 }
 /** Handle GET /workspace/download: serve a file as a download attachment. */

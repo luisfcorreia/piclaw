@@ -35,8 +35,8 @@ export class WorkspaceService {
     return this.fileService.attachFile(pathParam);
   }
 
-  uploadFile(pathParam: string | null, file: File) {
-    return this.fileService.uploadFile(pathParam, file);
+  uploadFile(pathParam: string | null, file: File, overwrite = false) {
+    return this.fileService.uploadFile(pathParam, file, overwrite);
   }
 
   updateFile(pathParam: string | null, content: string) {

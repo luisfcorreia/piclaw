@@ -148,7 +148,7 @@ export class WorkspaceFileService {
             return { status: 500, body: { error: "Failed to attach file" } };
         }
     }
-    async uploadFile(pathParam, file) {
+    async uploadFile(pathParam, file, overwrite = false) {
         const targetDir = resolveWorkspacePath(pathParam);
         if (!targetDir)
             return { status: 400, body: { error: "Invalid path" } };
@@ -170,8 +170,15 @@ export class WorkspaceFileService {
             return { status: 400, body: { error: "File too large to upload" } };
         }
         const destPath = path.join(targetDir, filename);
-        if (existsSync(destPath)) {
-            return { status: 409, body: { error: "File already exists" } };
+        const existed = existsSync(destPath);
+        if (existed && !overwrite) {
+            return { status: 409, body: { error: "File already exists", code: "file_exists" } };
+        }
+        if (existed) {
+            const existing = statSync(destPath);
+            if (existing.isDirectory()) {
+                return { status: 400, body: { error: "Path is a directory" } };
+            }
         }
         try {
             const buffer = Buffer.from(await file.arrayBuffer());
@@ -186,6 +193,7 @@ export class WorkspaceFileService {
                     path: relPath,
                     name: filename,
                     size: buffer.length,
+                    overwritten: existed,
                 },
             };
         }
