@@ -405,10 +405,25 @@ export function ComposeBox({
                 setSlashIndex(i => (i - 1 + slashMatches.length) % slashMatches.length);
                 return;
             }
-            if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+            if (e.key === 'Tab') {
                 e.preventDefault();
                 acceptSlashCommand(slashMatches[slashIndex]);
                 return;
+            }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const currentValue = textareaRef.current?.value ?? (searchMode ? searchText : content);
+                const hasArgs = currentValue.includes(' ');
+                if (!hasArgs) {
+                    e.preventDefault();
+                    const cmd = slashMatches[slashIndex];
+                    setShowSlash(false);
+                    setSlashMatches([]);
+                    // If the user hits Enter with only a command fragment, accept
+                    // the match and submit in one step to avoid double-Enter.
+                    handleSubmit(cmd.name);
+                    return;
+                }
+                // When args are present, allow Enter to fall through to submit.
             }
             if (e.key === 'Escape') {
                 e.preventDefault();
