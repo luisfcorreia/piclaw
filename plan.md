@@ -11,7 +11,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 - Lint: passing (for current backend tranche)
 - Coverage (line): **57.97%** (`coverage/lcov.info`)
 - Review comment coverage: Added focused regression/unit tests for each recent extraction seam (`web/recovery.ts`, `web/agent-buffers.ts`, `web/auth-runtime.ts`, `web/auth-gateway.ts`, `web/auth-endpoints.ts`, `web/channel-endpoint-context-factory.ts`, `web/endpoint-contexts.ts`, `web/agent-status-store.ts`, `web/pending-steering.ts`, `web/interaction-broadcaster.ts`, `web/followup-placeholders.ts`, `web/chat-run-control.ts`, `web/message-write-flows.ts`, `web/handlers/workspace.ts`, `web/http/dispatch-workspace.ts`, `web/http/dispatch-media.ts`, `web/http/dispatch-auth.ts`, `web/http/request-guards.ts`, `runtime/composition.ts`, `runtime/bootstrap.ts`, runtime wiring/provider bootstrap) so refactors remain behavior-preserving.
-- Commenting standards coverage: New extraction seams include module headers plus exported type/function JSDoc, and this remains an explicit tracked goal (see checklist + quality bars below). Re-audit (2026-03-09, refreshed): module headers are present across `src/**/*.ts` (shebang-aware check); exported-JSDoc heuristic now reports **89** uncovered exports across **48** files after documenting `src/db/webauthn.ts`, `src/db/web-sessions.ts`, `src/channels/web/auth-runtime.ts`, and `src/channels/web/endpoint-contexts.ts` (largest remaining hotspots: `src/channels/web/content-endpoints.ts`, `src/channels/web/webauthn-challenges.ts`, `src/channels/web/webauthn-auth.ts`).
+- Commenting standards coverage: New extraction seams include module headers plus exported type/function JSDoc, and this remains an explicit tracked goal (see checklist + quality bars below). Re-audit (2026-03-09, refreshed): module headers are present across `src/**/*.ts` (shebang-aware check); exported-JSDoc heuristic now reports **83** uncovered exports across **47** files after documenting `src/db/webauthn.ts`, `src/db/web-sessions.ts`, `src/channels/web/auth-runtime.ts`, `src/channels/web/endpoint-contexts.ts`, and `src/channels/web/content-endpoints.ts` (largest remaining hotspots: `src/channels/web/webauthn-challenges.ts`, `src/channels/web/webauthn-auth.ts`, `src/channels/web/message-write-flows.ts`, `src/channels/web/chat-run-control.ts`).
 
 ---
 
@@ -94,9 +94,11 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - added exported JSDoc coverage for web/passkey session persistence helpers in `src/db/webauthn.ts` and `src/db/web-sessions.ts`
   - added exported JSDoc coverage for auth mode/context evaluation helpers in `src/channels/web/auth-runtime.ts`
   - added exported JSDoc coverage for endpoint-context dependency builders in `src/channels/web/endpoint-contexts.ts`
+  - added exported JSDoc coverage for timeline/search/thread/thought helper contracts in `src/channels/web/content-endpoints.ts`
 
 ### Recent commit sequence (latest first)
 
+- `a01094d` Document web endpoint context builder exports
 - `e135de5` Expand auth/session persistence JSDoc coverage
 - `34d424f` Record commenting standards re-audit snapshot
 - `7ebcdd4` Document request-origin and rate-limit rule contracts
@@ -235,8 +237,8 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 - [ ] **Commenting/documentation standards consistency**
   - In progress: extracted seam modules include module-level purpose headers and JSDoc on exported contracts/helpers (recently reaffirmed for `runtime/composition.ts`, `runtime/bootstrap.ts`, `runtime/wiring.ts`, `runtime/shutdown.ts`, `remote/service.ts`, `utils/azure-tool-call-limit.ts`, `db/remote-interop.ts`, `remote/auth.ts`, `remote/identity.ts`, `remote/signature.ts`, `remote/ssrf.ts`, `remote/nonce-cache.ts`, `remote/limits.ts`, `utils/totp-qr.ts`, `channels/web/request-origin.ts`, and `channels/web/http/rate-limit-rules.ts`).
-  - Re-audit snapshot (2026-03-09, refreshed): module headers are complete across `src/**/*.ts`; exported-JSDoc heuristic flags 89 missing export docblocks across 48 files.
-  - Pending: burn down remaining hotspots in focused batches (starting with `src/channels/web/content-endpoints.ts`, `src/channels/web/webauthn-challenges.ts`, `src/channels/web/webauthn-auth.ts`, `src/channels/web/message-write-flows.ts`) and enforce in review checklist.
+  - Re-audit snapshot (2026-03-09, refreshed): module headers are complete across `src/**/*.ts`; exported-JSDoc heuristic flags 83 missing export docblocks across 47 files.
+  - Pending: burn down remaining hotspots in focused batches (starting with `src/channels/web/webauthn-challenges.ts`, `src/channels/web/webauthn-auth.ts`, `src/channels/web/message-write-flows.ts`, `src/channels/web/chat-run-control.ts`) and enforce in review checklist.
 
 - [ ] **Test redundancy analysis (suite signal-to-noise)**
   - In progress: initial inventory captured in `docs/testing/test-redundancy-inventory.md` covering web/runtime hotspots and concrete dedupe candidates (JSON response/request fixtures, route-flag fixture builders, env/workspace setup helpers).

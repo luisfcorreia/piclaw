@@ -10,12 +10,14 @@ import {
 } from "./timeline-service.js";
 import type { WebAgentBufferEntry } from "./agent-buffers.js";
 
+/** Shared dependencies for timeline/search/thread/thought endpoint handlers. */
 export interface ContentEndpointsContext {
   defaultChatJid: string;
   json(payload: unknown, status?: number): Response;
   getBuffer(turnId: string, panel: "thought" | "draft"): WebAgentBufferEntry | undefined;
 }
 
+/** Return the timeline response for the default web chat. */
 export function handleTimelineRequest(
   limit: number,
   before: number | undefined,
@@ -25,6 +27,7 @@ export function handleTimelineRequest(
   return ctx.json(result.body, result.status);
 }
 
+/** Return posts for a hashtag in the default web chat. */
 export function handleHashtagRequest(
   tag: string,
   limit: number,
@@ -35,6 +38,7 @@ export function handleHashtagRequest(
   return ctx.json(result.body, result.status);
 }
 
+/** Return search results for a query in the default web chat. */
 export function handleSearchRequest(
   query: string,
   limit: number,
@@ -45,11 +49,13 @@ export function handleSearchRequest(
   return ctx.json(result.body, result.status);
 }
 
+/** Return a thread payload rooted at the provided interaction id. */
 export function handleThreadRequest(id: number | null, ctx: ContentEndpointsContext): Response {
   const result = getThreadResponse(ctx.defaultChatJid, id);
   return ctx.json(result.body, result.status);
 }
 
+/** Return persisted thought/draft buffer text for a streamed model turn. */
 export function handleThoughtRequest(
   panel: string | null,
   turnId: string | null,
