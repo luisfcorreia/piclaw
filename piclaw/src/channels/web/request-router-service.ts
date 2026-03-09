@@ -29,6 +29,7 @@ import type { WebChannel } from "../web.js";
 import { rememberWebOrigin } from "./request-origin.js";
 import { handleAgentRoutes } from "./http/dispatch-agent.js";
 import { handleMediaRoutes } from "./http/dispatch-media.js";
+import { handleWorkspaceRoutes } from "./http/dispatch-workspace.js";
 import { enforceRequestGuards } from "./http/request-guards.js";
 import { getRouteFlags } from "./http/route-flags.js";
 import { withSecurityHeaders } from "./http/security.js";
@@ -186,40 +187,9 @@ export class RequestRouterService {
       return this.channel.handleTimeline(limit, before ?? undefined);
     }
 
-    if (req.method === "GET" && pathname === "/workspace/tree") {
-      return this.channel.handleWorkspaceTree(req);
-    }
-
-    if (req.method === "GET" && pathname === "/workspace/file") {
-      return this.channel.handleWorkspaceFile(req);
-    }
-
-    if (req.method === "PUT" && pathname === "/workspace/file") {
-      return await this.channel.handleWorkspaceUpdate(req);
-    }
-
-    if (req.method === "DELETE" && pathname === "/workspace/file") {
-      return this.channel.handleWorkspaceDelete(req);
-    }
-
-    if (req.method === "GET" && pathname === "/workspace/raw") {
-      return this.channel.handleWorkspaceRaw(req);
-    }
-
-    if (req.method === "GET" && pathname === "/workspace/download") {
-      return this.channel.handleWorkspaceDownload(req);
-    }
-
-    if (req.method === "POST" && pathname === "/workspace/attach") {
-      return this.channel.handleWorkspaceAttach(req);
-    }
-
-    if (req.method === "POST" && pathname === "/workspace/upload") {
-      return this.channel.handleWorkspaceUpload(req);
-    }
-
-    if (req.method === "POST" && pathname === "/workspace/visibility") {
-      return this.channel.handleWorkspaceVisibility(req);
+    const workspaceResponse = await handleWorkspaceRoutes(this.channel, req, pathname);
+    if (workspaceResponse) {
+      return workspaceResponse;
     }
 
     if (req.method === "GET" && pathname.startsWith("/hashtag/")) {
