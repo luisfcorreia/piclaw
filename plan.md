@@ -5,9 +5,9 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 ## Review snapshot (updated)
 
-- Backend size: **157 TS files / 22,071 LOC** (`src/`)
+- Backend size: **157 TS files / 22,193 LOC** (`src/`)
 - Frontend size: **7,095 LOC** (`web/src/`)
-- Tests: **572 passing, 0 failing**
+- Tests: **575 passing, 0 failing**
 - Lint: passing (for current backend tranche)
 - Coverage (line): **57.97%** (`coverage/lcov.info`)
 
@@ -30,6 +30,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - extracted startup/wiring helpers (`runtime/startup.ts`, `runtime/wiring.ts`)
   - extracted message-loop orchestration coordinator (`runtime/coordinator.ts`)
   - narrowed runtime coordinator/wiring to interface-based contracts (message-loop/scheduler/IPC deps) and localized channel instances inside `main()` composition
+  - removed provider-bootstrap access to private `AgentPool` internals by introducing typed provider registration methods on `AgentPool`
 - Web architecture decomposition (P1, non-destructive)
   - `src/channels/web/http/` modular namespace introduced and standardized
   - extracted route/security helpers:
@@ -54,6 +55,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 ### Recent commit sequence (latest first)
 
+- `2fa15d4` Harden runtime provider and IPC typing boundaries
 - `4b9711e` Narrow runtime wiring interfaces and add coverage
 - `79833ab` Extract web identity endpoint helpers
 - `b16e931` Extract web content endpoint helpers and type workspace tree
@@ -140,18 +142,19 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - Pending: split auth/session/status/passkey and orchestration responsibilities further.
 
 - [ ] **Refactor `src/runtime.ts` into composition root + startup/shutdown managers**
-  - In progress: provider bootstrap, shutdown orchestration, startup/wiring helpers, message-loop coordinator extraction, and interface narrowing across runtime wiring/coordinator.
+  - In progress: provider bootstrap, shutdown orchestration, startup/wiring helpers, message-loop coordinator extraction, and interface narrowing across runtime wiring/coordinator/provider bootstrap.
   - Pending: complete remaining runtime-owned interface narrowing and reduce residual global composition coupling.
 
 - [ ] **Architectural dependency boundaries**
-  - In progress: removed web session-binder `as any` cast path, tightened UI bridge/context typing (including pending/custom flow and typed context bridge access), and shifted runtime wiring/coordinator to interface-based dependency contracts.
+  - In progress: removed web session-binder `as any` cast path, tightened UI bridge/context typing (including pending/custom flow and typed context bridge access), shifted runtime wiring/coordinator to interface-based dependency contracts, and removed runtime provider-bootstrap peeking into private `AgentPool` internals.
   - Pending: remove remaining internal peeking/casts and formalize service interfaces/ports.
 
 - [ ] **Extension contract hardening**
   - Pending: remove deep/dist imports and `src/*` coupling where avoidable.
 
 - [ ] **Type quality pass**
-  - Pending: reduce `any` density in `src/ipc.ts`, `src/runtime.ts`, `src/channels/web.ts`, `src/agent-pool.ts`.
+  - In progress: removed high-risk `any` usage from `src/ipc.ts` payload/update paths and from runtime provider bootstrap + `AgentPool` provider-registration boundary.
+  - Pending: continue reducing `any` density in remaining hotspots (`src/runtime.ts`, `src/channels/web.ts`, and broader `src/agent-pool.ts` paths).
 
 - [ ] **Dead code review and removal**
   - Pending confirmation for `src/db/auto-compaction.ts`, `src/channels/web/ui-context.ts`, and stale dist allowlist items.
