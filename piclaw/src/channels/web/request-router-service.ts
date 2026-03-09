@@ -27,6 +27,7 @@
 import { extname, resolve } from "path";
 import type { WebChannel } from "../web.js";
 import { rememberWebOrigin } from "./request-origin.js";
+import { handleAgentRoutes } from "./http/dispatch-agent.js";
 import { handleMediaRoutes } from "./http/dispatch-media.js";
 import { enforceRequestGuards } from "./http/request-guards.js";
 import { getRouteFlags } from "./http/route-flags.js";
@@ -253,14 +254,9 @@ export class RequestRouterService {
       return this.channel.handleThread(id);
     }
 
-    if (req.method === "GET" && pathname === "/agent/thought") {
-      const turnId = url.searchParams.get("turn_id");
-      const panel = url.searchParams.get("panel");
-      return this.channel.handleThought(panel, turnId);
-    }
-
-    if (req.method === "POST" && pathname === "/agent/thought/visibility") {
-      return this.channel.handleThoughtVisibility(req);
+    const agentResponse = await handleAgentRoutes(this.channel, req, pathname, url);
+    if (agentResponse) {
+      return agentResponse;
     }
 
     if (req.method === "DELETE" && pathname.startsWith("/post/")) {
@@ -271,31 +267,6 @@ export class RequestRouterService {
 
     if (req.method === "POST" && pathname === "/internal/post") {
       return this.channel.handleInternalPost(req);
-    }
-
-    if (req.method === "POST" && pathname.startsWith("/agent/") && pathname.endsWith("/message")) {
-      return this.channel.handleAgentMessage(req, pathname);
-    }
-
-    if (req.method === "GET" && pathname === "/agent/status") {
-      return this.channel.handleAgentStatus(req);
-    }
-
-    if (req.method === "GET" && pathname === "/agent/context") {
-      return this.channel.handleAgentContext(req);
-    }
-
-    if (req.method === "GET" && pathname === "/agent/models") {
-      return this.channel.handleAgentModels(req);
-    }
-
-    if (req.method === "POST" && pathname === "/agent/respond") {
-      return this.channel.handleAgentRespond(req);
-    }
-
-    // /agent/whitelist — deprecated no-op stub, removed for security hygiene.
-    if (req.method === "POST" && pathname === "/agent/whitelist") {
-      return this.channel.json({ error: "Not found" }, 404);
     }
 
     const mediaResponse = await handleMediaRoutes(this.channel, req, pathname);
