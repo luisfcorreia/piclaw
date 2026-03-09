@@ -24,7 +24,7 @@ import type { WebChannel } from "./channels/web.js";
 import type { WhatsAppChannel } from "./channels/whatsapp.js";
 import { stopIpcWatcher } from "./ipc.js";
 import { AgentQueue } from "./queue.js";
-import { processMessages, runMessageLoop } from "./runtime/message-loop.js";
+import { startRuntimeLoop } from "./runtime/coordinator.js";
 import { registerOptionalProviders } from "./runtime/provider-bootstrap.js";
 import { createShutdownHandler } from "./runtime/shutdown.js";
 import { initializeRuntimeEnvironment, startOptionalPushoverChannel, startWebChannel, createWhatsAppChannel } from "./runtime/startup.js";
@@ -69,18 +69,13 @@ export async function main(): Promise<void> {
 
   await whatsapp.connect();
 
-  runMessageLoop({
+  await startRuntimeLoop({
     queue,
     state,
+    agentPool,
+    whatsapp,
     assistantName: ASSISTANT_NAME,
+    triggerPattern: TRIGGER_PATTERN,
     pollIntervalMs: POLL_INTERVAL,
-    processMessages: (chatJid) =>
-      processMessages(chatJid, {
-        agentPool,
-        whatsapp,
-        state,
-        assistantName: ASSISTANT_NAME,
-        triggerPattern: TRIGGER_PATTERN,
-      }),
   });
 }

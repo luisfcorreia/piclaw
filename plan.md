@@ -5,7 +5,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 ## Review snapshot (updated)
 
-- Backend size: **142 TS files / 21,389 LOC** (`src/`)
+- Backend size: **143 TS files / 21,428 LOC** (`src/`)
 - Frontend size: **7,095 LOC** (`web/src/`)
 - Tests: **527 passing, 0 failing**
 - Lint: passing (for current backend tranche)
@@ -28,6 +28,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 - Runtime decomposition (ongoing, non-destructive)
   - extracted provider bootstrap and shutdown orchestration from `runtime.ts`
   - extracted startup/wiring helpers (`runtime/startup.ts`, `runtime/wiring.ts`)
+  - extracted message-loop orchestration coordinator (`runtime/coordinator.ts`)
 - Web architecture decomposition (P1, non-destructive)
   - `src/channels/web/http/` modular namespace introduced and standardized
   - extracted route/security helpers:
@@ -37,6 +38,7 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
 
 ### Recent commit sequence (latest first)
 
+- `a4f7ddc` Extract runtime startup/wiring helpers and refresh plan status
 - `8ddcb06` Decompose runtime provider bootstrap and shutdown orchestration
 - `00d74b9` Extract auth route dispatch into web/http module
 - `259281d` Extract shell/static route dispatch into web/http module
@@ -106,8 +108,8 @@ Scope reviewed: `piclaw/piclaw/src`, `piclaw/piclaw/extensions`, `piclaw/piclaw/
   - Pending: split auth/session/status/passkey and orchestration responsibilities further.
 
 - [ ] **Refactor `src/runtime.ts` into composition root + startup/shutdown managers**
-  - In progress: provider bootstrap, shutdown orchestration, startup/wiring helpers extracted.
-  - Pending: split remaining runtime message-loop orchestration dependencies behind narrower interfaces.
+  - In progress: provider bootstrap, shutdown orchestration, startup/wiring helpers, and message-loop coordinator extracted.
+  - Pending: finalize interface narrowing around runtime-owned dependencies and reduce remaining global composition coupling.
 
 - [ ] **Architectural dependency boundaries**
   - Pending: remove internal peeking/casts and formalize service interfaces/ports.
