@@ -4,10 +4,14 @@
 
 import { getDb } from "./connection.js";
 
+/** Lifecycle state for a known remote peer. */
 export type RemotePeerStatus = "paired" | "pending" | "denied" | "blocked" | "revoked";
+/** Interop mode negotiated with a remote peer. */
 export type RemotePeerMode = "mediated" | "short-circuit";
+/** Capability profile attached to a remote peer. */
 export type RemotePeerProfile = "read-only" | "restricted" | "full" | "custom";
 
+/** Row shape for records stored in `remote_peers`. */
 export interface RemotePeerRecord {
   instance_id: string;
   public_key: string;
@@ -22,6 +26,7 @@ export interface RemotePeerRecord {
   blocked_reason: string | null;
 }
 
+/** Row shape for records stored in `remote_pair_requests`. */
 export interface RemotePairRequestRecord {
   id: string;
   instance_id: string;
@@ -36,6 +41,7 @@ export interface RemotePairRequestRecord {
   source_ip: string | null;
 }
 
+/** Row shape for records stored in `remote_requests`. */
 export interface RemoteRequestRecord {
   id: string;
   peer_instance_id: string;
@@ -48,6 +54,7 @@ export interface RemoteRequestRecord {
   error: string | null;
 }
 
+/** Row shape for records stored in `remote_audit_logs`. */
 export interface RemoteAuditRecord {
   peer_instance_id: string | null;
   endpoint: string;
@@ -57,6 +64,7 @@ export interface RemoteAuditRecord {
   created_at: string;
 }
 
+/** Insert or update a remote peer by `instance_id`. */
 export function upsertRemotePeer(peer: RemotePeerRecord): void {
   const db = getDb();
   db.prepare(
@@ -89,6 +97,7 @@ export function upsertRemotePeer(peer: RemotePeerRecord): void {
   );
 }
 
+/** Fetch a remote peer by `instance_id`. */
 export function getRemotePeer(instanceId: string): RemotePeerRecord | null {
   const db = getDb();
   const row = db
@@ -101,6 +110,7 @@ export function getRemotePeer(instanceId: string): RemotePeerRecord | null {
   return row ?? null;
 }
 
+/** Apply a partial update to a remote peer record. */
 export function updateRemotePeer(instanceId: string, updates: Partial<RemotePeerRecord>): void {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -126,6 +136,7 @@ export function updateRemotePeer(instanceId: string, updates: Partial<RemotePeer
   db.prepare(`UPDATE remote_peers SET ${fields.join(", ")} WHERE instance_id = ?`).run(...values);
 }
 
+/** Insert a new inbound pair request. */
 export function createPairRequest(request: RemotePairRequestRecord): void {
   const db = getDb();
   db.prepare(
@@ -148,6 +159,7 @@ export function createPairRequest(request: RemotePairRequestRecord): void {
   );
 }
 
+/** Fetch a pair request by request ID. */
 export function getPairRequestById(id: string): RemotePairRequestRecord | null {
   const db = getDb();
   const row = db
@@ -160,6 +172,7 @@ export function getPairRequestById(id: string): RemotePairRequestRecord | null {
   return row ?? null;
 }
 
+/** Return the newest pending pair request for a remote instance, if any. */
 export function getPendingPairRequest(instanceId: string): RemotePairRequestRecord | null {
   const db = getDb();
   const row = db
@@ -175,11 +188,13 @@ export function getPendingPairRequest(instanceId: string): RemotePairRequestReco
   return row ?? null;
 }
 
+/** Update only the status field on a pair request row. */
 export function updatePairRequestStatus(id: string, status: string): void {
   const db = getDb();
   db.prepare("UPDATE remote_pair_requests SET status = ? WHERE id = ?").run(status, id);
 }
 
+/** Insert a new remote interop proposal/execute request record. */
 export function storeRemoteRequest(request: RemoteRequestRecord): void {
   const db = getDb();
   db.prepare(
@@ -199,6 +214,7 @@ export function storeRemoteRequest(request: RemoteRequestRecord): void {
   );
 }
 
+/** Fetch a remote request record by ID. */
 export function getRemoteRequestById(id: string): RemoteRequestRecord | null {
   const db = getDb();
   const row = db
@@ -210,6 +226,7 @@ export function getRemoteRequestById(id: string): RemoteRequestRecord | null {
   return row ?? null;
 }
 
+/** Apply a partial update to a remote request record. */
 export function updateRemoteRequest(id: string, updates: Partial<RemoteRequestRecord>): void {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -230,6 +247,7 @@ export function updateRemoteRequest(id: string, updates: Partial<RemoteRequestRe
   db.prepare(`UPDATE remote_requests SET ${fields.join(", ")} WHERE id = ?`).run(...values);
 }
 
+/** Append an audit event for remote interop endpoint activity. */
 export function logRemoteAudit(entry: RemoteAuditRecord): void {
   const db = getDb();
   db.prepare(
