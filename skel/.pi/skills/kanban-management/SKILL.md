@@ -87,10 +87,13 @@ Before a ticket moves from `next` to `doing`:
 
 While a ticket is in `doing`:
 
-1. Log progress under `## Updates` with dated entries.
-2. Reference commit hashes, test results, and artifact paths.
-3. When implementation is complete:
+1. Create a **feature branch** named after the ticket slug (e.g., `feature/message-permalink-references`).
+   All implementation work for the ticket MUST happen on this branch, not on `main`.
+2. Log progress under `## Updates` with dated entries.
+3. Reference commit hashes, test results, and artifact paths.
+4. When implementation is complete:
    - Run test plan; record pass/fail evidence.
+   - Merge the feature branch to `main` (fast-forward or squash).
    - Move ticket to `40-review/`.
    - Set `updated` date.
 
