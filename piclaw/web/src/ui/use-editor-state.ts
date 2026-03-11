@@ -18,6 +18,10 @@ import { paneRegistry, tabStore } from '../panes/index.js';
  * @returns Tab state, handlers, and active tab info.
  */
 export function useEditorState({ onTabClosed } = {}) {
+    // Store callback in ref so close handlers never re-create when the caller changes identity
+    const onTabClosedRef = useRef(onTabClosed);
+    onTabClosedRef.current = onTabClosed;
+
     // ── Tab strip state (driven by tabStore) ────────────────────
     const [tabStripTabs, setTabStripTabs] = useState(() => tabStore.getTabs());
     const [tabStripActiveId, setTabStripActiveId] = useState(() => tabStore.getActiveId());
@@ -91,9 +95,9 @@ export function useEditorState({ onTabClosed } = {}) {
             }
             tabStore.close(activeId);
             cleanupPreviewTab(activeId);
-            onTabClosed?.(activeId);
+            onTabClosedRef.current?.(activeId);
         }
-    }, [onTabClosed, cleanupPreviewTab]);
+    }, [cleanupPreviewTab]);
 
     /** Close a specific tab (from tab strip). */
     const handleTabClose = useCallback((id) => {
@@ -104,8 +108,8 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         tabStore.close(id);
         cleanupPreviewTab(id);
-        onTabClosed?.(id);
-    }, [onTabClosed, cleanupPreviewTab]);
+        onTabClosedRef.current?.(id);
+    }, [cleanupPreviewTab]);
 
     /** Activate a tab by id. */
     const handleTabActivate = useCallback((id) => {
@@ -122,8 +126,8 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         const closedIds = others.map(t => t.id);
         tabStore.closeOthers(id);
-        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosed?.(cid); });
-    }, [onTabClosed, cleanupPreviewTab]);
+        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosedRef.current?.(cid); });
+    }, [cleanupPreviewTab]);
 
     /** Close all tabs. */
     const handleTabCloseAll = useCallback(() => {
@@ -135,8 +139,8 @@ export function useEditorState({ onTabClosed } = {}) {
         }
         const closedIds = tabs.map(t => t.id);
         tabStore.closeAll();
-        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosed?.(cid); });
-    }, [onTabClosed, cleanupPreviewTab]);
+        closedIds.forEach(cid => { cleanupPreviewTab(cid); onTabClosedRef.current?.(cid); });
+    }, [cleanupPreviewTab]);
 
     /** Toggle pin on a tab. */
     const handleTabTogglePin = useCallback((id) => {
