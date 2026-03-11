@@ -1,6 +1,7 @@
 services:
   pibox:
     image: pibox:latest
+    shm_size: '256m'
     container_name: pibox
     hostname: pibox
     environment:
