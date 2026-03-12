@@ -233,7 +233,7 @@ function cardHeight(ticket: Ticket, laneKey: string): number {
   return Math.max(h, 52);
 }
 
-function renderCard(ticket: Ticket, x: number, y: number, laneKey: string): string {
+function renderCard(ticket: Ticket, x: number, y: number, laneKey: string, refNumber?: number): string {
   const pColor = PRIORITY_COLORS[ticket.priority] || "#94a3b8";
   const titleLines = wrapText(ticket.title, 32);
   const isDone = laneKey === "done";
@@ -264,6 +264,15 @@ function renderCard(ticket: Ticket, x: number, y: number, laneKey: string): stri
       <rect width="${CARD_W}" height="${h}" rx="6"
             fill="${bgFill}" stroke="${strokeColor}" stroke-width="${strokeWidth}"${isDone ? ' opacity="0.7"' : ""}/>
       <circle cx="14" cy="16" r="4.5" fill="${pColor}"/>`;
+
+  // Visible ticket number
+  if (refNumber !== undefined) {
+    card += `
+      <g>
+        <rect x="${CARD_W - 32}" y="8" width="24" height="14" rx="7" fill="${P.barTrack}"/>
+        <text x="${CARD_W - 20}" y="18" font-size="9" font-weight="700" fill="${titleFill}" text-anchor="middle">${refNumber}</text>
+      </g>`;
+  }
 
   // Title (multi-line)
   titleLines.forEach((line, i) => {
@@ -299,7 +308,7 @@ function renderCard(ticket: Ticket, x: number, y: number, laneKey: string): stri
   // Done checkmark
   if (isDone) {
     card += `
-      <text x="${CARD_W - 14}" y="18" font-size="11" fill="#4ade80" text-anchor="end">✓</text>`;
+      <text x="${CARD_W - 14}" y="34" font-size="11" fill="#4ade80" text-anchor="end">✓</text>`;
   }
 
   card += `
@@ -330,7 +339,13 @@ function generate(): string {
     if (h > maxLaneContentH) maxLaneContentH = h;
   }
 
-  const totalH = MARGIN * 2 + HEADER_H + maxLaneContentH + 36;
+  const LANE_BOTTOM_PAD = 12;
+  const LEGEND_TOP_GAP = 12;
+  const LEGEND_H = 18;
+  const FOOTER_PAD = 2;
+
+  const laneH = HEADER_H + maxLaneContentH + LANE_BOTTOM_PAD;
+  const totalH = MARGIN + laneH + LEGEND_TOP_GAP + LEGEND_H + FOOTER_PAD;
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalW} ${totalH}" font-family="system-ui,-apple-system,sans-serif">
   <style>
@@ -344,10 +359,10 @@ function generate(): string {
 
   // Track card positions for blocker arrows
   const cardPositions: Map<string, { x: number; y: number; w: number; h: number; laneIdx: number }> = new Map();
+  let ticketNumber = 1;
 
   visibleLanes.forEach((lane, i) => {
     const lx = MARGIN + i * (LANE_W + LANE_GAP);
-    const laneH = totalH - MARGIN * 2;
 
     svg += `
   <g transform="translate(${lx},${MARGIN})">
@@ -358,7 +373,7 @@ function generate(): string {
     let cy = HEADER_H;
     lane.tickets.forEach((ticket) => {
       const ch = cardHeight(ticket, lane.key);
-      svg += renderCard(ticket, CARD_PAD, cy, lane.key);
+      svg += renderCard(ticket, CARD_PAD, cy, lane.key, ticketNumber++);
 
       // Store absolute position for arrows
       cardPositions.set(ticket.id, {
@@ -415,7 +430,7 @@ function generate(): string {
   }
 
   // Legend
-  const ly = totalH - 26;
+  const ly = MARGIN + laneH + LEGEND_TOP_GAP;
   svg += `
   <g transform="translate(${MARGIN + 6},${ly})">
     <circle cx="4" cy="6" r="4" fill="#ef4444"/><text x="14" y="10" font-size="9.5" fill="${P.textSecondary}">high</text>
