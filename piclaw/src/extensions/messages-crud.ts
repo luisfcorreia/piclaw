@@ -65,7 +65,7 @@ const MessagesSchema = Type.Object({
   force: Type.Optional(Type.Boolean({ description: "For delete action, ignore attachment-safety checks." })),
 });
 
-type MessagesParams = Static<typeof MessagesSchema>;
+export type MessagesParams = Static<typeof MessagesSchema>;
 
 type MessageRow = {
   rowid: number;
@@ -148,6 +148,26 @@ function runSearch(
   if (beforeTs) {
     timeClauses.push("timestamp < ?");
     timeValues.push(beforeTs);
+  }
+
+  if (trimmed === "*") {
+    const conditions: string[] = [];
+    const params: (string | number)[] = [];
+    if (chatJid) {
+      conditions.push("chat_jid = ?");
+      params.push(chatJid);
+    }
+    if (roleFilter !== null) {
+      conditions.push("is_bot_message = ?");
+      params.push(roleFilter);
+    }
+    for (const c of timeClauses) conditions.push(c);
+    params.push(...timeValues);
+
+    const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
+    const sql = `SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message
+      FROM messages${whereClause} ORDER BY rowid DESC LIMIT ? OFFSET ?`;
+    return db.prepare(sql).all(...params, limit, offset) as MessageRow[];
   }
 
   if (trimmed.startsWith("#")) {
@@ -563,6 +583,30 @@ function executeDelete(params: MessagesParams, defaultChat: string): AgentToolRe
   };
 }
 
+/**
+ * Shared helper for external callers that want direct access to message-tool
+ * semantics without an agent extension context.
+ */
+export function runMessagesTool(
+  params: MessagesParams,
+  defaultChat: string = "web:default"
+): AgentToolResult<Record<string, unknown>> {
+  const action = params.action || "search";
+
+  if (action === "search") return executeSearch(params, defaultChat);
+  if (action === "get") return executeGet(params, defaultChat);
+  if (action === "add") return executeAdd(params, defaultChat);
+  if (action === "delete") return executeDelete(params, defaultChat);
+
+  return {
+    content: [{ type: "text", text: `Unknown action: ${action}` }],
+    details: {
+      error: `Unknown action: ${action}`,
+      requested_action: action,
+    },
+  };
+}
+
 const MESSAGES_TOOL_HINT = [
   "## Messages",
   "Use the messages tool to search, retrieve, add, and delete chat messages.",
@@ -586,17 +630,7 @@ export const messagesCrud: ExtensionFactory = (pi: ExtensionAPI) => {
     parameters: MessagesSchema,
     async execute(_toolCallId, params) {
       const defaultChat = getChatJid("web:default");
-      const action = params.action || "search";
-
-      if (action === "search") return executeSearch(params, defaultChat);
-      if (action === "get") return executeGet(params, defaultChat);
-      if (action === "add") return executeAdd(params, defaultChat);
-      if (action === "delete") return executeDelete(params, defaultChat);
-
-      return {
-        content: [{ type: "text", text: `Unknown action: ${action}` }],
-        details: {},
-      };
+      return runMessagesTool(params, defaultChat);
     },
   });
 };

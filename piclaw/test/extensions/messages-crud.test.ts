@@ -120,6 +120,17 @@ describe("messages tool extension", () => {
     expect(result.details.results[0].content).toContain("sunny");
   });
 
+  test("search supports wildcard all-rows query", async () => {
+    insertMessage("alpha message");
+    insertMessage("beta message");
+    insertMessage("gamma message");
+
+    const { tool } = await getTool();
+    const result = await runWithContext(tool, { action: "search", query: "*", limit: 5 });
+    expect(result.details.action).toBe("search");
+    expect(result.details.count).toBe(3);
+  });
+
   test("search supports hashtag lookup", async () => {
     insertMessage("Working on #project-alpha today");
     insertMessage("No hashtag here");

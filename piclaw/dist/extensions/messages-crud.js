@@ -99,6 +99,25 @@ function runSearch(query, chatJid, roleFilter, limit, offset, afterTs, beforeTs)
         timeClauses.push("timestamp < ?");
         timeValues.push(beforeTs);
     }
+    if (trimmed === "*") {
+        const conditions = [];
+        const params = [];
+        if (chatJid) {
+            conditions.push("chat_jid = ?");
+            params.push(chatJid);
+        }
+        if (roleFilter !== null) {
+            conditions.push("is_bot_message = ?");
+            params.push(roleFilter);
+        }
+        for (const c of timeClauses)
+            conditions.push(c);
+        params.push(...timeValues);
+        const whereClause = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
+        const sql = `SELECT rowid, chat_jid, sender, sender_name, content, timestamp, is_bot_message
+      FROM messages${whereClause} ORDER BY rowid DESC LIMIT ? OFFSET ?`;
+        return db.prepare(sql).all(...params, limit, offset);
+    }
     if (trimmed.startsWith("#")) {
         const tag = trimmed.replace(/^#+/, "");
         if (!tag)
@@ -464,6 +483,28 @@ function executeDelete(params, defaultChat) {
         },
     };
 }
+/**
+ * Shared helper for external callers that want direct access to message-tool
+ * semantics without an agent extension context.
+ */
+export function runMessagesTool(params, defaultChat = "web:default") {
+    const action = params.action || "search";
+    if (action === "search")
+        return executeSearch(params, defaultChat);
+    if (action === "get")
+        return executeGet(params, defaultChat);
+    if (action === "add")
+        return executeAdd(params, defaultChat);
+    if (action === "delete")
+        return executeDelete(params, defaultChat);
+    return {
+        content: [{ type: "text", text: `Unknown action: ${action}` }],
+        details: {
+            error: `Unknown action: ${action}`,
+            requested_action: action,
+        },
+    };
+}
 const MESSAGES_TOOL_HINT = [
     "## Messages",
     "Use the messages tool to search, retrieve, add, and delete chat messages.",
@@ -485,19 +526,7 @@ export const messagesCrud = (pi) => {
         parameters: MessagesSchema,
         async execute(_toolCallId, params) {
             const defaultChat = getChatJid("web:default");
-            const action = params.action || "search";
-            if (action === "search")
-                return executeSearch(params, defaultChat);
-            if (action === "get")
-                return executeGet(params, defaultChat);
-            if (action === "add")
-                return executeAdd(params, defaultChat);
-            if (action === "delete")
-                return executeDelete(params, defaultChat);
-            return {
-                content: [{ type: "text", text: `Unknown action: ${action}` }],
-                details: {},
-            };
+            return runMessagesTool(params, defaultChat);
         },
     });
 };
