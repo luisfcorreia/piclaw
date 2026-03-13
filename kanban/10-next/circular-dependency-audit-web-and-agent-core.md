@@ -1,7 +1,7 @@
 ---
 id: circular-dependency-audit-web-and-agent-core
 title: Audit and reduce server-side circular dependencies
-status: next
+status: done
 priority: medium
 created: 2026-03-11
 updated: 2026-03-13
