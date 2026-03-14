@@ -45,6 +45,12 @@ const defaultStore: WebRecoveryStore = {
   getMessagesSince,
 };
 
+/** Maximum age (ms) of an inflight marker before recovery skips it.
+ *  If the marker is older than this, the run already timed out on a
+ *  previous boot and replaying it is unlikely to succeed.  Defaults to
+ *  30 minutes — well above the 15-minute interactive timeout.  */
+const MAX_INFLIGHT_AGE_MS = 30 * 60 * 1000;
+
 /** Recover interrupted runs left inflight after a restart. */
 export function recoverInflightRuns(
   ctx: WebRecoveryContext,
@@ -52,6 +58,8 @@ export function recoverInflightRuns(
 ): void {
   const inflights = store.getInflightRuns();
   if (inflights.length === 0) return;
+
+  const now = typeof ctx.now === "function" ? ctx.now() : Date.now();
 
   try {
     store.transaction(() => {
@@ -71,9 +79,27 @@ export function recoverInflightRuns(
               "already has agent replies — clearing marker without rollback"
           );
           store.clearInflightMarker(inflight.chatJid);
-        } else {
-          store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
+          continue;
         }
+
+        // Skip stale inflight markers.  If the marker has survived multiple
+        // restarts without producing a terminal reply, the message is unlikely
+        // to succeed on replay (e.g. contextless recovery, stuck model).
+        // Clear the marker WITHOUT rolling back the cursor so the next
+        // `resumePendingChats` picks up the *next* pending message instead of
+        // endlessly retrying the same one.
+        const inflightAge = now - new Date(inflight.startedAt).getTime();
+        if (inflightAge > MAX_INFLIGHT_AGE_MS) {
+          console.warn(
+            `[web] Inflight run for ${inflight.chatJid} is stale ` +
+              `(${Math.round(inflightAge / 1000)}s old, started ${inflight.startedAt}) — ` +
+              "clearing marker without rollback to avoid retry loop"
+          );
+          store.clearInflightMarker(inflight.chatJid);
+          continue;
+        }
+
+        store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
       }
     });
   } catch (err) {

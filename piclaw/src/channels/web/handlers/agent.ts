@@ -744,7 +744,8 @@ export async function processChat(
   // Exactly-once rule: never clear inflight state unless a terminal reply was
   // actually persisted (either the final output itself or a draft fallback).
   const finalAttachments = output.attachments ?? [];
-  const finalized = output.result || finalAttachments.length > 0
+  const hasOutput = !!(output.result || finalAttachments.length > 0);
+  const finalized = hasOutput
     ? storeAgentTurn(channel, emitter, {
         chatJid,
         text: output.result || "",
@@ -756,8 +757,10 @@ export async function processChat(
       })
     : publishDraftFallback("empty-final");
 
-  if (!finalized) {
-    const errorText = "Agent completed without a persisted terminal response.";
+  if (!finalized && hasOutput) {
+    // The agent produced output but persistence failed (DB write error).
+    // Record a failed run so the message is retried on model switch.
+    const errorText = "Agent completed but terminal response could not be persisted.";
     endChatRunWithError(chatJid, {
       prevTs: prevCursor,
       failedTs: lastMessage.timestamp,
@@ -772,6 +775,42 @@ export async function processChat(
       title: errorText,
       turn_id: turnId,
     });
+    return;
+  }
+
+  if (!finalized && !hasOutput) {
+    // Check if a draft buffer existed — if so, the agent DID produce content
+    // but persistence failed, which is a real error worth recording.
+    const draft = channel.getBuffer(turnId, "draft");
+    const hadDraft = !!(typeof draft?.text === "string" && draft.text.trim());
+    if (hadDraft) {
+      const errorText = "Agent completed but draft response could not be persisted.";
+      endChatRunWithError(chatJid, {
+        prevTs: prevCursor,
+        failedTs: lastMessage.timestamp,
+        messageId: lastMessage.id,
+        threadRootId: resolvedThreadRootId ?? null,
+        createdAt: new Date().toISOString(),
+      });
+      trackedEmitter.status({
+        thread_id: threadId,
+        agent_id: agentId,
+        type: "error",
+        title: errorText,
+        turn_id: turnId,
+      });
+      return;
+    }
+
+    // The agent completed normally but produced no output and there was no
+    // draft buffer.  This typically happens when restart recovery replays a
+    // contextless message.  Treat as a successful no-op so the cursor
+    // advances and the same message is not retried endlessly.
+    console.warn(
+      `[web] Agent completed for ${chatJid} without output — ` +
+        "finalizing as no-op to advance cursor"
+    );
+    await finalizeSuccessfulRun();
     return;
   }
 

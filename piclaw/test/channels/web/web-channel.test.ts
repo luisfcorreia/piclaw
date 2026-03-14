@@ -1124,7 +1124,7 @@ test("processChat records an explicit failed run when draft fallback persistence
   expect(contents).toEqual(["hello"]);
 });
 
-test("processChat records an explicit failed run when no terminal output can be persisted", async () => {
+test("processChat finalizes as no-op when no terminal output can be persisted", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
@@ -1157,8 +1157,10 @@ test("processChat records an explicit failed run when no terminal output can be 
 
   await web.processChat("web:default", "default");
 
+  // Empty output with no draft is treated as a no-op success (cursor
+  // advances) to prevent infinite retry loops on restart recovery.
   const failedRun = db.getFailedRun("web:default");
-  expect(failedRun).toBeTruthy();
+  expect(failedRun).toBeUndefined();
 
   const timeline = db.getTimeline("web:default", 10);
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
@@ -1620,7 +1622,7 @@ test("recoverInflightRuns rolls back cursor and retries the run", async () => {
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
-  const ts = "2024-01-01T00:00:00.000Z";
+  const ts = new Date(Date.now() - 5000).toISOString();
   const messageId = `msg-${Math.random()}`;
   db.storeMessage({
     id: messageId,
@@ -1674,8 +1676,9 @@ test("recoverInflightRuns replays runs with only non-terminal assistant output",
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
-  const ts = "2024-01-01T00:00:00.000Z";
-  const partialTs = "2024-01-01T00:00:01.000Z";
+  const baseMs = Date.now() - 5000;
+  const ts = new Date(baseMs).toISOString();
+  const partialTs = new Date(baseMs + 1000).toISOString();
   const messageId = `msg-${Math.random()}`;
   db.storeMessage({
     id: messageId,
@@ -1739,10 +1742,11 @@ test("recoverInflightRuns ignores older terminal replies before the inflight sta
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
-  const prevUserTs = "2024-01-01T00:00:00.000Z";
-  const prevReplyTs = "2024-01-01T00:00:01.000Z";
-  const currentUserTs = "2024-01-01T00:00:02.000Z";
-  const startedAt = "2024-01-01T00:00:03.000Z";
+  const baseMs = Date.now() - 5000;
+  const prevUserTs = new Date(baseMs).toISOString();
+  const prevReplyTs = new Date(baseMs + 1000).toISOString();
+  const currentUserTs = new Date(baseMs + 2000).toISOString();
+  const startedAt = new Date(baseMs + 3000).toISOString();
   const currentMessageId = `msg-${Math.random()}`;
 
   db.storeMessage({
