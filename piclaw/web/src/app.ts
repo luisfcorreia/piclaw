@@ -42,6 +42,7 @@ import {
     isIOSDevice,
     useTimestampRefresh,
 } from './ui/app-helpers.js';
+import { resolveFilePillOpenAction } from './ui/file-pill-open.js';
 
 function missingApi(name, fallback) {
     if (typeof window !== 'undefined') {
@@ -345,32 +346,19 @@ function App() {
     }, [clearIntentToast]);
 
     const openFileFromPill = useCallback((rawPath) => {
-        if (typeof rawPath !== 'string') return;
-        const path = rawPath.trim();
-        if (!path) {
-            showIntentToast('No file selected', 'Use a valid file path from a file pill.', 'warning');
+        const result = resolveFilePillOpenAction(rawPath, {
+            editorOpen,
+            resolvePane: (context) => paneRegistry.resolve(context),
+        });
+
+        if (result.kind === 'open') {
+            openEditor(result.path);
             return;
         }
 
-        if (!editorOpen) {
-            showIntentToast('Editor pane is not open', 'Open the editor pane to open files from pills.', 'warning');
-            return;
+        if (result.kind === 'toast') {
+            showIntentToast(result.title, result.detail, result.level);
         }
-
-        const protocolMatch = /^[a-z][a-z0-9+.-]*:/i.test(path);
-        if (protocolMatch) {
-            showIntentToast('Cannot open external path from file pill', 'Use an in-workspace file path.', 'warning');
-            return;
-        }
-
-        const context = { path, mode: 'edit' };
-        const editorExt = paneRegistry.resolve(context);
-        if (!editorExt) {
-            showIntentToast('No editor available', `No editor can open: ${path}`, 'warning');
-            return;
-        }
-
-        openEditor(path);
     }, [editorOpen, openEditor, showIntentToast]);
 
     const attachActiveEditorFile = useCallback(() => {

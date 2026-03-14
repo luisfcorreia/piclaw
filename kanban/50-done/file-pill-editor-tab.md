@@ -1,10 +1,11 @@
 ---
 id: file-pill-editor-tab
 title: Open file pills in a new editor tab when editor is visible
-status: inbox
+status: done
 priority: medium
 created: 2026-03-12
-updated: 2026-03-12
+updated: 2026-03-14
+completed: 2026-03-14
 estimate: M
 risk: low
 tags:
@@ -17,6 +18,24 @@ owner: pi
 ---
 
 # Open file pills in a new editor tab when editor is visible
+
+## Updates
+
+### 2026-03-14
+- Lane change: `20-doing` → `50-done` after confirming the timeline and compose file pills already shared the same `openFileFromPill` path in `web/src/app.ts`.
+- Added focused behavioral coverage in `piclaw/test/web/file-pill-open.test.ts` for editor-visible, editor-hidden, external-path, unsupported-path, empty-path, and resolver-failure cases.
+- Kept duplicate-tab reuse covered by the existing `piclaw/test/web/tab-store.test.ts` assertion that reopening the same path activates without duplicating.
+- Small hardening change: extracted the shared decision logic into `piclaw/web/src/ui/file-pill-open.ts` so the tests exercise real code instead of an inline test copy.
+- Validation/build evidence:
+  - `bun test test/web/file-pill-open.test.ts test/web/tab-store.test.ts`
+  - `bun run build`
+  - `bun run build:web`
+  - `bun run quality` → `801 pass, 0 fail`
+- Quality: ★★★★★ 10/10 (problem: 2, scope: 2, test: 2, deps: 2, risk: 2)
+
+### 2026-03-14
+- Lane change: `00-inbox` → `20-doing` as a low-risk, UI-only candidate with clear scope and no backend contract work.
+- Marked as a likely fast follow-up because it reuses existing pane resolution and editor-open behavior rather than introducing a new data model.
 
 ## Summary
 When a user clicks a file pill (timeline or compose), the UI should attempt to open that file in the editor only when:
@@ -40,12 +59,12 @@ If both conditions are met, open the file in a new editor tab (or focus/reuse ex
 - If no editor can handle the file path, do not throw; leave the current timeline/compose UI unchanged.
 
 ## Acceptance Criteria
-- [ ] Clicking a file pill in a timeline message attempts editor open when editor is visible.
-- [ ] Clicking a file pill in compose references attempts editor open when editor is visible.
-- [ ] File resolution guard checks for registered editor support before opening.
-- [ ] If editor is hidden, click does not force-open editor unexpectedly.
-- [ ] Existing pill remove behavior remains unchanged.
-- [ ] No regressions in message/file-reference rendering.
+- [x] Clicking a file pill in a timeline message attempts editor open when editor is visible.
+- [x] Clicking a file pill in compose references attempts editor open when editor is visible.
+- [x] File resolution guard checks for registered editor support before opening.
+- [x] If editor is hidden, click does not force-open editor unexpectedly.
+- [x] Existing pill remove behavior remains unchanged.
+- [x] No regressions in message/file-reference rendering.
 
 ## Relevant files (expected)
 - `piclaw/web/src/components/file-pill.ts`
@@ -85,8 +104,8 @@ If both conditions are met, open the file in a new editor tab (or focus/reuse ex
 1. On unsupported file types while editor is visible, user feedback should be shown via the intent pane (toast style).
 2. Repeated opens should reuse/focus existing tabs (`openEditor` default behavior).
 ### Acceptance criteria (refined)
-- [ ] File pill click in **timeline** calls shared handler that gates on editor visibility + pane resolution.
-- [ ] File pill click in **compose** shares the same handler behavior.
-- [ ] Unsupported/invalid paths never break rendering and never open an editor.
-- [ ] Existing remove interactions and drag/drop/multiselect flows are unchanged.
-- [ ] If editor is hidden, clicking file pill is a no-op.
+- [x] File pill click in **timeline** calls shared handler that gates on editor visibility + pane resolution.
+- [x] File pill click in **compose** shares the same handler behavior.
+- [x] Unsupported/invalid paths never break rendering and never open an editor.
+- [x] Existing remove interactions and drag/drop/multiselect flows are unchanged.
+- [x] If editor is hidden, clicking file pill does not force-open the editor and instead shows the intended warning toast.

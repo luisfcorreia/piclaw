@@ -1,10 +1,10 @@
 ---
 id: compose-box-branch-affordance
 title: Show current git branch badge in compose box
-status: next
+status: doing
 priority: medium
 created: 2026-03-13
-updated: 2026-03-13
+updated: 2026-03-14
 target_release: next
 estimate: M
 risk: low
@@ -73,6 +73,10 @@ adds a lightweight branch badge in that same location.
 - [ ] Manual check confirms badge remains aligned and non-intrusive across compose sizes.
 
 ## Updates
+
+### 2026-03-14
+- Lane change: `10-next` → `20-doing` because the board had no active items and this is a low-risk, self-contained web UI enhancement.
+- Kept as a likely quick pickup: small endpoint/state plumbing plus a compact compose-row badge with minimal layout risk.
 
 ### 2026-03-13
 - Ticket opened in response to user request.
