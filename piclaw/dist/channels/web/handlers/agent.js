@@ -351,18 +351,36 @@ export async function handleAgentMessage(channel, req, pathname, chatJid, defaul
 }
 /** Process a chat message: detect commands, queue agent run, or store post. */
 export async function processChat(channel, chatJid, agentId, threadRootId) {
+    const MAX_MATERIALIZE_RETRIES = 5;
     const materializeNextDeferredFollowup = () => {
         const nextQueued = channel.consumeQueuedFollowupItem(chatJid);
         if (!nextQueued)
             return false;
+        const retries = nextQueued.materializeRetries ?? 0;
         const queuedInteraction = channel.storeMessage(chatJid, nextQueued.queuedContent, false, nextQueued.mediaIds ?? [], {
             contentBlocks: Array.isArray(nextQueued.contentBlocks) ? nextQueued.contentBlocks : undefined,
             linkPreviews: Array.isArray(nextQueued.linkPreviews) ? nextQueued.linkPreviews : undefined,
             threadId: nextQueued.threadId ?? undefined,
         });
         if (!queuedInteraction) {
-            // Preserve order if materializing the deferred user message fails.
-            channel.prependQueuedFollowupItem(chatJid, nextQueued);
+            if (retries >= MAX_MATERIALIZE_RETRIES) {
+                // Too many failures — drop the item to prevent infinite loops.
+                console.error(`[web] Dropping queued followup for ${chatJid} after ${retries} failed materialize attempts ` +
+                    `(rowId=${nextQueued.rowId}, content=${nextQueued.queuedContent?.slice(0, 80)})`);
+                channel.broadcastEvent("agent_followup_consumed", {
+                    chat_jid: chatJid,
+                    thread_id: nextQueued.threadId ?? null,
+                    row_id: nextQueued.rowId,
+                    content: nextQueued.queuedContent,
+                    timestamp: nextQueued.queuedAt,
+                });
+                return false;
+            }
+            // Preserve order and increment retry counter.
+            const withRetry = { ...nextQueued, materializeRetries: retries + 1 };
+            channel.prependQueuedFollowupItem(chatJid, withRetry);
+            console.warn(`[web] Failed to materialize queued followup for ${chatJid} ` +
+                `(attempt ${retries + 1}/${MAX_MATERIALIZE_RETRIES}, rowId=${nextQueued.rowId})`);
             return false;
         }
         channel.broadcastEvent("agent_followup_consumed", {
@@ -654,8 +672,25 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         // draft buffer.  This typically happens when restart recovery replays a
         // contextless message.  Treat as a successful no-op so the cursor
         // advances and the same message is not retried endlessly.
+        //
+        // Post a system notice so the user can see their message was consumed
+        // without a response and re-send if needed.
         console.warn(`[web] Agent completed for ${chatJid} without output — ` +
             "finalizing as no-op to advance cursor");
+        const originalContent = currentMessage.content || "";
+        const preview = originalContent.length > 120
+            ? originalContent.slice(0, 120) + "…"
+            : originalContent;
+        const noticeText = preview
+            ? `⚠️ Your message was received but the agent produced no response. You may need to re-send it.\n\n> ${preview}`
+            : "⚠️ Your message was received but the agent produced no response. You may need to re-send it.";
+        const notice = channel.storeMessage(chatJid, noticeText, true, [], {
+            threadId: resolvedThreadRootId ?? undefined,
+            isTerminalAgentReply: true,
+        });
+        if (notice) {
+            channel.broadcastEvent("agent_response", notice);
+        }
         await finalizeSuccessfulRun();
         return;
     }

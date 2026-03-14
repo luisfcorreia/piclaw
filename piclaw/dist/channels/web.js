@@ -230,6 +230,7 @@ export class WebChannel {
             mediaIds: item.mediaIds ? [...item.mediaIds] : undefined,
             contentBlocks: Array.isArray(item.contentBlocks) ? [...item.contentBlocks] : undefined,
             linkPreviews: Array.isArray(item.linkPreviews) ? [...item.linkPreviews] : undefined,
+            materializeRetries: item.materializeRetries ?? 0,
         });
         this.setDeferredQueuedFollowupItems(chatJid, queued);
     }
@@ -244,11 +245,21 @@ export class WebChannel {
             ...this.getDeferredQueuedFollowupItems(chatJid),
             ...this.followupPlaceholderStore.peek(chatJid),
         ];
+        // Deduplicate by rowId — the two stores use different ID spaces (negative
+        // for deferred, positive for placeholder), but guard against bugs that
+        // might put the same item in both stores.
+        const seen = new Set();
         return rows
             .map((row) => ({
             ...row,
             queuedAt: row.queuedAt,
         }))
+            .filter((row) => {
+            if (seen.has(row.rowId))
+                return false;
+            seen.add(row.rowId);
+            return true;
+        })
             .sort((a, b) => String(a.queuedAt).localeCompare(String(b.queuedAt)));
     }
     removeQueuedFollowupItem(chatJid, rowId) {

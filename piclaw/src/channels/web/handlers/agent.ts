@@ -464,7 +464,7 @@ export async function processChat(
     const nextQueued = channel.consumeQueuedFollowupItem(chatJid);
     if (!nextQueued) return false;
 
-    const retries = (nextQueued as Record<string, unknown>).materializeRetries as number | undefined ?? 0;
+    const retries = nextQueued.materializeRetries ?? 0;
 
     const queuedInteraction = channel.storeMessage(
       chatJid,
@@ -844,10 +844,7 @@ export async function processChat(
         "finalizing as no-op to advance cursor"
     );
 
-    const originalContent = currentMessage?.text
-      || currentMessage?.content
-      || (typeof currentMessage?.data?.content === "string" ? currentMessage.data.content : "")
-      || "";
+    const originalContent = currentMessage.content || "";
     const preview = originalContent.length > 120
       ? originalContent.slice(0, 120) + "…"
       : originalContent;

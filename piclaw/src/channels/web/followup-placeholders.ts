@@ -10,6 +10,8 @@ export interface QueuedFollowupItem {
   mediaIds?: number[];
   contentBlocks?: unknown[];
   linkPreviews?: unknown[];
+  /** Number of times materializeNextDeferredFollowup has failed for this item. */
+  materializeRetries?: number;
 }
 
 /** FIFO in-memory row-id queue for deferred follow-up placeholder replacement. */
