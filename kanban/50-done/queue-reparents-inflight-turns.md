@@ -150,6 +150,15 @@ carries a stale explicit `threadRootId`) is tracked separately in
 
 All 792 tests pass as of 2026-03-14.
 
+### 2026-03-14 (related follow-up fix)
+- A separate but related reparenting bug was fixed: `processChat(threadRootId)`
+  could cross-parent responses when multiple messages were pending, because the
+  `threadRootId` came from the enqueuing `handleAgentMessage` call rather than
+  the message actually being processed. Fixed in commit `a27a860` by deriving
+  the thread root from the actual `currentMessage.thread_id`.
+- See: `kanban/50-done/fix-stale-thread-root-on-queued-web-chat-retry.md`
+- See: `kanban/50-done/queue-inflight-turn-parenting-regression.md`
+
 ## Links
 
 - `piclaw/src/agent-control/handlers/queue.ts`

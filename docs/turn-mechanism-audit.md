@@ -186,11 +186,17 @@ processChat(channel, chatJid, agentId, threadRootId?)
   │
   ├── Read messages since cursor
   │     getMessagesSince(chatJid, prevCursor, assistantName)
+  │     (now includes thread_id in SELECT for thread-root derivation)
   │
   ├── No messages? → Try materializeNextDeferredFollowup() → return
   │
   ├── Process exactly ONE message (messages[0])
   │     → formatMessages([currentMessage], channelName) → prompt string
+  │     → Derive effectiveThreadRootId from currentMessage.thread_id,
+  │       falling back to the threadRootId parameter only when the message
+  │       has no thread_id. This prevents cross-parenting when cursor-ordered
+  │       selection picks a different message than the one that enqueued
+  │       this processChat task.
   │
   ├── beginChatRun() → atomically advance cursor + set inflight marker
   │

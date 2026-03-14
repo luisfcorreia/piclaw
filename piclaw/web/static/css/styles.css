@@ -942,6 +942,13 @@ body {
     opacity: 0;
     transition: opacity var(--ui-transition-fast), background-color var(--ui-transition-fast);
     cursor: pointer;
+    border: none;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
 }
 
 .tab-item:hover .tab-close,

@@ -4,7 +4,8 @@ title: Fix stale thread root on queued web chat retry
 status: done
 priority: high
 created: 2026-03-13
-updated: 2026-03-13
+updated: 2026-03-14
+completed: 2026-03-14
 target_release: next
 estimate: M
 risk: medium
@@ -39,11 +40,11 @@ reply sequence.
 
 ## Acceptance Criteria
 
-- [ ] If multiple persisted user messages are pending, an assistant turn is always parented to the user message actually being processed, not the message that happened to enqueue the current queue task.
-- [ ] A stale explicit `threadRootId` cannot reparent an earlier pending message under a later user turn.
-- [ ] Retries after `already processing` or similar requeue paths preserve correct thread parenting.
-- [ ] Fixture coverage reproduces the `7664/7665/7666` shape and proves the fix.
-- [ ] Existing follow-up queue and steering threading tests remain green.
+- [x] If multiple persisted user messages are pending, an assistant turn is always parented to the user message actually being processed, not the message that happened to enqueue the current queue task.
+- [x] A stale explicit `threadRootId` cannot reparent an earlier pending message under a later user turn.
+- [x] Retries after `already processing` or similar requeue paths preserve correct thread parenting.
+- [x] Fixture coverage reproduces the `7664/7665/7666` shape and proves the fix.
+- [x] Existing follow-up queue and steering threading tests remain green.
 
 ## Implementation Paths
 
@@ -89,11 +90,11 @@ Cons:
 
 ## Definition of Done
 
-- [ ] Root cause confirmed in code, not just inferred from DB rows
-- [ ] Regression test added for stale explicit thread-root mismatch
-- [ ] Assistant replies parent correctly under both normal and retried queue execution
-- [ ] `bun run quality` passes
-- [ ] Ticket moved to `50-done/` only after DB evidence confirms correct thread ids in a real run
+- [x] Root cause confirmed in code, not just inferred from DB rows
+- [x] Regression test added for stale explicit thread-root mismatch
+- [x] Assistant replies parent correctly under both normal and retried queue execution
+- [x] `bun run quality` passes
+- [x] Ticket moved to `50-done/` only after DB evidence confirms correct thread ids in a real run
 
 ## Updates
 

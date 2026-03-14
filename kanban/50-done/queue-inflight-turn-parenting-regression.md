@@ -1,9 +1,10 @@
 ---
 id: queue-inflight-turn-parenting-regression
 title: Investigate intermittent /queue re-parenting regression for in-flight turns
-status: inbox
+status: done
 created: 2026-03-13
-updated: 2026-03-13
+updated: 2026-03-14
+completed: 2026-03-14
 priority: high
 estimate: M
 risk: medium
@@ -59,6 +60,23 @@ This appears to be either:
 - Important distinction in the new report: this is about *sometimes* and *long requests*, which may indicate a different timing window than the original deterministic case.
 
 ## Updates
+
+### 2026-03-14 (resolved)
+- **Root cause confirmed** — same underlying bug as `fix-stale-thread-root-on-queued-web-chat-retry`:
+  `processChat(threadRootId)` receives the thread root from whichever
+  `handleAgentMessage` enqueued the queue task, but cursor-ordered message
+  selection (`getMessagesSince`) may pick a *different* pending message
+  (the earlier one). The response to message A is then cross-parented
+  under message B's thread.
+- **Fixed** in commit `a27a860`: `processChat` now reads `thread_id` from the
+  actual `currentMessage` (via updated `getMessagesSince` SQL that includes
+  `thread_id` in its SELECT) and derives `effectiveThreadRootId =
+  messageThreadId ?? threadRootId`. The explicit parameter is only a fallback.
+- The intermittent nature is explained by the timing: it only happens when two
+  messages are pending simultaneously with different thread roots, which
+  requires the second message to be submitted before the first is processed.
+- All 792 tests pass. All acceptance criteria are met by the same fix that
+  resolved the sibling ticket.
 
 ### 2026-03-13
 - Added from new user report that long-running in-flight requests can still sometimes be visually parented to the queued turn rather than the original turn.

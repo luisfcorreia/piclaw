@@ -96,7 +96,17 @@ export function TabStrip({ tabs, activeId, onActivate, onClose, onCloseOthers, o
         setContextMenu({ id, x: e.clientX, y: e.clientY });
     }, []);
 
+    const handleCloseMouseDown = useCallback((e) => {
+        // Prevent the parent tab's onMouseDown handler from activating the tab
+        // first. This is especially important for the last open tab, where the
+        // close control should behave as a pure close action rather than a
+        // close-after-activate sequence.
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
     const handleCloseClick = useCallback((e, id) => {
+        e.preventDefault();
         e.stopPropagation();
         onClose?.(id);
     }, [onClose]);
@@ -132,8 +142,10 @@ export function TabStrip({ tabs, activeId, onActivate, onClose, onCloseOthers, o
                         </span>
                     `}
                     <span class="tab-label">${tab.label}</span>
-                    <span
+                    <button
+                        type="button"
                         class="tab-close"
+                        onMouseDown=${handleCloseMouseDown}
                         onClick=${(e) => handleCloseClick(e, tab.id)}
                         title=${tab.dirty ? 'Unsaved changes' : 'Close'}
                         aria-label=${tab.dirty ? 'Unsaved changes' : `Close ${tab.label}`}
@@ -145,7 +157,7 @@ export function TabStrip({ tabs, activeId, onActivate, onClose, onCloseOthers, o
                                 <line x1="12" y1="4" x2="4" y2="12"/>
                             </svg>`
                         }
-                    </span>
+                    </button>
                 </div>
             `)}
             ${onToggleDock && html`
