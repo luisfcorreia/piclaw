@@ -45,6 +45,7 @@ import {
 } from './ui/app-helpers.js';
 import { resolveFilePillOpenAction } from './ui/file-pill-open.js';
 import { parseBtwCommand, buildBtwInjectionText } from './ui/btw.js';
+import { buildChatWindowUrl, getChatWindowOpenOptions, isStandaloneWebAppMode } from './ui/chat-window.js';
 import { isCompactionStatus } from './ui/status-duration.js';
 
 function missingApi(name, fallback) {
@@ -94,6 +95,9 @@ const getAgentContext = typeof api.getAgentContext === 'function'
 const getAgentModels = typeof api.getAgentModels === 'function'
     ? api.getAgentModels
     : missingApi('getAgentModels', { current: null, models: [] });
+const getActiveChatAgents = typeof api.getActiveChatAgents === 'function'
+    ? api.getActiveChatAgents
+    : missingApi('getActiveChatAgents', { chats: [] });
 const getAgentQueueState = typeof api.getAgentQueueState === 'function'
     ? api.getAgentQueueState
     : missingApi('getAgentQueueState', { count: 0 });
@@ -129,7 +133,21 @@ preloadEditorBundle();
 paneRegistry.register(terminalPaneExtension);
 
 function App() {
+    const locationParams = useMemo(() => {
+        if (typeof window === 'undefined') return new URLSearchParams();
+        return new URL(window.location.href).searchParams;
+    }, []);
+    const currentChatJid = useMemo(() => {
+        const raw = locationParams.get('chat_jid');
+        return raw && raw.trim() ? raw.trim() : 'web:default';
+    }, [locationParams]);
+    const chatOnlyMode = useMemo(() => {
+        const raw = (locationParams.get('chat_only') || locationParams.get('chat-only') || '').trim().toLowerCase();
+        return raw === '1' || raw === 'true' || raw === 'yes';
+    }, [locationParams]);
+
     const [connectionStatus, setConnectionStatus] = useState('disconnected');
+    const [isWebAppMode, setIsWebAppMode] = useState(() => isStandaloneWebAppMode());
     const [currentHashtag, setCurrentHashtag] = useState(null);
     const [searchQuery, setSearchQuery] = useState(null);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -168,10 +186,15 @@ function App() {
     const [activeThinkingLevel, setActiveThinkingLevel] = useState(null);
     const [supportsThinking, setSupportsThinking] = useState(false);
     const [activeModelUsage, setActiveModelUsage] = useState(null);
+    const [activeChatAgents, setActiveChatAgents] = useState([]);
     const [contextUsage, setContextUsage] = useState(null);
     const [followupQueueItems, setFollowupQueueItems] = useState([]);
     const [isAgentTurnActive, setIsAgentTurnActive] = useState(false);
     const [btwSession, setBtwSession] = useState(() => loadStoredBtwSession());
+    const currentChatAgent = useMemo(
+        () => activeChatAgents.find((chat) => chat?.chat_jid === currentChatJid) || null,
+        [activeChatAgents, currentChatJid],
+    );
     const followupQueueCount = followupQueueItems.length;
     const followupQueueRowIdsRef = useRef(new Set());
     const followupQueueItemsRef = useRef([]);
@@ -213,7 +236,7 @@ function App() {
     const hasDockPanes = paneRegistry.getDockPanes().length > 0;
     const [dockVisible, setDockVisible] = useState(false);
     const toggleDock = useCallback(() => setDockVisible((v) => !v), []);
-    const showEditorPaneContainer = editorOpen || (hasDockPanes && dockVisible);
+    const showEditorPaneContainer = !chatOnlyMode && (editorOpen || (hasDockPanes && dockVisible));
 
     // Mount/dispose editor extension instance when active tab changes
     useEffect(() => {
@@ -345,6 +368,51 @@ function App() {
     }, []);
 
     useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const refreshWebAppMode = () => {
+            setIsWebAppMode(isStandaloneWebAppMode());
+        };
+
+        refreshWebAppMode();
+
+        const queries = [
+            '(display-mode: standalone)',
+            '(display-mode: minimal-ui)',
+            '(display-mode: fullscreen)',
+        ];
+        const mediaQueries = queries
+            .map((query) => {
+                try {
+                    return window.matchMedia(query);
+                } catch {
+                    return null;
+                }
+            })
+            .filter(Boolean);
+
+        const removers = mediaQueries.map((mql) => {
+            if (typeof mql.addEventListener === 'function') {
+                mql.addEventListener('change', refreshWebAppMode);
+                return () => mql.removeEventListener('change', refreshWebAppMode);
+            }
+            if (typeof mql.addListener === 'function') {
+                mql.addListener(refreshWebAppMode);
+                return () => mql.removeListener(refreshWebAppMode);
+            }
+            return () => {};
+        });
+
+        window.addEventListener('focus', refreshWebAppMode);
+        window.addEventListener('pageshow', refreshWebAppMode);
+        return () => {
+            for (const remove of removers) remove();
+            window.removeEventListener('focus', refreshWebAppMode);
+            window.removeEventListener('pageshow', refreshWebAppMode);
+        };
+    }, []);
+
+    useEffect(() => {
         setLocalStorageItem('workspaceOpen', String(workspaceOpen));
     }, [workspaceOpen]);
 
@@ -466,7 +534,7 @@ function App() {
         if (existing) { highlight(existing); return; }
         // Not in DOM - fetch via API and inject into posts
         try {
-            const result = await api.getThread(id);
+            const result = await api.getThread(id, currentChatJid);
             const msg = result?.thread?.[0];
             if (!msg) return;
             setPosts((prev) => {
@@ -751,7 +819,7 @@ function App() {
         refreshTimeline,
         loadMore,
         loadMoreRef,
-    } = useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop });
+    } = useTimeline({ preserveTimelineScroll, preserveTimelineScrollTop, chatJid: currentChatJid });
 
     // Derive filtered posts: placeholder rows and their parent user messages
     // are hidden.  Recomputes when rawPosts or followupQueueItems change;
@@ -828,7 +896,7 @@ function App() {
 
 
     const refreshQueueState = useCallback(() => {
-        getAgentQueueState()
+        getAgentQueueState(currentChatJid)
             .then((payload) => {
                 const dismissed = dismissedQueueRowIdsRef.current;
                 const items = Array.isArray(payload?.items)
@@ -855,16 +923,16 @@ function App() {
 
     const refreshContextUsage = useCallback(async () => {
         try {
-            const ctx = await getAgentContext();
+            const ctx = await getAgentContext(currentChatJid);
             if (ctx) setContextUsage(ctx);
         } catch (err) {
             console.warn('Failed to fetch agent context:', err);
         }
-    }, []);
+    }, [currentChatJid]);
 
     const refreshAgentStatus = useCallback(async () => {
         try {
-            const res = await getAgentStatus('web:default');
+            const res = await getAgentStatus(currentChatJid);
             if (!res || res.status !== 'active' || !res.data) {
                 // If the agent just transitioned active → idle, refresh the timeline
                 // to catch any final response that arrived while SSE was gapped.
@@ -1040,14 +1108,14 @@ function App() {
         setCurrentHashtag(null);
         setPosts(null);
         try {
-            const result = await searchPosts(query.trim());
+            const result = await searchPosts(query.trim(), 50, 0, currentChatJid);
             setPosts(result.results);
             setHasMore(false);
         } catch (error) {
             console.error('Failed to search:', error);
             setPosts([]);
         }
-    }, []);
+    }, [currentChatJid]);
 
     const enterSearchMode = useCallback(() => {
         setSearchOpen(true);
@@ -1140,10 +1208,10 @@ function App() {
         }
         // Fetch initial context usage for the pie chart indicator
         try {
-            const ctx = await getAgentContext();
+            const ctx = await getAgentContext(currentChatJid);
             if (ctx) setContextUsage(ctx);
         } catch {}
-    }, [applyBranding]);
+    }, [applyBranding, currentChatJid]);
 
     useEffect(() => {
         loadAgents();
@@ -1245,6 +1313,17 @@ function App() {
             })
             .catch(() => {});
     }, [applyModelState]);
+
+    const refreshActiveChatAgents = useCallback(() => {
+        getActiveChatAgents()
+            .then((payload) => {
+                const chats = Array.isArray(payload?.chats)
+                    ? payload.chats.filter((chat) => chat && typeof chat.agent_name === 'string' && chat.agent_name.trim())
+                    : [];
+                setActiveChatAgents(chats);
+            })
+            .catch(() => {});
+    }, []);
     const handleInjectQueuedFollowup = useCallback((queuedItem) => {
         const rowId = queuedItem?.row_id;
         if (rowId == null) return;
@@ -1290,6 +1369,8 @@ function App() {
     const handleMessageResponse = useCallback((response) => {
         if (!response || typeof response !== "object") return;
 
+        refreshActiveChatAgents();
+
         if (response?.queued === "followup" || response?.queued === "steer") {
             refreshQueueState();
             return;
@@ -1301,7 +1382,7 @@ function App() {
         )) {
             refreshQueueState();
         }
-    }, [refreshQueueState]);
+    }, [refreshActiveChatAgents, refreshQueueState]);
 
     const closeBtwPanel = useCallback(() => {
         if (btwAbortRef.current) {
@@ -1406,7 +1487,7 @@ function App() {
         const content = buildBtwInjectionText(btwSession);
         if (!content) return;
         try {
-            const response = await api.sendAgentMessage('default', content, null, [], isComposeBoxAgentActive ? 'queue' : null);
+            const response = await api.sendAgentMessage('default', content, null, [], isComposeBoxAgentActive ? 'queue' : null, currentChatJid);
             handleMessageResponse(response);
             showIntentToast(
                 response?.queued === 'followup' ? 'BTW queued' : 'BTW injected',
@@ -1423,18 +1504,20 @@ function App() {
 
     const refreshModelAndQueueState = useCallback(() => {
         refreshModelState();
+        refreshActiveChatAgents();
         refreshQueueState();
         refreshContextUsage();
-    }, [refreshModelState, refreshQueueState, refreshContextUsage]);
+    }, [refreshModelState, refreshActiveChatAgents, refreshQueueState, refreshContextUsage]);
 
     useEffect(() => {
         refreshModelAndQueueState();
         const interval = setInterval(() => {
             refreshModelState();
+            refreshActiveChatAgents();
             refreshQueueState();
         }, 60_000);
         return () => clearInterval(interval);
-    }, [refreshModelAndQueueState, refreshModelState, refreshQueueState]);
+    }, [refreshModelAndQueueState, refreshModelState, refreshActiveChatAgents, refreshQueueState]);
 
     const handleSseEvent = useCallback((eventType, data) => {
         const turnId = data?.turn_id;
@@ -1468,7 +1551,7 @@ function App() {
             pendingRequestRef.current = null;
             clearAgentRunState();
 
-            getAgentStatus('web:default')
+            getAgentStatus(currentChatJid)
                 .then((res) => {
                     if (!res || res.status !== 'active' || !res.data) return;
                     const payload = res.data;
@@ -1522,6 +1605,7 @@ function App() {
                 // an error or multi-step drain instead of blanking the stack
                 // optimistically and waiting for a later incidental refresh.
                 dismissedQueueRowIdsRef.current.clear();
+                void refreshActiveChatAgents();
                 void refreshQueueState();
                 setAgentDraft({ text: '', totalLines: 0 });
                 setAgentPlan('');
@@ -1745,7 +1829,7 @@ function App() {
             if (data?.thinking_level !== undefined) setActiveThinkingLevel(data.thinking_level ?? null);
             if (data?.supports_thinking !== undefined) setSupportsThinking(Boolean(data.supports_thinking));
             // Refresh context usage - the context window size changes with the model
-            getAgentContext().then((ctx) => { if (ctx) setContextUsage(ctx); }).catch(() => {});
+            getAgentContext(currentChatJid).then((ctx) => { if (ctx) setContextUsage(ctx); }).catch(() => {});
             return;
         }
 
@@ -1908,6 +1992,35 @@ function App() {
         setWorkspaceOpen((prev) => !prev);
     }, []);
 
+    const handlePopOutChat = useCallback(async () => {
+        if (typeof window === 'undefined' || isWebAppMode) return;
+        try {
+            const response = await api.forkChatBranch(currentChatJid);
+            const branch = response?.branch;
+            const nextChatJid = typeof branch?.chat_jid === 'string' && branch.chat_jid.trim() ? branch.chat_jid.trim() : null;
+            if (!nextChatJid) {
+                throw new Error('Branch fork did not return a chat id.');
+            }
+            try {
+                const active = await api.getActiveChatAgents();
+                setActiveChatAgents(Array.isArray(active?.chats) ? active.chats : []);
+            } catch {}
+            const url = buildChatWindowUrl(window.location.href, nextChatJid, { chatOnly: true });
+            const openOptions = getChatWindowOpenOptions(branch?.agent_name || nextChatJid);
+            if (!openOptions) {
+                throw new Error('Opening branch windows is unavailable in standalone webapp mode.');
+            }
+            if (openOptions.features) {
+                window.open(url, openOptions.target, openOptions.features);
+            } else {
+                window.open(url, openOptions.target);
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error || 'Failed to fork chat branch.');
+            showIntentToast('Could not open branch window', message || 'Failed to fork chat branch.', 'error', 5000);
+        }
+    }, [currentChatJid, isWebAppMode, showIntentToast]);
+
     useEffect(() => {
         if (!editorOpen) return;
         if (typeof window === 'undefined') return;
@@ -1929,7 +2042,7 @@ function App() {
 
     // Keyboard shortcut: Ctrl+` to toggle dock (only when dock panes exist)
     useEffect(() => {
-        if (!hasDockPanes) return;
+        if (!hasDockPanes || chatOnlyMode) return;
         const onKeyDown = (e) => {
             if (e.ctrlKey && e.key === '`') {
                 e.preventDefault();
@@ -1938,29 +2051,31 @@ function App() {
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [toggleDock, hasDockPanes]);
+    }, [toggleDock, hasDockPanes, chatOnlyMode]);
 
     const steerQueued = Boolean(steerQueuedTurnId && (steerQueuedTurnId === (agentStatus?.turn_id || currentTurnId)));
 
     return html`
-        <div class=${`app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}`} ref=${appShellRef}>
-            <${WorkspaceExplorer}
-                onFileSelect=${addFileRef}
-                visible=${workspaceOpen}
-                active=${workspaceOpen || editorOpen}
-                onOpenEditor=${openEditor}
-            />
-            <button
-                class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
-                onClick=${toggleWorkspace}
-                title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-                aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
-            >
-                <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="6 3 11 8 6 13" />
-                </svg>
-            </button>
-            <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart}></div>
+        <div class=${`app-shell${workspaceOpen ? '' : ' workspace-collapsed'}${editorOpen ? ' editor-open' : ''}${chatOnlyMode ? ' chat-only' : ''}`} ref=${appShellRef}>
+            ${!chatOnlyMode && html`
+                <${WorkspaceExplorer}
+                    onFileSelect=${addFileRef}
+                    visible=${workspaceOpen}
+                    active=${workspaceOpen || editorOpen}
+                    onOpenEditor=${openEditor}
+                />
+                <button
+                    class=${`workspace-toggle-tab${workspaceOpen ? ' open' : ' closed'}`}
+                    onClick=${toggleWorkspace}
+                    title=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
+                    aria-label=${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
+                >
+                    <svg class="workspace-toggle-tab-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="6 3 11 8 6 13" />
+                    </svg>
+                </button>
+                <div class="workspace-splitter" onMouseDown=${handleSplitterMouseDown} onTouchStart=${handleSplitterTouchStart}></div>
+            `}
             ${showEditorPaneContainer && html`
                 <div class="editor-pane-container">
                     ${editorOpen && html`
@@ -2004,6 +2119,17 @@ function App() {
             `}
             <div class="container">
                 ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
+                ${chatOnlyMode && html`
+                    <div class="chat-window-header">
+                        <div class="chat-window-header-main">
+                            <span class="chat-window-header-title">
+                                ${currentChatAgent?.display_name || currentChatAgent?.agent_name ? `@${currentChatAgent?.agent_name || currentChatJid}` : currentChatJid}
+                            </span>
+                            <span class="chat-window-header-subtitle">${currentChatAgent?.display_name || currentChatJid}</span>
+                        </div>
+                        <span class="chat-window-header-badge">Chat only</span>
+                    </div>
+                `}
                 ${(currentHashtag || searchQuery) && html`
                     <div class="hashtag-header">
                         <button class="back-btn" onClick=${handleBackToTimeline}>
@@ -2060,8 +2186,8 @@ function App() {
                     messageRefs=${messageRefs}
                     onRemoveMessageRef=${removeMessageRef}
                     onClearMessageRefs=${clearMessageRefs}
-                    activeEditorPath=${tabStripActiveId}
-                    onAttachEditorFile=${attachActiveEditorFile}
+                    activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
+                    onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}
                     onOpenFilePill=${openFileFromPill}
                     followupQueueCount=${followupQueueCount}
                     followupQueueItems=${followupQueueItems}
@@ -2069,7 +2195,10 @@ function App() {
                     onRemoveQueuedFollowup=${handleRemoveQueuedFollowup}
                     onSubmitIntercept=${handleBtwIntercept}
                     onMessageResponse=${handleMessageResponse}
+                    onPopOutChat=${isWebAppMode ? undefined : handlePopOutChat}
                     isAgentActive=${isComposeBoxAgentActive}
+                    activeChatAgents=${activeChatAgents}
+                    currentChatJid=${currentChatJid}
                     activeModel=${activeModel}
                     modelUsage=${activeModelUsage}
                     thinkingLevel=${activeThinkingLevel}

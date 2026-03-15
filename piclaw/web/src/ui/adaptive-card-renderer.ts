@@ -9,7 +9,8 @@
  *     contains an adaptive_card content block.
  */
 
-import { buildHostConfig } from "./adaptive-card-host-config.js";
+import { renderMarkdown } from "../markdown.js";
+import { buildHostConfig, getAdaptiveCardThemeValues } from "./adaptive-card-host-config.js";
 
 /** Shape of an adaptive_card content block in a message's content_blocks. */
 export interface AdaptiveCardBlock {
@@ -36,6 +37,7 @@ const SUPPORTED_VERSIONS = new Set(["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1
 
 let sdkLoaded = false;
 let sdkLoadPromise: Promise<void> | null = null;
+let markdownProcessorConfigured = false;
 
 function clearAdaptiveCardNotice(container: HTMLElement): void {
   container.querySelector(".adaptive-card-notice")?.remove();
@@ -47,6 +49,42 @@ function showAdaptiveCardNotice(container: HTMLElement, message: string, tone: "
   notice.className = `adaptive-card-notice adaptive-card-notice-${tone}`;
   notice.textContent = message;
   container.appendChild(notice);
+}
+
+export function processAdaptiveCardMarkdown(
+  text: string,
+  renderer: (source: string) => string = (source) => renderMarkdown(source, null),
+): { outputHtml: string; didProcess: boolean } {
+  const source = typeof text === "string" ? text : String(text ?? "");
+  if (!source.trim()) {
+    return { outputHtml: "", didProcess: false };
+  }
+  return {
+    outputHtml: renderer(source),
+    didProcess: true,
+  };
+}
+
+export function createAdaptiveCardMarkdownProcessor(
+  renderer: (source: string) => string = (source) => renderMarkdown(source, null),
+) {
+  return (text: string, result: { outputHtml?: string; didProcess?: boolean }) => {
+    try {
+      const processed = processAdaptiveCardMarkdown(text, renderer);
+      result.outputHtml = processed.outputHtml;
+      result.didProcess = processed.didProcess;
+    } catch (error) {
+      console.error("[adaptive-card] Failed to process markdown:", error);
+      result.outputHtml = String(text ?? "");
+      result.didProcess = false;
+    }
+  };
+}
+
+function ensureAdaptiveCardMarkdownProcessor(AC: any): void {
+  if (markdownProcessorConfigured || !AC?.AdaptiveCard) return;
+  AC.AdaptiveCard.onProcessMarkdown = createAdaptiveCardMarkdownProcessor();
+  markdownProcessorConfigured = true;
 }
 
 /** Lazy-load the vendored adaptivecards SDK. */
@@ -265,9 +303,11 @@ export async function renderAdaptiveCard(
 
   try {
     const AC = getAC();
+    ensureAdaptiveCardMarkdownProcessor(AC);
     const card = new AC.AdaptiveCard();
 
     // Apply HostConfig from current theme
+    const themeValues = getAdaptiveCardThemeValues();
     card.hostConfig = new AC.HostConfig(buildHostConfig());
 
     // Parse the card payload. Finished cards are hydrated with the last
@@ -307,6 +347,7 @@ export async function renderAdaptiveCard(
 
     // Style the container
     container.classList.add("adaptive-card-container");
+    container.style.setProperty("--adaptive-card-button-text-color", themeValues.buttonTextColor);
 
     const stateMeta = describeAdaptiveCardState(block);
     if (stateMeta) {

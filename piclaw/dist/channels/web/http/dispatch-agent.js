@@ -37,6 +37,9 @@ export async function handleAgentRoutes(channel, req, pathname, url) {
     if (req.method === "GET" && pathname === "/agent/active-chats") {
         return await channel.handleAgentActiveChats(req);
     }
+    if (req.method === "POST" && pathname === "/agent/branch-fork") {
+        return await channel.handleAgentBranchFork(req);
+    }
     if (req.method === "POST" && pathname === "/agent/peer-message") {
         return await channel.handleAgentPeerMessage(req);
     }

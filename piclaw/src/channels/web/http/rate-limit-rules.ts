@@ -22,6 +22,7 @@ const DATA_WORKSPACE_UPLOAD_LIMIT = 20;
 const DATA_DELETE_LIMIT = 60;
 const DATA_WRITE_LIMIT = 30;
 const DATA_AGENT_QUEUE_LIMIT = 30;
+const DATA_AGENT_BRANCH_LIMIT = 20;
 const DATA_AGENT_PEER_LIMIT = 30;
 
 /** Rate-limit rule returned for a specific method/path endpoint. */
@@ -52,6 +53,13 @@ export function getDataRateLimitRule(method: string, pathname: string): DataRate
       bucket: "data/agent_queue",
       limit: DATA_AGENT_QUEUE_LIMIT,
       message: "Too many queued-message actions. Slow down.",
+    };
+  }
+  if (method === "POST" && pathname === "/agent/branch-fork") {
+    return {
+      bucket: "data/agent_branch",
+      limit: DATA_AGENT_BRANCH_LIMIT,
+      message: "Too many branch forks. Slow down.",
     };
   }
   if (method === "POST" && pathname === "/agent/peer-message") {

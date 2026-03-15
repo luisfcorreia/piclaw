@@ -365,6 +365,18 @@ Pick and justify one recommended approach that:
   - `POST /agent/peer-message`
   - `POST /agent/:id/message?chat_jid=...` now reuses the normal send path for non-default branch chats
 - This does not complete pop-out chats by itself, but it establishes a concrete path for active chat windows/agents to communicate with each other using normal target-chat queue/defer semantics.
+- Architecture choice was then made explicitly: **Option C** is now the target model, because chat branches need to align with Pi session-tree semantics and may mature into stable named `@agent` identities.
+- Implemented the first C-shaped slice as an explicit SQLite branch registry instead of ad hoc handle derivation:
+  - added `chat_branches` table with first-class branch/session metadata (`branch_id`, `chat_jid`, `root_chat_jid`, `parent_branch_id`, `agent_name`, `display_name`, lifecycle timestamps)
+  - added DB helpers for branch lookup/creation by `chat_jid` and `agent_name`
+  - active-chat listing and `@name` routing now prefer registry-backed branch identities
+- Implemented the first real branch-fork flow on top of Pi session ancestry:
+  - added `POST /agent/branch-fork`
+  - backend creates a new branch row, assigns a unique `@agent` name, creates a distinct chat/session identity, and seeds a new Pi session with `parentSession` pointing at the source session plus carried-forward context/model/thinking state
+  - compose-corner pop-out now forks a real branch first, then opens that branch in chat-only window mode
+- This is intentionally still a first slice of C, not the whole end-state:
+  - branch-local runtime/recovery still primarily keys off `chat_jid`
+  - the explicit registry now owns naming/ancestry/lifecycle metadata so later work can move queue/recovery/session-picker logic onto it without another conceptual rewrite
 
 ### 2026-03-14
 - Ticket created from a user request for multiple parallel chat windows with

@@ -71,10 +71,13 @@ async function consumeEventStream(response, onEvent) {
 /**
  * Get timeline posts (chat style - returns oldest first)
  */
-export async function getTimeline(limit = 10, beforeId = null) {
+export async function getTimeline(limit = 10, beforeId = null, chatJid = null) {
     let url = `/timeline?limit=${limit}`;
     if (beforeId) {
         url += `&before=${beforeId}`;
+    }
+    if (chatJid) {
+        url += `&chat_jid=${encodeURIComponent(chatJid)}`;
     }
     return request(url);
 }
@@ -82,22 +85,25 @@ export async function getTimeline(limit = 10, beforeId = null) {
 /**
  * Get posts by hashtag
  */
-export async function getPostsByHashtag(hashtag, limit = 50, offset = 0) {
-    return request(`/hashtag/${encodeURIComponent(hashtag)}?limit=${limit}&offset=${offset}`);
+export async function getPostsByHashtag(hashtag, limit = 50, offset = 0, chatJid = null) {
+    const query = chatJid ? `&chat_jid=${encodeURIComponent(chatJid)}` : '';
+    return request(`/hashtag/${encodeURIComponent(hashtag)}?limit=${limit}&offset=${offset}${query}`);
 }
 
 /**
  * Search posts
  */
-export async function searchPosts(query, limit = 50, offset = 0) {
-    return request(`/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`);
+export async function searchPosts(query, limit = 50, offset = 0, chatJid = null) {
+    const chatQuery = chatJid ? `&chat_jid=${encodeURIComponent(chatJid)}` : '';
+    return request(`/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}${chatQuery}`);
 }
 
 /**
  * Get a thread by ID
  */
-export async function getThread(threadId) {
-    return request(`/thread/${threadId}`);
+export async function getThread(threadId, chatJid = null) {
+    const query = chatJid ? `?chat_jid=${encodeURIComponent(chatJid)}` : '';
+    return request(`/thread/${threadId}${query}`);
 }
 
 /**
@@ -144,6 +150,20 @@ export async function sendAgentMessage(agentId, content, threadId = null, mediaI
  */
 export async function getActiveChatAgents() {
     return request('/agent/active-chats');
+}
+
+/**
+ * Create a first-class forked branch from an existing chat branch.
+ */
+export async function forkChatBranch(sourceChatJid, options = {}) {
+    return request('/agent/branch-fork', {
+        method: 'POST',
+        body: JSON.stringify({
+            source_chat_jid: sourceChatJid,
+            ...(options?.agentName ? { agent_name: options.agentName } : {}),
+            ...(options?.displayName ? { display_name: options.displayName } : {}),
+        }),
+    });
 }
 
 /**

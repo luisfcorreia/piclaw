@@ -17,6 +17,7 @@
  *   - agent-pool.ts calls storeMessage() to persist agent responses.
  */
 import { getDb } from "./connection.js";
+import { ensureChatBranch } from "./chat-branches.js";
 import { clampWebContent } from "./web-content.js";
 import { attachMediaToMessage, deleteUnreferencedMedia, getMediaIdsForMessage, getMediaIdsForMessages, } from "./media.js";
 /** Column list used in SELECT queries to ensure a consistent shape. */
@@ -94,6 +95,10 @@ export function storeChatMetadata(chatJid, timestamp, name) {
        ON CONFLICT(jid) DO UPDATE SET
          last_message_time = MAX(last_message_time, excluded.last_message_time)`).run(chatJid, chatJid, timestamp);
     }
+    ensureChatBranch({
+        chat_jid: chatJid,
+        display_name: typeof name === "string" && name.trim() ? name.trim() : null,
+    });
 }
 /**
  * Persist a message into the `messages` table (INSERT OR REPLACE).

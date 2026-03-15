@@ -2,6 +2,7 @@
 import { html, useRef, useState, useEffect, useCallback } from '../vendor/preact-htm.js';
 import { getAgentModels, sendAgentMessage, uploadMedia } from '../api.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
+import { buildMentionValue, filterMentionAgents, getVisibleMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
 import { FilePill } from './file-pill.js';
 
 /**
@@ -138,7 +139,10 @@ export function ComposeBox({
     onRemoveQueuedFollowup,
     onSubmitIntercept,
     onMessageResponse,
+    onPopOutChat,
     isAgentActive = false,
+    activeChatAgents = [],
+    currentChatJid = 'web:default',
 }) {
     const [content, setContent] = useState('');
     const [searchText, setSearchText] = useState('');
@@ -147,12 +151,16 @@ export function ComposeBox({
     const [slashMatches, setSlashMatches] = useState([]);
     const [slashIndex, setSlashIndex] = useState(0);
     const [showSlash, setShowSlash] = useState(false);
+    const [mentionMatches, setMentionMatches] = useState([]);
+    const [mentionIndex, setMentionIndex] = useState(0);
+    const [showMention, setShowMention] = useState(false);
     const [switchingModel, setSwitchingModel] = useState(false);
     const [showModelPopup, setShowModelPopup] = useState(false);
     const [modelOptions, setModelOptions] = useState([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const textareaRef = useRef(null);
     const slashRef = useRef(null);
+    const mentionRef = useRef(null);
     const modelPopupRef = useRef(null);
     const modelHintRef = useRef(null);
     const dragCounterRef = useRef(0);
@@ -198,6 +206,8 @@ export function ComposeBox({
     const notificationActive = notificationPermission === 'granted' && notificationsEnabled;
     const notificationTitle = notificationActive ? 'Disable notifications' : 'Enable notifications';
 
+    const visibleMentionAgents = getVisibleMentionAgents(activeChatAgents, { currentChatJid, limit: 4 });
+    const hasVisibleMentionAgents = visibleMentionAgents.length > 0;
     const modelHintLabel = activeModel || '';
     const modelHintSuffix = supportsThinking && thinkingLevel ? ` (${thinkingLevel})` : '';
     const modelThinkingLabel = modelHintSuffix.trim() ? `${thinkingLevel}` : '';
@@ -261,6 +271,8 @@ export function ComposeBox({
             cmd.name.startsWith(prefix) || cmd.name.replace(/-/g, '').startsWith(prefix.replace(/-/g, ''))
         );
         if (matches.length > 0 && !(matches.length === 1 && matches[0].name === prefix)) {
+            setShowMention(false);
+            setMentionMatches([]);
             setSlashMatches(matches);
             setSlashIndex(0);
             setShowSlash(true);
@@ -291,12 +303,48 @@ export function ComposeBox({
         });
     };
 
+    const updateMentionAutocomplete = (value) => {
+        if (parseMentionAutocompleteQuery(value) == null) {
+            setShowMention(false);
+            setMentionMatches([]);
+            return;
+        }
+        const matches = filterMentionAgents(activeChatAgents, value, { currentChatJid });
+        if (matches.length > 0 && !(matches.length === 1 && buildMentionValue(matches[0].agent_name).trim().toLowerCase() === String(value || '').trim().toLowerCase())) {
+            setShowSlash(false);
+            setSlashMatches([]);
+            setMentionMatches(matches);
+            setMentionIndex(0);
+            setShowMention(true);
+        } else {
+            setShowMention(false);
+            setMentionMatches([]);
+        }
+    };
+
+    const acceptMention = (agent) => {
+        const newVal = buildMentionValue(agent?.agent_name);
+        if (!newVal) return;
+        setContent(newVal);
+        setShowMention(false);
+        setMentionMatches([]);
+        requestAnimationFrame(() => {
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const len = newVal.length;
+            textarea.selectionStart = len;
+            textarea.selectionEnd = len;
+            textarea.focus();
+        });
+    };
+
     const updateValue = (value) => {
         if (searchMode) {
             setSearchText(value);
         } else {
             setContent(value);
             updateSlashAutocomplete(value);
+            updateMentionAutocomplete(value);
         }
         requestAnimationFrame(() => resizeTextarea());
     };
@@ -324,7 +372,7 @@ export function ComposeBox({
 
         setSwitchingModel(true);
         try {
-            const response = await sendAgentMessage('default', commandText, null, []);
+            const response = await sendAgentMessage('default', commandText, null, [], null, currentChatJid);
             const nextModel = extractCurrentModel(response);
             emitModelState({
                 model: nextModel ?? activeModel ?? null,
@@ -332,7 +380,7 @@ export function ComposeBox({
                 supports_thinking: response?.command?.supports_thinking,
             });
             try {
-                const latest = await getAgentModels();
+                const latest = await getAgentModels(currentChatJid);
                 if (latest) emitModelState(latest);
             } catch {}
             onPost?.();
@@ -393,6 +441,8 @@ export function ComposeBox({
 
         setShowSlash(false);
         setSlashMatches([]);
+        setShowMention(false);
+        setMentionMatches([]);
 
         // Capture media/refs before clearing so the async send can use them
         const capturedMediaFiles = includeMedia ? [...mediaFiles] : [];
@@ -458,7 +508,7 @@ export function ComposeBox({
                     }).join('\n')}`
                     : '';
                 const message = [baseContent, fileBlock, messageRefBlock, mediaBlock].filter(Boolean).join('\n\n');
-                const response = await sendAgentMessage('default', message, null, mediaIds, resolveSubmitMode(submitMode));
+                const response = await sendAgentMessage('default', message, null, mediaIds, resolveSubmitMode(submitMode), currentChatJid);
                 onMessageResponse?.(response);
 
                 if (response?.command) {
@@ -468,7 +518,7 @@ export function ComposeBox({
                         supports_thinking: response.command.supports_thinking,
                     });
                     try {
-                        const latest = await getAgentModels();
+                        const latest = await getAgentModels(currentChatJid);
                         if (latest) emitModelState(latest);
                     } catch {}
                 }
@@ -495,6 +545,36 @@ export function ComposeBox({
             setSearchText('');
             onExitSearch?.();
             return;
+        }
+        // @agent autocomplete navigation
+        if (showMention && mentionMatches.length > 0) {
+            const mentionValue = textareaRef.current?.value ?? (searchMode ? searchText : content);
+            if (!String(mentionValue || '').match(/^@([a-zA-Z0-9_-]*)$/)) {
+                setShowMention(false);
+                setMentionMatches([]);
+            } else {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setMentionIndex(i => (i + 1) % mentionMatches.length);
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setMentionIndex(i => (i - 1 + mentionMatches.length) % mentionMatches.length);
+                    return;
+                }
+                if (e.key === 'Tab' || e.key === 'Enter') {
+                    e.preventDefault();
+                    acceptMention(mentionMatches[mentionIndex]);
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setShowMention(false);
+                    setMentionMatches([]);
+                    return;
+                }
+            }
         }
         // Slash autocomplete navigation
         if (showSlash && slashMatches.length > 0) {
@@ -701,7 +781,7 @@ export function ComposeBox({
         if (!showModelPopup) return;
 
         setLoadingModels(true);
-        getAgentModels()
+        getAgentModels(currentChatJid)
             .then((payload) => {
                 const models = Array.isArray(payload?.models)
                     ? payload.models.filter((model) => typeof model === 'string' && model.trim().length > 0)
@@ -719,7 +799,13 @@ export function ComposeBox({
     }, [showModelPopup, activeModel]);
 
     useEffect(() => {
-        if (searchMode) setShowModelPopup(false);
+        if (searchMode) {
+            setShowModelPopup(false);
+            setShowSlash(false);
+            setSlashMatches([]);
+            setShowMention(false);
+            setMentionMatches([]);
+        }
     }, [searchMode]);
 
     useEffect(() => {
@@ -749,6 +835,10 @@ export function ComposeBox({
         requestAnimationFrame(() => resizeTextarea());
     }, [content, searchText, searchMode]);
 
+    useEffect(() => {
+        if (searchMode) return;
+        updateMentionAutocomplete(content);
+    }, [activeChatAgents, currentChatJid, content, searchMode]);
 
     return html`
         <div class="compose-box">
@@ -841,6 +931,24 @@ export function ComposeBox({
                             })}
                         </div>
                     `}
+                    ${!searchMode && typeof onPopOutChat === 'function' && html`
+                        <button
+                            type="button"
+                            class="compose-popout-btn"
+                            onClick=${() => onPopOutChat?.()}
+                            title="Open this chat in a new chat-only window"
+                            aria-label="Open this chat in a new chat-only window"
+                        >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 5h5v5" />
+                                <path d="M10 14 19 5" />
+                                <path d="M19 14v5h-5" />
+                                <path d="M5 10V5h5" opacity="0" />
+                                <path d="M5 19h5" />
+                                <path d="M5 19v-5" />
+                            </svg>
+                        </button>
+                    `}
                     <textarea
                         ref=${textareaRef}
                         placeholder=${searchMode ? "Search (Enter to run)..." : "Message (Enter to send, Shift+Enter for newline)..."}
@@ -852,6 +960,21 @@ export function ComposeBox({
                         onClick=${onFocus}
                         rows="1"
                     />
+                    ${showMention && mentionMatches.length > 0 && html`
+                        <div class="slash-autocomplete" ref=${mentionRef}>
+                            ${mentionMatches.map((agent, i) => html`
+                                <div
+                                    key=${agent.chat_jid || agent.agent_name}
+                                    class=${`slash-item${i === mentionIndex ? ' active' : ''}`}
+                                    onMouseDown=${(e) => { e.preventDefault(); acceptMention(agent); }}
+                                    onMouseEnter=${() => setMentionIndex(i)}
+                                >
+                                    <span class="slash-name">@${agent.agent_name}</span>
+                                    <span class="slash-desc">${agent.display_name || agent.chat_jid || 'Active agent'}</span>
+                                </div>
+                            `)}
+                        </div>
+                    `}
                     ${showSlash && slashMatches.length > 0 && html`
                         <div class="slash-autocomplete" ref=${slashRef}>
                             ${slashMatches.map((cmd, i) => html`
@@ -924,6 +1047,22 @@ export function ComposeBox({
                                         <span class="compose-model-usage-hint" title=${modelHintTitle}>
                                             ${modelUsageSectionLabel}
                                         </span>
+                                    `}
+                                    ${!searchMode && hasVisibleMentionAgents && html`
+                                        <div class="compose-agent-hints" title="Active chat agents you can mention with @name">
+                                            <span class="compose-agent-hints-label">Agents</span>
+                                            ${visibleMentionAgents.map((agent) => html`
+                                                <button
+                                                    key=${agent.chat_jid || agent.agent_name}
+                                                    type="button"
+                                                    class=${`compose-agent-chip${agent.is_active ? ' active' : ''}`}
+                                                    onClick=${() => acceptMention(agent)}
+                                                    title=${`${agent.display_name || agent.chat_jid || 'Active agent'} — insert @${agent.agent_name}`}
+                                                >
+                                                    <span class="compose-agent-chip-handle">@${agent.agent_name}</span>
+                                                </button>
+                                            `)}
+                                        </div>
                                     `}
                                 </div>
                             </div>

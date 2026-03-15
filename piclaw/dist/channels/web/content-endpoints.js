@@ -2,24 +2,24 @@
  * channels/web/content-endpoints.ts – timeline/search/thread/thought endpoint helpers.
  */
 import { getHashtagResponse, getSearchResponse, getThreadResponse, getTimelineResponse, } from "./timeline-service.js";
-/** Return the timeline response for the default web chat. */
-export function handleTimelineRequest(limit, before, ctx) {
-    const result = getTimelineResponse(ctx.defaultChatJid, limit, before);
+/** Return the timeline response for the requested web chat (defaults to the main web chat). */
+export function handleTimelineRequest(limit, before, chatJid, ctx) {
+    const result = getTimelineResponse(chatJid || ctx.defaultChatJid, limit, before);
     return ctx.json(result.body, result.status);
 }
-/** Return posts for a hashtag in the default web chat. */
-export function handleHashtagRequest(tag, limit, offset, ctx) {
-    const result = getHashtagResponse(ctx.defaultChatJid, tag, limit, offset);
+/** Return posts for a hashtag in the requested web chat (defaults to the main web chat). */
+export function handleHashtagRequest(tag, limit, offset, chatJid, ctx) {
+    const result = getHashtagResponse(chatJid || ctx.defaultChatJid, tag, limit, offset);
     return ctx.json(result.body, result.status);
 }
-/** Return search results for a query in the default web chat. */
-export function handleSearchRequest(query, limit, offset, ctx) {
-    const result = getSearchResponse(ctx.defaultChatJid, query, limit, offset);
+/** Return search results for a query in the requested web chat (defaults to the main web chat). */
+export function handleSearchRequest(query, limit, offset, chatJid, ctx) {
+    const result = getSearchResponse(chatJid || ctx.defaultChatJid, query, limit, offset);
     return ctx.json(result.body, result.status);
 }
 /** Return a thread payload rooted at the provided interaction id. */
-export function handleThreadRequest(id, ctx) {
-    const result = getThreadResponse(ctx.defaultChatJid, id);
+export function handleThreadRequest(id, chatJid, ctx) {
+    const result = getThreadResponse(chatJid || ctx.defaultChatJid, id);
     return ctx.json(result.body, result.status);
 }
 /** Return persisted thought/draft buffer text for a streamed model turn. */

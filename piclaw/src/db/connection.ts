@@ -55,6 +55,23 @@ function createSchema(database: Database): void {
       last_message_time TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_chats_last_message_time ON chats(last_message_time);
+
+    CREATE TABLE IF NOT EXISTS chat_branches (
+      branch_id TEXT PRIMARY KEY,
+      chat_jid TEXT NOT NULL UNIQUE,
+      root_chat_jid TEXT NOT NULL,
+      parent_branch_id TEXT,
+      agent_name TEXT NOT NULL UNIQUE,
+      display_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archived_at TEXT,
+      FOREIGN KEY (chat_jid) REFERENCES chats(jid)
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_root_chat_jid ON chat_branches(root_chat_jid);
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_parent_branch_id ON chat_branches(parent_branch_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_branches_archived_at ON chat_branches(archived_at);
+
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT,
       chat_jid TEXT,

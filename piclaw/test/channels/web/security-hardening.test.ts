@@ -421,6 +421,37 @@ describe("CSRF origin checks", () => {
     expect(reached).toBe(false);
   });
 
+  test("auth-gates /agent/branch-fork before route dispatch", async () => {
+    let reached = false;
+    class AuthChannel extends StubChannel {
+      authGateway = {
+        isAuthEnabled: () => true,
+        isInternalSecretEnabled: () => false,
+        verifyInternalSecret: () => false,
+        isAuthenticated: () => false,
+      };
+      async handleAgentBranchFork() {
+        reached = true;
+        return this.json({ ok: true }, 200);
+      }
+    }
+
+    const router = new RequestRouterService(new AuthChannel() as any);
+    const req = new Request("http://localhost/agent/branch-fork", {
+      method: "POST",
+      headers: {
+        Origin: "http://localhost",
+        Host: "localhost",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ source_chat_jid: "web:default" }),
+    });
+
+    const res = await router.handle(req);
+    expect(res.status).toBe(401);
+    expect(reached).toBe(false);
+  });
+
   test("auth-gates /agent/peer-message before route dispatch", async () => {
     let reached = false;
     class AuthChannel extends StubChannel {

@@ -9,7 +9,10 @@ import {
   normalizeAdaptiveCardAction,
   describeAdaptiveCardState,
   hydrateAdaptiveCardPayloadWithSubmission,
+  processAdaptiveCardMarkdown,
+  createAdaptiveCardMarkdownProcessor,
 } from "../../web/src/ui/adaptive-card-renderer.js";
+import { pickHighestContrastColor } from "../../web/src/ui/adaptive-card-host-config.js";
 
 describe("isAdaptiveCardBlock", () => {
   test("accepts valid card block", () => {
@@ -125,6 +128,28 @@ describe("normalizeAdaptiveCardAction", () => {
     });
     expect(action.type).toBe("Action.OpenUrl");
     expect(action.url).toBe("https://adaptivecards.io/");
+  });
+});
+
+describe("processAdaptiveCardMarkdown", () => {
+  test("uses the provided markdown renderer and marks the result as processed", () => {
+    const rendered = processAdaptiveCardMarkdown("**Bold**", (input) => `<p><strong>${input.slice(2, -2)}</strong></p>`);
+    expect(rendered.didProcess).toBe(true);
+    expect(rendered.outputHtml).toBe("<p><strong>Bold</strong></p>");
+  });
+
+  test("adaptive card markdown processor writes HTML into the SDK callback result", () => {
+    const result: { outputHtml?: string; didProcess?: boolean } = {};
+    const processor = createAdaptiveCardMarkdownProcessor((input) => `<p>${input.toUpperCase()}</p>`);
+    processor("hello", result);
+    expect(result).toEqual({ outputHtml: "<p>HELLO</p>", didProcess: true });
+  });
+});
+
+describe("pickHighestContrastColor", () => {
+  test("chooses the strongest candidate against the accent background", () => {
+    expect(pickHighestContrastColor("#111111", ["#ffffff", "#222222"], "#ffffff")).toBe("#ffffff");
+    expect(pickHighestContrastColor("#f4f4f4", ["#ffffff", "#111111"], "#ffffff")).toBe("#111111");
   });
 });
 

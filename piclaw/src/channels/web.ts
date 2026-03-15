@@ -50,6 +50,7 @@ import { ResponseService } from "./web/http/response-service.js";
 import {
   deleteMessageByRowId,
   replaceMessageContent,
+  getChatBranchByChatJid,
   getChatCursor,
   getDb,
   getInflightMessageId,
@@ -605,20 +606,20 @@ export class WebChannel implements WebChannelLike {
     return await handleWorkspaceVisibilityRequest(req, this.endpointContexts.ui());
   }
 
-  handleTimeline(limit: number, before?: number): Response {
-    return handleTimelineRequest(limit, before, this.endpointContexts.content());
+  handleTimeline(limit: number, before?: number, chatJid?: string): Response {
+    return handleTimelineRequest(limit, before, chatJid, this.endpointContexts.content());
   }
 
-  handleHashtag(tag: string, limit: number, offset: number): Response {
-    return handleHashtagRequest(tag, limit, offset, this.endpointContexts.content());
+  handleHashtag(tag: string, limit: number, offset: number, chatJid?: string): Response {
+    return handleHashtagRequest(tag, limit, offset, chatJid, this.endpointContexts.content());
   }
 
-  handleSearch(query: string, limit: number, offset: number): Response {
-    return handleSearchRequest(query, limit, offset, this.endpointContexts.content());
+  handleSearch(query: string, limit: number, offset: number, chatJid?: string): Response {
+    return handleSearchRequest(query, limit, offset, chatJid, this.endpointContexts.content());
   }
 
-  handleThread(id: number | null): Response {
-    return handleThreadRequest(id, this.endpointContexts.content());
+  handleThread(id: number | null, chatJid?: string): Response {
+    return handleThreadRequest(id, chatJid, this.endpointContexts.content());
   }
 
   handleThought(panel: string | null, turnId: string | null): Response {
@@ -888,6 +889,38 @@ export class WebChannel implements WebChannelLike {
     return this.json({ chats: this.agentPool.listActiveChats() }, 200);
   }
 
+  /** POST /agent/branch-fork — create a first-class forked branch with its own session identity. */
+  async handleAgentBranchFork(req: Request): Promise<Response> {
+    let payload: { source_chat_jid?: string; agent_name?: string; display_name?: string };
+    try {
+      payload = await req.json();
+    } catch {
+      return this.json({ error: "Invalid JSON" }, 400);
+    }
+
+    const sourceChatJid = typeof payload?.source_chat_jid === "string" && payload.source_chat_jid.trim()
+      ? payload.source_chat_jid.trim()
+      : DEFAULT_CHAT_JID;
+    const agentName = typeof payload?.agent_name === "string" ? payload.agent_name.trim() : "";
+    const displayName = typeof payload?.display_name === "string" ? payload.display_name.trim() : "";
+
+    try {
+      const branch = await (this.agentPool as AgentPool & {
+        createForkedChatBranch?: (chatJid: string, options?: { agentName?: string | null; displayName?: string | null }) => Promise<unknown>;
+      }).createForkedChatBranch?.(sourceChatJid, {
+        agentName: agentName || null,
+        displayName: displayName || null,
+      });
+      if (!branch) {
+        return this.json({ error: "Branch forking is not available." }, 501);
+      }
+      return this.json({ branch }, 201);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "Failed to fork branch.");
+      return this.json({ error: message || "Failed to fork branch." }, 400);
+    }
+  }
+
   /**
    * POST /agent/peer-message — send a message from one active chat agent/window to another.
    * Reuses the normal agent message path in the target chat so queue/defer semantics stay consistent.
@@ -923,10 +956,13 @@ export class WebChannel implements WebChannelLike {
     if (!content) return this.json({ error: "Missing content" }, 400);
 
     const targetChat = requestedTargetChatJid
-      ? this.agentPool.listActiveChats().find((chat) => chat.chat_jid === requestedTargetChatJid) ?? null
-      : this.agentPool.findActiveChatByAgentName(requestedTargetAgentName);
+      ? this.agentPool.listActiveChats().find((chat) => chat.chat_jid === requestedTargetChatJid)
+          ?? getChatBranchByChatJid(requestedTargetChatJid)
+      : (typeof (this.agentPool as { findChatByAgentName?: (name: string) => { chat_jid: string; agent_name: string } | null }).findChatByAgentName === "function"
+          ? (this.agentPool as { findChatByAgentName: (name: string) => { chat_jid: string; agent_name: string } | null }).findChatByAgentName(requestedTargetAgentName)
+          : this.agentPool.findActiveChatByAgentName(requestedTargetAgentName));
     if (!targetChat) {
-      return this.json({ error: requestedTargetAgentName ? `Target agent is not active: ${requestedTargetAgentName}` : `Target chat is not active: ${requestedTargetChatJid}` }, 404);
+      return this.json({ error: requestedTargetAgentName ? `Unknown target agent: ${requestedTargetAgentName}` : `Target chat is not active: ${requestedTargetChatJid}` }, 404);
     }
     if (sourceChatJid === targetChat.chat_jid) {
       return this.json({ error: "source_chat_jid and target chat must differ" }, 400);

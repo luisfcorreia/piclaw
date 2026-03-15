@@ -122,3 +122,20 @@ export interface ToolOutputRecord {
   /** The full output content (may be null if only summary is stored). */
   content?: string | null;
 }
+
+/**
+ * First-class branch/session registry row for parallel web chats.
+ * A branch owns its naming, ancestry, and lifecycle metadata independent of
+ * any currently active in-memory session.
+ */
+export interface ChatBranchRecord {
+  branch_id: string;
+  chat_jid: string;
+  root_chat_jid: string;
+  parent_branch_id: string | null;
+  agent_name: string;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}

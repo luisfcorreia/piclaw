@@ -8,19 +8,22 @@ export async function handleContentPrimaryRoutes(channel, req, pathname, url) {
     if (req.method === "GET" && pathname === "/timeline") {
         const limit = channel.clampInt(url.searchParams.get("limit"), 10, 1, 100);
         const before = channel.parseOptionalInt(url.searchParams.get("before"));
-        return channel.handleTimeline(limit, before ?? undefined);
+        const chatJid = url.searchParams.get("chat_jid")?.trim() || undefined;
+        return channel.handleTimeline(limit, before ?? undefined, chatJid);
     }
     if (req.method === "GET" && pathname.startsWith("/hashtag/")) {
         const tag = decodeURIComponent(pathname.replace("/hashtag/", ""));
         const limit = channel.clampInt(url.searchParams.get("limit"), 50, 1, 100);
         const offset = channel.clampInt(url.searchParams.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
-        return channel.handleHashtag(tag, limit, offset);
+        const chatJid = url.searchParams.get("chat_jid")?.trim() || undefined;
+        return channel.handleHashtag(tag, limit, offset, chatJid);
     }
     if (req.method === "GET" && pathname === "/search") {
         const query = (url.searchParams.get("q") || "").trim();
         const limit = channel.clampInt(url.searchParams.get("limit"), 50, 1, 100);
         const offset = channel.clampInt(url.searchParams.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
-        return channel.handleSearch(query, limit, offset);
+        const chatJid = url.searchParams.get("chat_jid")?.trim() || undefined;
+        return channel.handleSearch(query, limit, offset, chatJid);
     }
     if (req.method === "POST" && pathname === "/post") {
         return await channel.handlePost(req, false);
@@ -34,7 +37,8 @@ export async function handleContentPrimaryRoutes(channel, req, pathname, url) {
     }
     if (req.method === "GET" && pathname.startsWith("/thread/")) {
         const id = channel.parseOptionalInt(pathname.replace("/thread/", ""));
-        return channel.handleThread(id);
+        const chatJid = url.searchParams.get("chat_jid")?.trim() || undefined;
+        return channel.handleThread(id, chatJid);
     }
     return null;
 }

@@ -24,7 +24,7 @@ import { handleAgentMessage as handleAgentMessageRequest, processChat as process
 import { SseHub } from "./web/sse-hub.js";
 import { UiBridge } from "./web/ui-bridge.js";
 import { ResponseService } from "./web/http/response-service.js";
-import { deleteMessageByRowId, replaceMessageContent, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, setDeferredQueuedFollowups, } from "../db.js";
+import { deleteMessageByRowId, replaceMessageContent, getChatBranchByChatJid, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, setDeferredQueuedFollowups, } from "../db.js";
 import { WebChannelState } from "./web/channel-state.js";
 import { AgentStatusStore } from "./web/agent-status-store.js";
 import { FollowupPlaceholderStore } from "./web/followup-placeholders.js";
@@ -434,17 +434,17 @@ export class WebChannel {
     async handleWorkspaceVisibility(req) {
         return await handleWorkspaceVisibilityRequest(req, this.endpointContexts.ui());
     }
-    handleTimeline(limit, before) {
-        return handleTimelineRequest(limit, before, this.endpointContexts.content());
+    handleTimeline(limit, before, chatJid) {
+        return handleTimelineRequest(limit, before, chatJid, this.endpointContexts.content());
     }
-    handleHashtag(tag, limit, offset) {
-        return handleHashtagRequest(tag, limit, offset, this.endpointContexts.content());
+    handleHashtag(tag, limit, offset, chatJid) {
+        return handleHashtagRequest(tag, limit, offset, chatJid, this.endpointContexts.content());
     }
-    handleSearch(query, limit, offset) {
-        return handleSearchRequest(query, limit, offset, this.endpointContexts.content());
+    handleSearch(query, limit, offset, chatJid) {
+        return handleSearchRequest(query, limit, offset, chatJid, this.endpointContexts.content());
     }
-    handleThread(id) {
-        return handleThreadRequest(id, this.endpointContexts.content());
+    handleThread(id, chatJid) {
+        return handleThreadRequest(id, chatJid, this.endpointContexts.content());
     }
     handleThought(panel, turnId) {
         return handleThoughtRequest(panel, turnId, this.endpointContexts.content());
@@ -674,6 +674,35 @@ export class WebChannel {
     async handleAgentActiveChats(_req) {
         return this.json({ chats: this.agentPool.listActiveChats() }, 200);
     }
+    /** POST /agent/branch-fork — create a first-class forked branch with its own session identity. */
+    async handleAgentBranchFork(req) {
+        let payload;
+        try {
+            payload = await req.json();
+        }
+        catch {
+            return this.json({ error: "Invalid JSON" }, 400);
+        }
+        const sourceChatJid = typeof payload?.source_chat_jid === "string" && payload.source_chat_jid.trim()
+            ? payload.source_chat_jid.trim()
+            : DEFAULT_CHAT_JID;
+        const agentName = typeof payload?.agent_name === "string" ? payload.agent_name.trim() : "";
+        const displayName = typeof payload?.display_name === "string" ? payload.display_name.trim() : "";
+        try {
+            const branch = await this.agentPool.createForkedChatBranch?.(sourceChatJid, {
+                agentName: agentName || null,
+                displayName: displayName || null,
+            });
+            if (!branch) {
+                return this.json({ error: "Branch forking is not available." }, 501);
+            }
+            return this.json({ branch }, 201);
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error || "Failed to fork branch.");
+            return this.json({ error: message || "Failed to fork branch." }, 400);
+        }
+    }
     /**
      * POST /agent/peer-message — send a message from one active chat agent/window to another.
      * Reuses the normal agent message path in the target chat so queue/defer semantics stay consistent.
@@ -702,10 +731,13 @@ export class WebChannel {
         if (!content)
             return this.json({ error: "Missing content" }, 400);
         const targetChat = requestedTargetChatJid
-            ? this.agentPool.listActiveChats().find((chat) => chat.chat_jid === requestedTargetChatJid) ?? null
-            : this.agentPool.findActiveChatByAgentName(requestedTargetAgentName);
+            ? this.agentPool.listActiveChats().find((chat) => chat.chat_jid === requestedTargetChatJid)
+                ?? getChatBranchByChatJid(requestedTargetChatJid)
+            : (typeof this.agentPool.findChatByAgentName === "function"
+                ? this.agentPool.findChatByAgentName(requestedTargetAgentName)
+                : this.agentPool.findActiveChatByAgentName(requestedTargetAgentName));
         if (!targetChat) {
-            return this.json({ error: requestedTargetAgentName ? `Target agent is not active: ${requestedTargetAgentName}` : `Target chat is not active: ${requestedTargetChatJid}` }, 404);
+            return this.json({ error: requestedTargetAgentName ? `Unknown target agent: ${requestedTargetAgentName}` : `Target chat is not active: ${requestedTargetChatJid}` }, 404);
         }
         if (sourceChatJid === targetChat.chat_jid) {
             return this.json({ error: "source_chat_jid and target chat must differ" }, 400);

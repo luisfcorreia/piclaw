@@ -35,6 +35,38 @@ function makeMessage(chatJid: string, content: string, timestamp: string, isBot 
   };
 }
 
+test("chat branch registry creates first-class branch rows with unique agent handles", () => {
+  const rootChatJid = `web:test-root-${Date.now()}`;
+  db.storeChatMetadata(rootChatJid, new Date().toISOString(), "Root");
+  const root = db.getChatBranchByChatJid(rootChatJid);
+  expect(root).not.toBeNull();
+  expect(root?.root_chat_jid).toBe(rootChatJid);
+  expect(root?.agent_name).toBeTruthy();
+
+  const childA = db.ensureChatBranch({
+    chat_jid: `${rootChatJid}:branch:a`,
+    root_chat_jid: rootChatJid,
+    parent_branch_id: root?.branch_id ?? null,
+    agent_name: root?.agent_name,
+    display_name: "Research",
+  });
+  const childB = db.ensureChatBranch({
+    chat_jid: `${rootChatJid}:branch:b`,
+    root_chat_jid: rootChatJid,
+    parent_branch_id: root?.branch_id ?? null,
+    agent_name: root?.agent_name,
+    display_name: "Builder",
+  });
+
+  expect(childA.root_chat_jid).toBe(rootChatJid);
+  expect(childA.parent_branch_id).toBe(root?.branch_id ?? null);
+  expect(childB.root_chat_jid).toBe(rootChatJid);
+  expect(childB.parent_branch_id).toBe(root?.branch_id ?? null);
+  expect(childA.agent_name).not.toBe(childB.agent_name);
+  expect(db.getChatBranchByAgentName(childA.agent_name)?.chat_jid).toBe(childA.chat_jid);
+  expect(db.getChatBranchByAgentName(childB.agent_name)?.chat_jid).toBe(childB.chat_jid);
+});
+
 test("timeline returns oldest-first and hasOlderMessages works", () => {
   const chatJid = `test:${Date.now()}-timeline`;
   db.storeChatMetadata(chatJid, new Date().toISOString(), "Test");

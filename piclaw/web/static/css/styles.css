@@ -161,6 +161,62 @@ body {
     min-height: 0;
 }
 
+.app-shell.chat-only {
+    justify-content: center;
+}
+
+.app-shell.chat-only .container {
+    width: 100%;
+    max-width: min(100%, 980px);
+    margin: 0 auto;
+}
+
+.chat-window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.chat-window-header-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 2px;
+}
+
+.chat-window-header-title {
+    font-family: var(--font-mono, monospace);
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-window-header-subtitle {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-window-header-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    line-height: 1;
+    white-space: nowrap;
+}
 
 .workspace-sidebar {
     --workspace-header-font-size: 13px;
@@ -1922,11 +1978,36 @@ body {
     color: var(--text-primary);
     background-color: transparent;
     outline: none;
-    padding: 1px var(--spacing-xs) 2px 1px;
+    padding: 1px calc(var(--spacing-xs) + 28px) 2px 1px;
     line-height: 1.4;
     overflow-y: hidden;
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+.compose-popout-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    transition: background-color var(--ui-transition-fast), color var(--ui-transition-fast);
+}
+
+.compose-popout-btn:hover,
+.compose-popout-btn:focus-visible {
+    background: var(--bg-hover);
+    color: var(--accent-color);
+    outline: none;
 }
 
 /* iOS Safari: keep compose textarea at >=16px to avoid keyboard-triggered
@@ -2018,6 +2099,54 @@ body {
     gap: 2px;
     min-width: 0;
     width: 100%;
+}
+
+.compose-agent-hints {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.compose-agent-hints-label {
+    font-size: 10.5px;
+    line-height: 1;
+    color: var(--text-tertiary, var(--text-secondary));
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.compose-agent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 11px;
+    line-height: 1.1;
+    cursor: pointer;
+    transition: background-color var(--ui-transition-fast), color var(--ui-transition-fast), border-color var(--ui-transition-fast);
+}
+
+.compose-agent-chip:hover,
+.compose-agent-chip:focus-visible {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.compose-agent-chip.active {
+    border-color: color-mix(in srgb, var(--accent-color) 38%, var(--border-color));
+    color: var(--accent-color);
+}
+
+.compose-agent-chip-handle {
+    font-family: var(--font-mono, monospace);
 }
 
 .compose-footer {
@@ -3190,7 +3319,7 @@ body {
 .adaptive-card-container [role="button"].ac-pushButton {
     appearance: none;
     background: var(--accent-color) !important;
-    color: var(--accent-contrast-text) !important;
+    color: var(--adaptive-card-button-text-color, var(--accent-contrast-text)) !important;
     border: 1px solid var(--accent-color) !important;
     border-radius: var(--radius-md) !important;
     min-height: 32px;
@@ -3201,6 +3330,12 @@ body {
     line-height: 1.2 !important;
     box-shadow: var(--shadow-sm);
     transition: background-color var(--ui-transition-fast), border-color var(--ui-transition-fast), box-shadow var(--ui-transition-fast), transform var(--ui-transition-fast);
+}
+
+.adaptive-card-container .ac-pushButton *,
+.adaptive-card-container button.ac-pushButton *,
+.adaptive-card-container [role="button"].ac-pushButton * {
+    color: inherit !important;
 }
 
 .adaptive-card-container .ac-pushButton:hover,

@@ -11,6 +11,11 @@
 export { initDatabase, getDb } from "./db/connection.js";
 export { clampWebContent } from "./db/web-content.js";
 export {
+  ensureChatBranch,
+  getChatBranchByChatJid,
+  getChatBranchByAgentName,
+} from "./db/chat-branches.js";
+export {
   storeChatMetadata,
   storeMessage,
   getMessageByRowId,
@@ -112,6 +117,7 @@ export {
 } from "./db/web-sessions.js";
 export type {
   ChatInfo,
+  ChatBranchRecord,
   InteractionContentMeta,
   InteractionData,
   InteractionRow,

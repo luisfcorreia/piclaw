@@ -135,10 +135,10 @@ export interface WebChannelLike
   handleAgents(): Promise<Response>;
 
   handleWorkspaceVisibility(req: Request): Promise<Response>;
-  handleTimeline(limit: number, before?: number): Response;
-  handleHashtag(tag: string, limit: number, offset: number): Response;
-  handleSearch(query: string, limit: number, offset: number): Response;
-  handleThread(id: number | null): Response;
+  handleTimeline(limit: number, before?: number, chatJid?: string): Response;
+  handleHashtag(tag: string, limit: number, offset: number, chatJid?: string): Response;
+  handleSearch(query: string, limit: number, offset: number, chatJid?: string): Response;
+  handleThread(id: number | null, chatJid?: string): Response;
   handleThought(panel: string | null, turnId: string | null): Response;
   handleThoughtVisibility(req: Request): Promise<Response>;
   handleDeletePost(id: number | null, cascade: boolean): Response;
@@ -153,6 +153,7 @@ export interface WebChannelLike
   handleAgentQueueSteer(req: Request): Promise<Response>;
   handleAgentModels(req: Request): Promise<Response>;
   handleAgentActiveChats(req: Request): Promise<Response>;
+  handleAgentBranchFork(req: Request): Promise<Response>;
   handleAgentPeerMessage(req: Request): Promise<Response>;
   handleAgentRespond(req: Request): Promise<Response>;
   handleAdaptiveCardAction(req: Request): Promise<Response>;

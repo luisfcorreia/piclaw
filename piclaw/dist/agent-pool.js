@@ -36,7 +36,9 @@ import { getProviderUsage } from "./agent-pool/provider-usage.js";
 import { recordMessageUsage } from "./agent-pool/usage.js";
 import { resolveModelLabel } from "./utils/model-utils.js";
 import { withChatContext } from "./core/chat-context.js";
-import { getSessionFileSize, rotateSession, seedRotatedSession } from "./session-rotation.js";
+import { getSessionFileSize, rotateSession, seedRotatedSession, forcePersistSessionFile } from "./session-rotation.js";
+import { ensureChatBranch, getChatBranchByAgentName, getChatBranchByChatJid, storeChatMetadata, } from "./db.js";
+import { createUuid } from "./utils/ids.js";
 function extractAssistantText(message) {
     if (!Array.isArray(message?.content))
         return "";
@@ -78,6 +80,10 @@ function deriveAgentHandle(chatJid, sessionName) {
     if (jidHandle)
         return jidHandle;
     return "agent";
+}
+function buildForkedChatJid(sourceChatJid) {
+    const root = sourceChatJid.startsWith("web:") ? sourceChatJid : `web:${sourceChatJid}`;
+    return `${root}:branch:${createUuid("chat").split("-").pop()}`;
 }
 /** How long (ms) an idle session stays cached before being disposed. */
 const IDLE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -530,33 +536,104 @@ export class AgentPool {
             return false;
         return Boolean(session.isStreaming || session.isCompacting || session.isRetrying || session.isBashRunning);
     }
-    listActiveChats() {
-        const baseChats = [...this.pool.entries()]
-            .map(([chatJid, entry]) => ({
+    ensureBranchRegistration(chatJid, session) {
+        const existing = getChatBranchByChatJid(chatJid);
+        if (existing)
+            return existing;
+        storeChatMetadata(chatJid, new Date().toISOString(), session?.sessionName?.trim() || chatJid);
+        return ensureChatBranch({
             chat_jid: chatJid,
-            display_name: entry.session.sessionName?.trim() || null,
-            session_id: entry.session.sessionId,
-            session_name: entry.session.sessionName?.trim() || null,
-            model: entry.session.model ? `${entry.session.model.provider}/${entry.session.model.id}` : null,
-            is_active: Boolean(entry.session.isStreaming || entry.session.isCompacting || entry.session.isRetrying || entry.session.isBashRunning),
-            has_side_session: this.sidePool.has(chatJid),
-        }))
-            .sort((a, b) => a.chat_jid.localeCompare(b.chat_jid));
-        const usedHandles = new Map();
-        const withHandles = baseChats.map((chat) => {
-            const baseHandle = deriveAgentHandle(chat.chat_jid, chat.session_name);
-            const seen = usedHandles.get(baseHandle) ?? 0;
-            usedHandles.set(baseHandle, seen + 1);
-            return {
-                ...chat,
-                agent_name: seen === 0 ? baseHandle : `${baseHandle}-${seen + 1}`,
-            };
+            display_name: session?.sessionName?.trim() || null,
+            agent_name: deriveAgentHandle(chatJid, session?.sessionName?.trim() || null),
         });
-        return withHandles.sort((a, b) => {
+    }
+    async createForkedChatBranch(sourceChatJid, options = {}) {
+        const sourceSession = await this.getOrCreate(sourceChatJid);
+        if (sourceSession.isStreaming || sourceSession.isCompacting || sourceSession.isRetrying || sourceSession.isBashRunning) {
+            throw new Error("Cannot fork a branch while the source chat is still active.");
+        }
+        const sourceBranch = this.ensureBranchRegistration(sourceChatJid, sourceSession);
+        const nextChatJid = buildForkedChatJid(sourceChatJid);
+        const requestedDisplayName = typeof options.displayName === "string" && options.displayName.trim()
+            ? options.displayName.trim()
+            : null;
+        const requestedAgentName = typeof options.agentName === "string" && options.agentName.trim()
+            ? options.agentName.trim()
+            : sourceBranch.agent_name;
+        storeChatMetadata(nextChatJid, new Date().toISOString(), requestedDisplayName || sourceSession.sessionName?.trim() || sourceBranch.display_name || nextChatJid);
+        const nextBranch = ensureChatBranch({
+            chat_jid: nextChatJid,
+            root_chat_jid: sourceBranch.root_chat_jid || sourceBranch.chat_jid,
+            parent_branch_id: sourceBranch.branch_id,
+            agent_name: requestedAgentName,
+            display_name: requestedDisplayName || sourceSession.sessionName?.trim() || sourceBranch.display_name || null,
+        });
+        const targetSession = await this.getOrCreate(nextChatJid);
+        const sourceContext = sourceSession.sessionManager.buildSessionContext();
+        const parentSession = sourceSession.sessionFile?.trim() || undefined;
+        const setupName = nextBranch.display_name || nextBranch.agent_name;
+        const sourceModel = sourceSession.model
+            ? { provider: sourceSession.model.provider, modelId: sourceSession.model.id }
+            : sourceContext.model;
+        const ok = await targetSession.newSession({
+            ...(parentSession ? { parentSession } : {}),
+            setup: async (sessionManager) => {
+                seedRotatedSession(sessionManager, sourceContext, {
+                    sessionName: setupName,
+                    model: sourceModel,
+                });
+            },
+        });
+        if (!ok) {
+            throw new Error("Branch fork was cancelled.");
+        }
+        if (sourceSession.model) {
+            try {
+                await targetSession.setModel(sourceSession.model);
+            }
+            catch { }
+        }
+        try {
+            targetSession.setThinkingLevel(sourceSession.thinkingLevel);
+        }
+        catch { }
+        try {
+            targetSession.setSessionName(setupName);
+        }
+        catch { }
+        forcePersistSessionFile(targetSession);
+        return ensureChatBranch({
+            chat_jid: nextChatJid,
+            root_chat_jid: nextBranch.root_chat_jid,
+            parent_branch_id: nextBranch.parent_branch_id,
+            agent_name: nextBranch.agent_name,
+            display_name: setupName,
+        });
+    }
+    listActiveChats() {
+        const chats = [...this.pool.entries()]
+            .map(([chatJid, entry]) => {
+            const branch = this.ensureBranchRegistration(chatJid, entry.session);
+            return {
+                branch_id: branch.branch_id,
+                chat_jid: chatJid,
+                root_chat_jid: branch.root_chat_jid,
+                parent_branch_id: branch.parent_branch_id,
+                agent_name: branch.agent_name,
+                display_name: branch.display_name || entry.session.sessionName?.trim() || null,
+                session_id: entry.session.sessionId,
+                session_name: entry.session.sessionName?.trim() || null,
+                model: entry.session.model ? `${entry.session.model.provider}/${entry.session.model.id}` : null,
+                is_active: Boolean(entry.session.isStreaming || entry.session.isCompacting || entry.session.isRetrying || entry.session.isBashRunning),
+                has_side_session: this.sidePool.has(chatJid),
+            };
+        })
+            .sort((a, b) => {
             if (a.is_active !== b.is_active)
                 return a.is_active ? -1 : 1;
             return a.chat_jid.localeCompare(b.chat_jid);
         });
+        return chats;
     }
     findActiveChatByAgentName(agentName) {
         const normalized = normalizeAgentHandlePart(agentName);
@@ -564,8 +641,15 @@ export class AgentPool {
             return null;
         return this.listActiveChats().find((chat) => chat.agent_name === normalized) ?? null;
     }
+    findChatByAgentName(agentName) {
+        const normalized = normalizeAgentHandlePart(agentName);
+        if (!normalized)
+            return null;
+        const branch = getChatBranchByAgentName(normalized);
+        return branch ? { chat_jid: branch.chat_jid, agent_name: branch.agent_name } : null;
+    }
     getAgentHandleForChat(chatJid) {
-        return this.listActiveChats().find((chat) => chat.chat_jid === chatJid)?.agent_name ?? deriveAgentHandle(chatJid);
+        return getChatBranchByChatJid(chatJid)?.agent_name ?? deriveAgentHandle(chatJid);
     }
     async queueStreamingMessage(chatJid, text, behavior) {
         const session = await this.getOrCreate(chatJid);
@@ -675,6 +759,7 @@ export class AgentPool {
             this.pool.set(chatJid, { session, lastUsed: Date.now() });
             await this.applyDefaultModel(session);
             await this.bindSession(session, chatJid);
+            this.ensureBranchRegistration(chatJid, session);
             console.log(`[agent-pool] Session ready for ${chatJid} (pool size: ${this.pool.size})`);
             return session;
         }
@@ -687,6 +772,7 @@ export class AgentPool {
         this.pool.set(chatJid, { session, lastUsed: Date.now() });
         await this.applyDefaultModel(session);
         await this.bindSession(session, chatJid);
+        this.ensureBranchRegistration(chatJid, session);
         console.log(`[agent-pool] Session ready for ${chatJid} (pool size: ${this.pool.size})`);
         return session;
     }

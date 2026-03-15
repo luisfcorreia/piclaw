@@ -54,9 +54,11 @@ export async function handleAgentMessage(channel, req, pathname, chatJid, defaul
     const requestMode = normalized.mode ?? "auto";
     const mention = content.trim().length > 0 ? parseLeadingAgentMention(content) : null;
     const mentionTarget = mention
-        ? (typeof channel.agentPool.findActiveChatByAgentName === "function"
-            ? channel.agentPool.findActiveChatByAgentName(mention.agentName)
-            : null)
+        ? (typeof channel.agentPool.findChatByAgentName === "function"
+            ? channel.agentPool.findChatByAgentName(mention.agentName)
+            : (typeof channel.agentPool.findActiveChatByAgentName === "function"
+                ? channel.agentPool.findActiveChatByAgentName(mention.agentName)
+                : null))
         : null;
     if (mention && !mentionTarget) {
         return channel.json({ error: `Unknown agent @${mention.agentName}` }, 404);

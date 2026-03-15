@@ -18,6 +18,7 @@
  */
 
 import { getDb } from "./connection.js";
+import { ensureChatBranch } from "./chat-branches.js";
 import { clampWebContent } from "./web-content.js";
 import type { InteractionRow } from "./types.js";
 import type { NewMessage } from "../types.js";
@@ -122,6 +123,11 @@ export function storeChatMetadata(chatJid: string, timestamp: string, name?: str
          last_message_time = MAX(last_message_time, excluded.last_message_time)`
     ).run(chatJid, chatJid, timestamp);
   }
+
+  ensureChatBranch({
+    chat_jid: chatJid,
+    display_name: typeof name === "string" && name.trim() ? name.trim() : null,
+  });
 }
 
 /**
