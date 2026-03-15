@@ -56,15 +56,10 @@ import {
     openProvisionalChatWindow,
     primeProvisionalChatWindow,
 } from './ui/chat-window.js';
-import { shouldClearQueuedSteerState } from './ui/queue-state.js';
+import { resolveQueueActionChatJid, shouldClearQueuedSteerState } from './ui/queue-state.js';
 import { isCompactionStatus } from './ui/status-duration.js';
-
-function missingApi(name, fallback) {
-    if (typeof window !== 'undefined') {
-        console.warn(`[app] API export missing: ${name}. Using fallback behavior.`);
-    }
-    return async () => fallback;
-}
+import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
+import { resolveOptionalApi } from './ui/optional-api.js';
 
 const BTW_SESSION_KEY = 'piclaw_btw_session';
 
@@ -106,36 +101,16 @@ const getAgents = api.getAgents;
 const getAgentThought = api.getAgentThought;
 const setAgentThoughtVisibility = api.setAgentThoughtVisibility;
 const getAgentStatus = api.getAgentStatus;
-const getAgentContext = typeof api.getAgentContext === 'function'
-    ? api.getAgentContext
-    : missingApi('getAgentContext', null);
-const getAgentModels = typeof api.getAgentModels === 'function'
-    ? api.getAgentModels
-    : missingApi('getAgentModels', { current: null, models: [] });
-const getActiveChatAgents = typeof api.getActiveChatAgents === 'function'
-    ? api.getActiveChatAgents
-    : missingApi('getActiveChatAgents', { chats: [] });
-const getChatBranches = typeof api.getChatBranches === 'function'
-    ? api.getChatBranches
-    : missingApi('getChatBranches', { chats: [] });
-const renameChatBranch = typeof api.renameChatBranch === 'function'
-    ? api.renameChatBranch
-    : missingApi('renameChatBranch', null);
-const pruneChatBranch = typeof api.pruneChatBranch === 'function'
-    ? api.pruneChatBranch
-    : missingApi('pruneChatBranch', null);
-const getAgentQueueState = typeof api.getAgentQueueState === 'function'
-    ? api.getAgentQueueState
-    : missingApi('getAgentQueueState', { count: 0 });
-const steerAgentQueueItem = typeof api.steerAgentQueueItem === 'function'
-    ? api.steerAgentQueueItem
-    : missingApi('steerAgentQueueItem', { removed: false, queued: 'steer' });
-const removeAgentQueueItem = typeof api.removeAgentQueueItem === 'function'
-    ? api.removeAgentQueueItem
-    : missingApi('removeAgentQueueItem', { removed: false });
-const streamSidePrompt = typeof api.streamSidePrompt === 'function'
-    ? api.streamSidePrompt
-    : missingApi('streamSidePrompt', null);
+const getAgentContext = resolveOptionalApi(api, 'getAgentContext', null);
+const getAgentModels = resolveOptionalApi(api, 'getAgentModels', { current: null, models: [] });
+const getActiveChatAgents = resolveOptionalApi(api, 'getActiveChatAgents', { chats: [] });
+const getChatBranches = resolveOptionalApi(api, 'getChatBranches', { chats: [] });
+const renameChatBranch = resolveOptionalApi(api, 'renameChatBranch', null);
+const pruneChatBranch = resolveOptionalApi(api, 'pruneChatBranch', null);
+const getAgentQueueState = resolveOptionalApi(api, 'getAgentQueueState', { count: 0 });
+const steerAgentQueueItem = resolveOptionalApi(api, 'steerAgentQueueItem', { removed: false, queued: 'steer' });
+const removeAgentQueueItem = resolveOptionalApi(api, 'removeAgentQueueItem', { removed: false });
+const streamSidePrompt = resolveOptionalApi(api, 'streamSidePrompt', null);
 
 // Configure marked for safe rendering
 if (window.marked) {
@@ -460,6 +435,10 @@ function MainApp({ locationParams }) {
     useEffect(() => {
         setLocalStorageItem('workspaceOpen', String(workspaceOpen));
     }, [workspaceOpen]);
+
+    useEffect(() => {
+        return installStandaloneMobileViewportFix();
+    }, []);
 
     useEffect(() => {
         return () => {

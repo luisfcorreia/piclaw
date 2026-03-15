@@ -75,7 +75,7 @@ piclaw/
     │   │   ├── editor-loader.ts # Lazy proxy for editor bundle
     │   │   ├── tab-store.ts     # Framework-agnostic tab state
     │   │   └── terminal-pane.ts # Terminal dock scaffold
-    │   ├── ui/                  # Hooks + state management
+    │   ├── ui/                  # Hooks + state management (queue helpers, windowing, optional API fallbacks, mobile viewport recovery)
     │   ├── vendor/              # Vendored libs (preact-htm, mermaid)
     │   └── styles/              # CSS source
     └── static/                  # Served files (HTML, built bundles, icons)
@@ -97,6 +97,7 @@ These are compiled into the package and registered via `extensionFactories` on t
 | `scheduledTasks` | `schedule_task`, `/tasks`, `/scheduled` slash commands |
 | `sqlIntrospect` | `introspect_sql` (read-only SQLite queries) |
 | `internalTools` | `list_internal_tools` |
+| `uiThemeExtension` | `/theme`, `/tint` web UI theme controls |
 
 Each factory receives an `ExtensionAPI` and registers tools or slash commands via `pi.registerTool()` and `pi.registerSlashCommand()`. System prompt hints are injected via `pi.on("before_agent_start")`.
 
@@ -182,6 +183,7 @@ Page load
 - **Message permalinks**: clicking a timeline timestamp inserts a `message:{id}` pill in the compose box; Ctrl+Click copies a shareable URL; clicking a reference scrolls to and highlights the target.
 - **Multi-turn threading**: when the agent produces multiple turns in a single response, subsequent turns are stored with a `thread_id` pointing to the first turn's message. The UI renders threaded replies indented with a left border.
 - **Context usage / compaction affordance**: the compose footer reads `/agent/context` for current context-window usage, and the web app refreshes that state on initial connect, SSE reconnect, focus, `pageshow`, and visible-again transitions so the compaction affordance restores promptly when returning to the tab.
+- **Standalone mobile/PWA recovery**: the web shell keeps a synced `--app-height` from `visualViewport` on standalone mobile runtimes and re-syncs it on focus / pageshow / visibility return to reduce whole-page jumps when resuming the app and focusing the compose textarea.
 - Scheduled tasks are isolated using the **session tree**: before a task runs, the current tree position is saved; after the task, the tree is navigated back. The task's output stays in a side branch without polluting conversation context. If the task uses a different model, it is restored afterwards. See [runtime-flows.md](runtime-flows.md) for details.
 - Scheduled tasks validate the requested model at creation time; invalid or ambiguous model names are rejected before the task is persisted.
 

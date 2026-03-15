@@ -133,6 +133,7 @@ html, body {
 
 html {
     background-color: var(--bg-primary);
+    --app-height: 100dvh;
 }
 
 body {
@@ -294,7 +295,7 @@ body {
     width: var(--sidebar-width, 280px);
     min-width: var(--sidebar-width, 280px);
     background-color: var(--bg-primary);
-    height: 100dvh;
+    height: var(--app-height, 100dvh);
     overflow: hidden;
     opacity: 1;
     transform: translateX(0);
@@ -1004,7 +1005,7 @@ body {
     width: var(--editor-width, 40vw);
     min-width: 280px;
     max-width: 70vw;
-    height: 100dvh;
+    height: var(--app-height, 100dvh);
     overflow: hidden;
     flex-shrink: 0;
 }
@@ -1793,7 +1794,7 @@ body {
     max-width: 800px;
     margin: 0 auto;
     height: 100%;
-    height: 100dvh; /* Dynamic viewport height for iOS */
+    height: var(--app-height, 100dvh);
     min-height: 0;
     background-color: var(--bg-primary);
     display: flex;
@@ -2065,13 +2066,13 @@ body {
     outline: none;
 }
 
-/* iOS Safari: keep compose textarea at >=16px to avoid keyboard-triggered
-   viewport zoom/scroll jumps while typing (notably on iPad). */
+/* iOS/WebKit: keep compose textarea at >=16px to avoid focus-triggered
+   page zoom/scroll jumps while typing in Safari/PWA modes (notably on iPad).
+   Do not gate this behind coarse-pointer media queries: iPad/PWA/hardware-input
+   combinations can miss those and still trigger whole-page movement on focus. */
 @supports (-webkit-touch-callout: none) {
-    @media (hover: none) and (pointer: coarse) {
-        .compose-box textarea {
-            font-size: calc(16px + 1pt);
-        }
+    .compose-box textarea {
+        font-size: calc(16px + 1pt);
     }
 }
 
@@ -4457,7 +4458,7 @@ body {
     width: 100%;
     box-sizing: border-box;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-    max-height: calc(100dvh - 32px);
+    max-height: calc(var(--app-height, 100dvh) - 32px);
     display: flex;
     flex-direction: column;
 }
