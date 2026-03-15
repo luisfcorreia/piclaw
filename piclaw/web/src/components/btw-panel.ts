@@ -40,7 +40,7 @@ export function BtwPanel({ session, onClose, onInject, onRetry }) {
         <section class="btw-panel" aria-label="BTW side conversation">
             <div class="btw-panel-header">
                 <div class="btw-panel-title-wrap">
-                    <span class="btw-panel-title">BTW</span>
+                    <span class="btw-panel-title">Question</span>
                     <span class=${`btw-panel-status btw-panel-status-${session.status || 'idle'}`}>${statusLabel}</span>
                 </div>
                 <button class="btw-panel-close" onClick=${() => onClose?.()} title="Close BTW" aria-label="Close BTW">
@@ -51,7 +51,7 @@ export function BtwPanel({ session, onClose, onInject, onRetry }) {
                 </button>
             </div>
 
-            ${session.question && html`<div class="btw-block btw-question"><strong>Question:</strong> ${session.question}</div>`}
+            ${session.question && html`<div class="btw-block btw-question">${session.question}</div>`}
             ${session.error && html`<div class="btw-block btw-error">${session.error}</div>`}
             ${hasThinking && html`
                 <details class="btw-block btw-thinking" open=${running ? true : undefined}>

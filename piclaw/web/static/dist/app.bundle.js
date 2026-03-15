@@ -385,7 +385,7 @@ ${j}`:null].filter(Boolean).join(`
         <section class="btw-panel" aria-label="BTW side conversation">
             <div class="btw-panel-header">
                 <div class="btw-panel-title-wrap">
-                    <span class="btw-panel-title">BTW</span>
+                    <span class="btw-panel-title">Question</span>
                     <span class=${`btw-panel-status btw-panel-status-${_.status||"idle"}`}>${f}</span>
                 </div>
                 <button class="btw-panel-close" onClick=${()=>$?.()} title="Close BTW" aria-label="Close BTW">
@@ -396,7 +396,7 @@ ${j}`:null].filter(Boolean).join(`
                 </button>
             </div>
 
-            ${_.question&&U`<div class="btw-block btw-question"><strong>Question:</strong> ${_.question}</div>`}
+            ${_.question&&U`<div class="btw-block btw-question">${_.question}</div>`}
             ${_.error&&U`<div class="btw-block btw-error">${_.error}</div>`}
             ${q&&U`
                 <details class="btw-block btw-thinking" open=${X?!0:void 0}>
@@ -1616,5 +1616,5 @@ This archives the branch agent and removes it from the branch picker. Chat histo
         </div>
     `}function s9(){let _=typeof window>"u"?new URLSearchParams:new URL(window.location.href).searchParams;return U`<${r9} locationParams=${_} />`}R1(U`<${s9} />`,document.getElementById("app"));
 
-//# debugId=046BB9F8855D289064756E2164756E21
+//# debugId=BC9534287C07587B64756E2164756E21
 //# sourceMappingURL=app.bundle.js.map
