@@ -15,7 +15,7 @@
  */
 
 import { resolve, extname, dirname } from "node:path";
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -24,8 +24,17 @@ const EXT_DIR = typeof import.meta.dir === "string"
   : dirname(new URL(import.meta.url).pathname);
 const VENDOR_DIR = resolve(EXT_DIR, "vendor");
 const ROUTE_PREFIX = "/drawio";
+const WORKSPACE_ROOT = "/workspace";
 
 const DRAWIO_EXTENSIONS = [".drawio", ".drawio.xml", ".drawio.svg", ".drawio.png"];
+const EXPORT_EXTENSIONS: Record<string, string> = {
+  "image/svg+xml": ".svg",
+  "image/png": ".png",
+  "application/pdf": ".pdf",
+  "image/jpeg": ".jpg",
+  "text/xml": ".xml",
+  "application/xml": ".xml",
+};
 const DEFAULT_DRAWIO_XML = '<mxfile host="app.diagrams.net"><diagram id="page-1" name="Page-1"><mxGraphModel dx="1260" dy="720" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel></diagram></mxfile>';
 
 const MIME_TYPES: Record<string, string> = {
@@ -88,10 +97,104 @@ var loading = document.getElementById('loading');
 var DEFAULT_DRAWIO_XML = ${JSON.stringify(DEFAULT_DRAWIO_XML)};
 var xmlData = DEFAULT_DRAWIO_XML;
 var modified = false;
+var format = (function() {
+  var lower = String(filePath || '').toLowerCase();
+  if (lower.endsWith('.drawio.svg') || lower.endsWith('.svg')) return 'xmlsvg';
+  if (lower.endsWith('.drawio.png') || lower.endsWith('.png')) return 'xmlpng';
+  return 'xml';
+})();
 
 function normalizeDrawioXml(value) {
   var text = String(value || '').trim();
   return text || DEFAULT_DRAWIO_XML;
+}
+
+function bytesToBase64(bytes) {
+  var binary = '';
+  var chunk = 0x8000;
+  for (var i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.slice(i, i + chunk)));
+  }
+  return btoa(binary);
+}
+
+function responseToDataUri(response, fallbackMimeType) {
+  return response.arrayBuffer().then(function(buf) {
+    var bytes = new Uint8Array(buf);
+    var mimeType = response.headers.get('Content-Type') || fallbackMimeType;
+    return 'data:' + mimeType + ';base64,' + bytesToBase64(bytes);
+  });
+}
+
+function patchDrawioExportTarget(win) {
+  try {
+    function postExport(payload) {
+      var target = (win && (win.parent || win.opener)) || window;
+      target.postMessage(JSON.stringify(Object.assign({ event: 'workspace-export' }, payload)), '*');
+      return true;
+    }
+
+    var editorUiCtor = win && win.EditorUi;
+    if (editorUiCtor && editorUiCtor.prototype && !editorUiCtor.prototype.__piclawWorkspaceSavePatched) {
+      var originalSaveData = editorUiCtor.prototype.saveData;
+      editorUiCtor.prototype.saveData = function(filename, format, data, mime, base64Encoded, defaultMode) {
+        try {
+          if (filename && data != null && postExport({ filename, format, data, mimeType: mime, base64Encoded: !!base64Encoded, defaultMode: defaultMode })) {
+            return;
+          }
+        } catch (err) {
+          console.warn('[drawio] saveData intercept failed, falling back to native save', err);
+        }
+        return originalSaveData.apply(this, arguments);
+      };
+      editorUiCtor.prototype.__piclawWorkspaceSavePatched = true;
+    }
+
+    var appCtor = win && win.App;
+    if (appCtor && appCtor.prototype && !appCtor.prototype.__piclawExportPatched) {
+      var original = appCtor.prototype.exportFile;
+      appCtor.prototype.exportFile = function(data, filename, mimeType, base64Encoded, mode, folderId) {
+        try {
+          if (filename && postExport({ filename: filename, mimeType: mimeType, base64Encoded: !!base64Encoded, data: data, mode: mode, folderId: folderId })) {
+            return;
+          }
+        } catch (err) {
+          console.warn('[drawio] export intercept failed, falling back to native export', err);
+        }
+        return original.apply(this, arguments);
+      };
+      appCtor.prototype.__piclawExportPatched = true;
+    }
+
+    return !!((editorUiCtor && editorUiCtor.prototype && editorUiCtor.prototype.__piclawWorkspaceSavePatched) || (appCtor && appCtor.prototype && appCtor.prototype.__piclawExportPatched));
+  } catch (_) {
+    return false;
+  }
+}
+
+function saveWorkspace(payload, acknowledge) {
+  return fetch('/drawio/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path: filePath,
+      format: payload.format || format,
+      xml: payload.xml,
+      data: payload.data,
+      mimeType: payload.mimeType,
+      filename: payload.filename,
+      base64Encoded: payload.base64Encoded
+    })
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (acknowledge && frame.contentWindow) {
+      frame.contentWindow.postMessage(JSON.stringify({
+        action: 'status',
+        message: 'Saved',
+        modified: false
+      }), '*');
+    }
+  });
 }
 
 // Load the file contents from workspace
@@ -103,12 +206,16 @@ function loadFile() {
   }
   fetch('/workspace/raw?path=' + encodeURIComponent(filePath))
     .then(function(r) {
-      if (r.ok) return r.text();
+      if (r.ok) {
+        if (format === 'xmlsvg') return responseToDataUri(r, 'image/svg+xml');
+        if (format === 'xmlpng') return responseToDataUri(r, 'image/png');
+        return r.text();
+      }
       if (r.status === 404) return DEFAULT_DRAWIO_XML; // new file
       throw new Error('HTTP ' + r.status);
     })
     .then(function(text) {
-      xmlData = normalizeDrawioXml(text);
+      xmlData = format === 'xml' ? normalizeDrawioXml(text) : String(text || DEFAULT_DRAWIO_XML);
       startEditor();
     })
     .catch(function(err) {
@@ -123,15 +230,24 @@ function startEditor() {
     + '&ui=dark&dark=' + (isDark ? '1' : '0');
   frame.src = editorUrl;
   frame.style.display = 'block';
+  frame.onload = function() {
+    function tryPatch() {
+      if (!frame.contentWindow) return;
+      if (patchDrawioExportTarget(frame.contentWindow)) return;
+      setTimeout(tryPatch, 250);
+    }
+    tryPatch();
+  };
 }
 
 // Handle postMessage from draw.io iframe
 window.addEventListener('message', function(e) {
-  // Only accept messages from our iframe
-  if (e.source !== frame.contentWindow) return;
-
   var msg;
   try { msg = JSON.parse(e.data); } catch(_) { return; }
+
+  // Most messages must come from our iframe. workspace-export is emitted
+  // by our wrapper-installed patch, which can surface with a wrapper source.
+  if (msg.event !== 'workspace-export' && e.source !== frame.contentWindow) return;
 
   switch (msg.event) {
     case 'init':
@@ -139,33 +255,61 @@ window.addEventListener('message', function(e) {
       // Send load action with the diagram XML
       frame.contentWindow.postMessage(JSON.stringify({
         action: 'load',
-        xml: normalizeDrawioXml(xmlData),
+        xml: format === 'xml' ? normalizeDrawioXml(xmlData) : xmlData,
         autosave: 1,
+        saveAndExit: '1',
         title: fileName
       }), '*');
       break;
 
     case 'autosave':
+      if (!filePath || !msg.xml) break;
+      modified = true;
+      if (format === 'xml') {
+        saveWorkspace({ xml: msg.xml, format: 'xml' }, false).catch(function(err) {
+          console.error('[drawio] autosave error:', err);
+        });
+      } else {
+        xmlData = msg.xml;
+      }
+      break;
+
     case 'save':
       if (!filePath || !msg.xml) break;
       modified = true;
-      // Save via workspace file API (PUT /workspace/file)
-      fetch('/workspace/file', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: filePath, content: msg.xml })
-      }).then(function(r) {
-        if (!r.ok) console.error('[drawio] save failed:', r.status);
-        // Acknowledge save
-        if (msg.event === 'save') {
-          frame.contentWindow.postMessage(JSON.stringify({
-            action: 'status',
-            message: 'Saved',
-            modified: false
-          }), '*');
-        }
-      }).catch(function(err) {
-        console.error('[drawio] save error:', err);
+      if (format === 'xml') {
+        saveWorkspace({ xml: msg.xml, format: 'xml' }, true).catch(function(err) {
+          console.error('[drawio] save error:', err);
+        });
+      } else {
+        xmlData = msg.xml;
+        frame.contentWindow.postMessage(JSON.stringify({
+          action: 'export',
+          format: format,
+          xml: msg.xml,
+          spinKey: 'export'
+        }), '*');
+      }
+      break;
+
+    case 'export':
+      if (!filePath || !msg.data) break;
+      saveWorkspace({ data: msg.data, format: format, xml: msg.xml }, true).catch(function(err) {
+        console.error('[drawio] export save error:', err);
+      });
+      break;
+
+    case 'workspace-export':
+      if (!filePath || !msg.data) break;
+      saveWorkspace({
+        data: msg.data,
+        xml: msg.xml,
+        format: format,
+        mimeType: msg.mimeType,
+        filename: msg.filename,
+        base64Encoded: !!msg.base64Encoded
+      }, true).catch(function(err) {
+        console.error('[drawio] workspace export save error:', err);
       });
       break;
 
@@ -197,7 +341,104 @@ function getMimeType(path: string): string {
   return MIME_TYPES[ext] || "application/octet-stream";
 }
 
-function handleRoute(req: Request, pathname: string): Response | null {
+function resolveWorkspacePath(path: string): string {
+  const relative = String(path || "").replace(/^@/, "").replace(/^\/+/, "");
+  const fullPath = resolve(WORKSPACE_ROOT, relative);
+  const realRoot = realpathSync(WORKSPACE_ROOT);
+  const parentDir = resolve(fullPath, "..");
+  const realParent = existsSync(parentDir) ? realpathSync(parentDir) : realpathSync(WORKSPACE_ROOT);
+  if (!fullPath.startsWith(realRoot) || !realParent.startsWith(realRoot)) {
+    throw new Error("Forbidden path");
+  }
+  return fullPath;
+}
+
+function decodeDataUri(dataUri: string): { mimeType: string | null; bytes: Uint8Array } {
+  const match = String(dataUri || "").match(/^data:([^;,]+)?(;base64)?,(.*)$/s);
+  if (!match) {
+    return { mimeType: null, bytes: new TextEncoder().encode(String(dataUri || "")) };
+  }
+  const mimeType = match[1] || null;
+  const isBase64 = Boolean(match[2]);
+  const payload = match[3] || "";
+  if (isBase64) {
+    return { mimeType, bytes: Uint8Array.from(Buffer.from(payload, "base64")) };
+  }
+  return { mimeType, bytes: new TextEncoder().encode(decodeURIComponent(payload)) };
+}
+
+function replaceExtension(path: string, extension: string): string {
+  const lower = String(path || "").toLowerCase();
+  if (lower.endsWith(".drawio.svg") || lower.endsWith(".drawio.png") || lower.endsWith(".drawio.xml")) {
+    return path.replace(/\.drawio\.(svg|png|xml)$/i, extension);
+  }
+  if (lower.endsWith(".drawio")) {
+    return path.replace(/\.drawio$/i, extension);
+  }
+  const idx = path.lastIndexOf(".");
+  return idx >= 0 ? `${path.slice(0, idx)}${extension}` : `${path}${extension}`;
+}
+
+async function handleSaveRequest(req: Request): Promise<Response> {
+  let data: { path?: string; format?: string; xml?: string; data?: string; mimeType?: string; filename?: string; base64Encoded?: boolean };
+  try {
+    data = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: { "Content-Type": "application/json; charset=utf-8" } });
+  }
+
+  if (!data?.path) {
+    return new Response(JSON.stringify({ error: "Missing path" }), { status: 400, headers: { "Content-Type": "application/json; charset=utf-8" } });
+  }
+
+  try {
+    let savePath = String(data.path);
+    if (data.filename && data.mimeType) {
+      const ext = EXPORT_EXTENSIONS[data.mimeType] || "";
+      savePath = replaceExtension(savePath, ext || extname(data.filename) || ".bin");
+    }
+
+    const targetPath = resolveWorkspacePath(savePath);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    const lower = savePath.toLowerCase();
+
+    if (data.base64Encoded && data.data && !String(data.data).startsWith("data:")) {
+      const mime = data.mimeType || (lower.endsWith(".svg") ? "image/svg+xml" : lower.endsWith(".png") ? "image/png" : "application/octet-stream");
+      data.data = `data:${mime};base64,${data.data}`;
+    }
+
+    if (lower.endsWith(".png") || data.format === "xmlpng" || data.format === "png") {
+      if (!data.data) throw new Error("Missing PNG data");
+      const decoded = decodeDataUri(data.data);
+      writeFileSync(targetPath, decoded.bytes);
+    } else if (lower.endsWith(".svg") || data.format === "xmlsvg" || data.format === "svg") {
+      if (!data.data) throw new Error("Missing SVG data");
+      const decoded = decodeDataUri(data.data);
+      writeFileSync(targetPath, Buffer.from(decoded.bytes).toString("utf8"), "utf8");
+    } else if (data.data && data.mimeType === "application/pdf") {
+      const decoded = decodeDataUri(data.data);
+      writeFileSync(targetPath, decoded.bytes);
+    } else {
+      writeFileSync(targetPath, data.xml ?? DEFAULT_DRAWIO_XML, "utf8");
+    }
+
+    return new Response(JSON.stringify({ ok: true, path: savePath }), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
+      status: 400,
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    });
+  }
+}
+
+function handleRoute(req: Request, pathname: string): Response | Promise<Response> | null {
+  if (req.method === "POST" && pathname === "/drawio/save") {
+    return handleSaveRequest(req);
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     return new Response("Method Not Allowed", { status: 405 });
   }

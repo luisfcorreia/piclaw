@@ -46,6 +46,8 @@ const COPY_ITEMS = [
   "styles/",
   // Images (toolbar icons, UI elements)
   "images/",
+  // Shape library assets (AWS/Azure/GCP/etc.)
+  "img/",
   // Localization and app resources
   "resources/",
   // mxGraph resources

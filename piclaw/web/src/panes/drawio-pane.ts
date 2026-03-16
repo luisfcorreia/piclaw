@@ -43,6 +43,75 @@ function normalizeDrawioXml(value: string | null | undefined): string {
     return text ? text : DEFAULT_DRAWIO_XML;
 }
 
+function getDrawioFormat(filePath: string): 'xml' | 'xmlsvg' | 'xmlpng' {
+    const lower = String(filePath || '').toLowerCase();
+    if (lower.endsWith('.drawio.svg') || lower.endsWith('.svg')) return 'xmlsvg';
+    if (lower.endsWith('.drawio.png') || lower.endsWith('.png')) return 'xmlpng';
+    return 'xml';
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+}
+
+function patchDrawioExportTarget(iframeWindow: Window, targetOrigin = '*'): boolean {
+    try {
+        const postExport = (payload: Record<string, unknown>) => {
+            const parent = iframeWindow.parent || iframeWindow.opener;
+            if (!parent) return false;
+            parent.postMessage(JSON.stringify({ event: 'workspace-export', ...payload }), targetOrigin);
+            return true;
+        };
+
+        const editorUiCtor = (iframeWindow as any).EditorUi;
+        if (editorUiCtor?.prototype && !editorUiCtor.prototype.__piclawWorkspaceSavePatched) {
+            const originalSaveData = editorUiCtor.prototype.saveData;
+            editorUiCtor.prototype.saveData = function(filename: string, format: string, data: string, mime: string, base64Encoded: boolean, defaultMode: string) {
+                try {
+                    if (filename && data != null && postExport({ filename, format, data, mimeType: mime, base64Encoded: Boolean(base64Encoded), defaultMode })) {
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('[drawio-pane] saveData intercept failed, falling back to native save', error);
+                }
+                return originalSaveData.apply(this, arguments as any);
+            };
+            editorUiCtor.prototype.__piclawWorkspaceSavePatched = true;
+        }
+
+        const appCtor = (iframeWindow as any).App;
+        if (appCtor?.prototype && !appCtor.prototype.__piclawExportPatched) {
+            const originalExportFile = appCtor.prototype.exportFile;
+            appCtor.prototype.exportFile = function(data: string, filename: string, mimeType: string, base64Encoded: boolean, mode: string, folderId: string) {
+                try {
+                    if (filename && postExport({ filename, data, mimeType, base64Encoded: Boolean(base64Encoded), mode, folderId })) {
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('[drawio-pane] export intercept failed, falling back to native export', error);
+                }
+                return originalExportFile.apply(this, arguments as any);
+            };
+            appCtor.prototype.__piclawExportPatched = true;
+        }
+
+        return Boolean((editorUiCtor?.prototype && editorUiCtor.prototype.__piclawWorkspaceSavePatched) || (appCtor?.prototype && appCtor.prototype.__piclawExportPatched));
+    } catch {
+        return false;
+    }
+}
+
+async function responseToDataUri(response: Response, fallbackMimeType: string): Promise<string> {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const mimeType = response.headers.get('Content-Type') || fallbackMimeType;
+    return `data:${mimeType};base64,${bytesToBase64(bytes)}`;
+}
+
 // ── Preview card (workspace browser) ────────────────────────────
 
 class DrawioPreviewCard implements PaneInstance {
@@ -104,6 +173,7 @@ class DrawioEditorInstance implements PaneInstance {
     private disposed = false;
     private filePath: string;
     private fileName: string;
+    private format: 'xml' | 'xmlsvg' | 'xmlpng';
     private xmlData = '';
     private fileLoaded = false;
     private editorReady = false;
@@ -115,6 +185,7 @@ class DrawioEditorInstance implements PaneInstance {
         this.container = container;
         this.filePath = context.path || '';
         this.fileName = this.filePath.split('/').pop() || 'diagram.drawio';
+        this.format = getDrawioFormat(this.filePath);
         this.onMessageBound = this.onMessage.bind(this);
 
         const wrapper = document.createElement('div');
@@ -131,6 +202,14 @@ class DrawioEditorInstance implements PaneInstance {
         this.iframe = document.createElement('iframe');
         this.iframe.src = editorUrl;
         this.iframe.style.cssText = 'width:100%;height:100%;border:none;background:#1e1e1e;position:relative;z-index:0;';
+        this.iframe.addEventListener('load', () => {
+            const tryPatch = () => {
+                if (!this.iframe?.contentWindow || this.disposed) return;
+                if (patchDrawioExportTarget(this.iframe.contentWindow)) return;
+                setTimeout(tryPatch, 250);
+            };
+            tryPatch();
+        });
         wrapper.appendChild(this.iframe);
         container.appendChild(wrapper);
 
@@ -148,7 +227,13 @@ class DrawioEditorInstance implements PaneInstance {
         try {
             const response = await fetch(`/workspace/raw?path=${encodeURIComponent(this.filePath)}`);
             if (response.ok) {
-                this.xmlData = normalizeDrawioXml(await response.text());
+                if (this.format === 'xmlsvg') {
+                    this.xmlData = await responseToDataUri(response, 'image/svg+xml');
+                } else if (this.format === 'xmlpng') {
+                    this.xmlData = await responseToDataUri(response, 'image/png');
+                } else {
+                    this.xmlData = normalizeDrawioXml(await response.text());
+                }
             } else if (response.status === 404) {
                 this.xmlData = DEFAULT_DRAWIO_XML;
             } else {
@@ -170,20 +255,29 @@ class DrawioEditorInstance implements PaneInstance {
         this.loadSent = true;
         this.iframe.contentWindow.postMessage(JSON.stringify({
             action: 'load',
-            xml: normalizeDrawioXml(this.xmlData),
+            xml: this.format === 'xml' ? normalizeDrawioXml(this.xmlData) : this.xmlData,
             autosave: 1,
+            saveAndExit: '1',
             title: this.fileName,
         }), '*');
         if (this.overlay) this.overlay.style.display = 'none';
     }
 
-    private queueSave(xml: string, acknowledge: boolean): void {
-        if (!this.filePath || !xml) return;
+    private queueSave(payload: { xml?: string; data?: string; format?: string; mimeType?: string; filename?: string; base64Encoded?: boolean }, acknowledge: boolean): void {
+        if (!this.filePath) return;
         this.saveChain = this.saveChain.then(async () => {
-            const response = await fetch('/workspace/file', {
-                method: 'PUT',
+            const response = await fetch('/drawio/save', {
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: this.filePath, content: xml }),
+                body: JSON.stringify({
+                    path: this.filePath,
+                    format: payload.format || this.format,
+                    xml: payload.xml,
+                    data: payload.data,
+                    mimeType: payload.mimeType,
+                    filename: payload.filename,
+                    base64Encoded: payload.base64Encoded,
+                }),
             });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
@@ -218,13 +312,43 @@ class DrawioEditorInstance implements PaneInstance {
                 this.trySendLoad();
                 break;
             case 'autosave':
-                if (typeof msg.xml === 'string') this.queueSave(msg.xml, false);
+                if (this.format === 'xml') {
+                    if (typeof msg.xml === 'string') this.queueSave({ xml: msg.xml, format: 'xml' }, false);
+                } else if (typeof msg.xml === 'string') {
+                    this.xmlData = msg.xml;
+                }
                 break;
             case 'save':
-                if (typeof msg.xml === 'string') this.queueSave(msg.xml, true);
+                if (this.format === 'xml') {
+                    if (typeof msg.xml === 'string') this.queueSave({ xml: msg.xml, format: 'xml' }, true);
+                } else if (typeof msg.xml === 'string' && this.iframe?.contentWindow) {
+                    this.xmlData = msg.xml;
+                    this.iframe.contentWindow.postMessage(JSON.stringify({
+                        action: 'export',
+                        format: this.format,
+                        xml: msg.xml,
+                        spinKey: 'export',
+                    }), '*');
+                }
+                break;
+            case 'export':
+                if (typeof msg.data === 'string') {
+                    this.queueSave({ data: msg.data, format: this.format, xml: typeof msg.xml === 'string' ? msg.xml : undefined }, true);
+                }
+                break;
+            case 'workspace-export':
+                if (typeof msg.data === 'string') {
+                    this.queueSave({
+                        data: msg.data,
+                        xml: typeof msg.xml === 'string' ? msg.xml : undefined,
+                        mimeType: typeof msg.mimeType === 'string' ? msg.mimeType : undefined,
+                        filename: typeof msg.filename === 'string' ? msg.filename : undefined,
+                        base64Encoded: Boolean(msg.base64Encoded),
+                        format: this.format,
+                    } as any, true);
+                }
                 break;
             case 'exit':
-            case 'export':
             default:
                 break;
         }
