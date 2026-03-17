@@ -498,6 +498,13 @@ function appendFileLists(base, fileOps) {
 // Extension factory
 // ---------------------------------------------------------------------------
 export const smartCompaction = (pi) => {
+    // Guard: only activate inside piclaw, not inside plain pi.
+    const isPiclaw = !!(process.env.PICLAW_WORKSPACE ||
+        process.env.PICLAW_INTERNAL_SECRET ||
+        process.env.PICLAW_WEB_INTERNAL_SECRET);
+    if (!isPiclaw) {
+        return;
+    }
     pi.on("session_before_compact", async (event, ctx) => {
         const { preparation, signal, customInstructions } = event;
         const { messagesToSummarize, tokensBefore, firstKeptEntryId, previousSummary, settings, } = preparation;
