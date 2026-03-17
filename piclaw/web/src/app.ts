@@ -18,7 +18,7 @@ import { html, render, useState, useEffect, useCallback, useRef, useMemo } from 
 import * as api from './api.js';
 import { ComposeBox } from './components/compose-box.js';
 import { BtwPanel } from './components/btw-panel.js';
-import { AgentRequestModal, AgentStatus, ConnectionStatus } from './components/status.js';
+import { AgentRequestModal, AgentStatus } from './components/status.js';
 import { Timeline } from './components/timeline.js';
 import { WorkspaceExplorer } from './components/workspace-explorer.js';
 import { TabStrip } from './components/tab-strip.js';
@@ -500,11 +500,29 @@ function MainApp({ locationParams }) {
         setFileRefs([]);
     }, []);
 
+    const setFileRefsFromCompose = useCallback((next) => {
+        if (!Array.isArray(next)) {
+            setFileRefs([]);
+            return;
+        }
+        const deduped = [];
+        const seen = new Set();
+        for (const value of next) {
+            if (typeof value !== 'string' || !value.trim()) continue;
+            const normalized = value.trim();
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            deduped.push(normalized);
+        }
+        setFileRefs(deduped);
+    }, []);
+
     // TDZ-safe hook ordering note:
     // - keep handler callbacks defined before they are passed downstream,
     // - avoid forward references to uninitialized const callbacks,
     // - use useRef.current for mutable forward refs when needed.
     // See notes/piclaw-web-frontend-safety.md for the full checklist.
+
     const showIntentToast = useCallback((title, detail = null, kind = 'info', durationMs = 3000) => {
         clearIntentToast();
         setIntentToast({ title, detail: detail || null, kind: kind || 'info' });
@@ -582,6 +600,28 @@ function MainApp({ locationParams }) {
     const clearMessageRefs = useCallback(() => {
         setMessageRefs([]);
     }, []);
+
+    const setMessageRefsFromCompose = useCallback((next) => {
+        if (!Array.isArray(next)) {
+            setMessageRefs([]);
+            return;
+        }
+        const deduped = [];
+        const seen = new Set();
+        for (const value of next) {
+            if (typeof value !== 'string' || !value.trim()) continue;
+            const normalized = value.trim();
+            if (seen.has(normalized)) continue;
+            seen.add(normalized);
+            deduped.push(normalized);
+        }
+        setMessageRefs(deduped);
+    }, []);
+
+    const handleComposeSubmitError = useCallback((message) => {
+        const detail = typeof message === 'string' && message.trim() ? message.trim() : 'Could not send your message.';
+        showIntentToast('Compose failed', detail, 'error', 5000);
+    }, [showIntentToast]);
 
     const noteAgentActivity = useCallback((options = {}) => {
         const now = Date.now();
@@ -2613,9 +2653,11 @@ function MainApp({ locationParams }) {
                     fileRefs=${fileRefs}
                     onRemoveFileRef=${removeFileRef}
                     onClearFileRefs=${clearFileRefs}
+                    onSetFileRefs=${setFileRefsFromCompose}
                     messageRefs=${messageRefs}
                     onRemoveMessageRef=${removeMessageRef}
                     onClearMessageRefs=${clearMessageRefs}
+                    onSetMessageRefs=${setMessageRefsFromCompose}
                     activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
                     onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}
                     onOpenFilePill=${openFileFromPill}
@@ -2625,10 +2667,12 @@ function MainApp({ locationParams }) {
                     onRemoveQueuedFollowup=${handleRemoveQueuedFollowup}
                     onSubmitIntercept=${handleBtwIntercept}
                     onMessageResponse=${handleMessageResponse}
+                    onSubmitError=${handleComposeSubmitError}
                     onPopOutChat=${isWebAppMode ? undefined : handlePopOutChat}
                     isAgentActive=${isComposeBoxAgentActive}
                     activeChatAgents=${activeChatAgents}
                     currentChatJid=${currentChatJid}
+                    connectionStatus=${connectionStatus}
                     activeModel=${activeModel}
                     modelUsage=${activeModelUsage}
                     thinkingLevel=${activeThinkingLevel}
@@ -2640,7 +2684,6 @@ function MainApp({ locationParams }) {
                     onModelChange=${setActiveModel}
                     onModelStateChange=${applyModelState}
                 />
-                <${ConnectionStatus} status=${connectionStatus} />
                 <${AgentRequestModal}
                     request=${pendingRequest}
                     onRespond=${() => {
