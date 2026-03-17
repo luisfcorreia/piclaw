@@ -100,10 +100,51 @@ function generateEditorPage(): string {
 'use strict';
 
 var params = new URLSearchParams(location.search);
-var filePath = params.get('path') || '';
-var mediaId = params.get('media') || '';
-var explicitName = params.get('name') || '';
-var readOnly = /^(1|true|yes)$/i.test(params.get('readonly') || '');
+var hashParams = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+
+function getFlexibleParam(name) {
+  var direct = params.get(name);
+  if (direct) return direct;
+  for (var it = params.entries(), next = it.next(); !next.done; next = it.next()) {
+    var key = String(next.value[0] || '');
+    var normalized = key.replace(/^amp;/i, '');
+    if (normalized === name) return String(next.value[1] || '');
+  }
+  return '';
+}
+
+function firstNonEmpty(parts) {
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i]) return parts[i];
+  }
+  return '';
+}
+
+var filePath = firstNonEmpty([
+  getFlexibleParam('path'),
+  hashParams.get('path') || '',
+]);
+
+var mediaId = firstNonEmpty([
+  getFlexibleParam('media'),
+  hashParams.get('media') || '',
+]);
+
+var explicitName = firstNonEmpty([
+  getFlexibleParam('name'),
+  hashParams.get('name') || '',
+]);
+
+var readOnly = /^(1|true|yes)$/i.test(firstNonEmpty([
+  getFlexibleParam('readonly'),
+  hashParams.get('readonly') || '',
+]));
+
+// Attachment preview mode is always read-only.
+if (!filePath && /^\\d+$/.test(mediaId) && Number(mediaId) > 0) {
+  readOnly = true;
+}
+
 var sourceName = explicitName || filePath || ('attachment-' + mediaId + '.drawio');
 var fileName = sourceName.split('/').pop() || 'diagram.drawio';
 var frame = document.getElementById('editor-frame');
@@ -215,7 +256,7 @@ function saveWorkspace(payload, acknowledge) {
 
 // Load the file contents from workspace or media attachment
 function loadFile() {
-  if (!filePath && !(/^\d+$/.test(mediaId) && Number(mediaId) > 0)) {
+  if (!filePath && !(/^\\d+$/.test(mediaId) && Number(mediaId) > 0)) {
     xmlData = DEFAULT_DRAWIO_XML;
     startEditor();
     return;

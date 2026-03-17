@@ -20,7 +20,7 @@ function buildFrameUrl(mediaId, filename, previewKind) {
     const safeMediaId = encodeURIComponent(String(mediaId));
 
     if (previewKind === 'pdf') {
-        return `/pdf-viewer/?media=${safeMediaId}&name=${safeName}`;
+        return `/pdf-viewer/?media=${safeMediaId}&name=${safeName}#media=${safeMediaId}&name=${safeName}`;
     }
 
     if (previewKind === 'office') {
@@ -29,7 +29,7 @@ function buildFrameUrl(mediaId, filename, previewKind) {
     }
 
     if (previewKind === 'drawio') {
-        return `/drawio/edit.html?media=${safeMediaId}&name=${safeName}&readonly=1`;
+        return `/drawio/edit.html?media=${safeMediaId}&name=${safeName}&readonly=1#media=${safeMediaId}&name=${safeName}&readonly=1`;
     }
 
     return null;
@@ -103,6 +103,17 @@ export function AttachmentPreviewModal({ mediaId, info, onClose }) {
                         <div class="attachment-preview-subtitle">${previewLabel}</div>
                     </div>
                     <div class="attachment-preview-header-actions">
+                        ${frameUrl && html`
+                            <a
+                                href=${frameUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="attachment-preview-download"
+                                onClick=${(e) => e.stopPropagation()}
+                            >
+                                Open in Tab
+                            </a>
+                        `}
                         <a
                             href=${getMediaUrl(mediaId)}
                             download=${filename}
