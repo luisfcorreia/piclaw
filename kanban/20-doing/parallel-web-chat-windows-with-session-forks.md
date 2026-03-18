@@ -4,7 +4,7 @@ title: Support multiple parallel web chat windows backed by resumable forked ses
 status: doing
 priority: high
 created: 2026-03-14
-updated: 2026-03-16
+updated: 2026-03-17
 target_release: next
 estimate: L
 risk: high
@@ -358,6 +358,10 @@ Pick and justify one recommended approach that:
 
 ## Updates
 
+### 2026-03-17
+- Created focused child ticket `kanban/10-next/branch-agent-rename-and-old-branch-reuse.md` to track branch identity lifecycle separately: rename to prior tree-style identities and deliberate archived-branch reuse/reopen.
+- This keeps the umbrella ticket focused on cross-cutting multi-chat architecture/runtime work while giving naming/reuse its own acceptance criteria and test surface.
+
 ### 2026-03-16
 - This ticket remains the main umbrella for the multi-chat / branch-agent work and is now mostly in **hardening/polish** rather than missing-core-architecture territory.
 - Major shipped slices now include: branch registry, branch fork/open flow, browser-aware popup/new-tab behaviour, iOS-safe branch opening, branch picker, branch rename, branch prune/archive, branch-aware read/write/action routing, per-chat pane/model/context state, lane-aware parallel runtime execution, strict chat-scoped SSE enforcement, and dedicated multi-chat isolation coverage.
@@ -426,3 +430,4 @@ Pick and justify one recommended approach that:
 - `piclaw/piclaw/src/channels/web/recovery.ts`
 - `piclaw/piclaw/src/channels/web/timeline-service.ts`
 - `piclaw/piclaw/web/src/app.ts`
+- `kanban/10-next/branch-agent-rename-and-old-branch-reuse.md`

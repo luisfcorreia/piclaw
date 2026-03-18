@@ -149,6 +149,8 @@ export function ComposeBox({
     onSetFileRefs,
     onSetMessageRefs,
     onSubmitError,
+    onSwitchChat,
+    onRenameSession,
 }) {
     const [content, setContent] = useState('');
     const [searchText, setSearchText] = useState('');
@@ -162,6 +164,7 @@ export function ComposeBox({
     const [showMention, setShowMention] = useState(false);
     const [switchingModel, setSwitchingModel] = useState(false);
     const [showModelPopup, setShowModelPopup] = useState(false);
+    const [showSessionPopup, setShowSessionPopup] = useState(false);
     const [modelOptions, setModelOptions] = useState([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const [footerWidth, setFooterWidth] = useState(0);
@@ -171,6 +174,8 @@ export function ComposeBox({
     const mentionRef = useRef(null);
     const modelPopupRef = useRef(null);
     const modelHintRef = useRef(null);
+    const sessionPopupRef = useRef(null);
+    const sessionButtonRef = useRef(null);
     const footerRef = useRef(null);
     const dragCounterRef = useRef(0);
     const historyMax = 200;
@@ -225,12 +230,28 @@ export function ComposeBox({
         : `Connection: ${connectionStatusLabel}`;
 
     const visibleMentionAgents = getVisibleMentionAgents(activeChatAgents, { currentChatJid, limit: 4 });
-    const hasVisibleMentionAgents = visibleMentionAgents.length > 0;
     const showAgentAffordance = !searchMode && shouldShowComposeAgentAffordance({
         footerWidth,
         visibleAgentCount: visibleMentionAgents.length,
         hasContextIndicator: Boolean(contextUsage && contextUsage.percent != null),
     });
+    const switchableChatAgents = (() => {
+        const seen = new Set();
+        const chats = [];
+        for (const chat of Array.isArray(activeChatAgents) ? activeChatAgents : []) {
+            const chatJid = typeof chat?.chat_jid === 'string' ? chat.chat_jid.trim() : '';
+            if (!chatJid || chatJid === currentChatJid || seen.has(chatJid)) continue;
+            const agentName = typeof chat?.agent_name === 'string' ? chat.agent_name.trim() : '';
+            if (!agentName) continue;
+            seen.add(chatJid);
+            chats.push(chat);
+        }
+        return chats;
+    })();
+    const hasSwitchableChatAgents = switchableChatAgents.length > 0;
+    const canSwitchSession = hasSwitchableChatAgents && typeof onSwitchChat === 'function';
+    const canRenameSession = !searchMode && typeof onRenameSession === 'function';
+    const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRenameSession);
     const modelHintLabel = activeModel || '';
     const modelHintSuffix = supportsThinking && thinkingLevel ? ` (${thinkingLevel})` : '';
     const modelThinkingLabel = modelHintSuffix.trim() ? `${thinkingLevel}` : '';
@@ -434,6 +455,40 @@ export function ComposeBox({
         });
     };
 
+    const toggleSessionPopup = (event) => {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (searchMode || (!canSwitchSession && !canRenameSession)) return;
+
+        setShowModelPopup(false);
+        setShowSlash(false);
+        setSlashMatches([]);
+        setShowMention(false);
+        setMentionMatches([]);
+        setShowSessionPopup((prev) => !prev);
+    };
+
+    const handleSessionSwitch = (chatJid) => {
+        const nextChatJid = typeof chatJid === 'string' ? chatJid.trim() : '';
+        setShowSessionPopup(false);
+        if (!nextChatJid || nextChatJid === currentChatJid) {
+            requestAnimationFrame(() => textareaRef.current?.focus());
+            return;
+        }
+        onSwitchChat?.(nextChatJid);
+    };
+
+    const handleRenameSession = async () => {
+        if (typeof onRenameSession !== 'function') return;
+        setShowSessionPopup(false);
+        try {
+            await onRenameSession();
+        } catch (error) {
+            console.warn('Failed to rename session:', error);
+        }
+        requestAnimationFrame(() => textareaRef.current?.focus());
+    };
+
     const updateValue = (value) => {
         if (searchMode) {
             setSearchText(value);
@@ -503,6 +558,7 @@ export function ComposeBox({
     const toggleModelPopup = (event) => {
         event.preventDefault();
         event.stopPropagation();
+        setShowSessionPopup(false);
         setShowModelPopup((prev) => !prev);
     };
 
@@ -539,6 +595,7 @@ export function ComposeBox({
         setSlashMatches([]);
         setShowMention(false);
         setMentionMatches([]);
+        setShowSessionPopup(false);
         setSubmitError(null);
 
         // Capture media/refs before clearing so the async send can use them
@@ -655,6 +712,11 @@ export function ComposeBox({
             e.preventDefault();
             setSearchText('');
             onExitSearch?.();
+            return;
+        }
+        if (!searchMode && showSessionPopup && e.key === 'Escape') {
+            e.preventDefault();
+            setShowSessionPopup(false);
             return;
         }
         // @agent autocomplete navigation
@@ -921,12 +983,19 @@ export function ComposeBox({
     useEffect(() => {
         if (searchMode) {
             setShowModelPopup(false);
+            setShowSessionPopup(false);
             setShowSlash(false);
             setSlashMatches([]);
             setShowMention(false);
             setMentionMatches([]);
         }
     }, [searchMode]);
+
+    useEffect(() => {
+        if (showSessionPopup && !showSessionSwitcherButton) {
+            setShowSessionPopup(false);
+        }
+    }, [showSessionPopup, showSessionSwitcherButton]);
 
     useEffect(() => {
         if (!showModelPopup) return;
@@ -943,6 +1012,22 @@ export function ComposeBox({
         document.addEventListener('pointerdown', onPointerDown);
         return () => document.removeEventListener('pointerdown', onPointerDown);
     }, [showModelPopup]);
+
+    useEffect(() => {
+        if (!showSessionPopup) return;
+
+        const onPointerDown = (event) => {
+            const popup = sessionPopupRef.current;
+            const trigger = sessionButtonRef.current;
+            const target = event.target;
+            if (popup && popup.contains(target)) return;
+            if (trigger && trigger.contains(target)) return;
+            setShowSessionPopup(false);
+        };
+
+        document.addEventListener('pointerdown', onPointerDown);
+        return () => document.removeEventListener('pointerdown', onPointerDown);
+    }, [showSessionPopup]);
 
     useEffect(() => {
         const updateFooterWidth = () => {
@@ -989,6 +1074,7 @@ export function ComposeBox({
     const handleInput = (e) => {
         const value = e.target.value;
         setSubmitError(null);
+        if (showSessionPopup) setShowSessionPopup(false);
         resizeTextarea(e.target);
         updateValue(value);
     };
@@ -1234,6 +1320,39 @@ export function ComposeBox({
                             </div>
                         </div>
                     `}
+                    ${showSessionPopup && !searchMode && html`
+                        <div class="compose-model-popup" ref=${sessionPopupRef}>
+                            <div class="compose-model-popup-title">Switch active session</div>
+                            <div class="compose-model-popup-menu" role="menu" aria-label="Active sessions">
+                                ${!canSwitchSession && html`
+                                    <div class="compose-model-popup-empty">No other active sessions.</div>
+                                `}
+                                ${canSwitchSession && switchableChatAgents.map((chat) => html`
+                                    <button
+                                        key=${chat.chat_jid}
+                                        type="button"
+                                        role="menuitem"
+                                        class="compose-model-popup-item"
+                                        onClick=${() => handleSessionSwitch(chat.chat_jid)}
+                                    >
+                                        ${`@${chat.agent_name}${chat.display_name ? ` — ${chat.display_name}` : ''}${chat.is_active ? ' • active' : ''}`}
+                                    </button>
+                                `)}
+                            </div>
+                            ${canRenameSession && html`
+                                <div class="compose-model-popup-actions">
+                                    <button
+                                        type="button"
+                                        class="compose-model-popup-btn primary"
+                                        onClick=${() => { void handleRenameSession(); }}
+                                        title="Rename current branch name and agent handle"
+                                    >
+                                        Rename current…
+                                    </button>
+                                </div>
+                            `}
+                        </div>
+                    `}
                 </div>
                 <div class="compose-footer" ref=${footerRef}>
                     ${!searchMode && activeModel && html`
@@ -1263,6 +1382,19 @@ export function ComposeBox({
                     </div>
                     `}
                     <div class="compose-actions ${searchMode ? 'search-mode' : ''}">
+                    ${showSessionSwitcherButton && html`
+                        <button
+                            ref=${sessionButtonRef}
+                            type="button"
+                            class=${`icon-btn compose-mention-btn${showSessionPopup ? ' active' : ''}`}
+                            onClick=${toggleSessionPopup}
+                            title=${showSessionPopup ? 'Hide active sessions' : 'Switch active session/agent'}
+                            aria-label="Switch active session/agent"
+                            aria-expanded=${showSessionPopup ? 'true' : 'false'}
+                        >
+                            <span>@</span>
+                        </button>
+                    `}
                     ${showAgentAffordance && html`
                         <div class="compose-agent-hints compose-agent-hints-inline" title="Active chat agents you can mention with @name">
                             <span class="compose-agent-hints-label">Agents</span>

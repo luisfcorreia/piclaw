@@ -2660,6 +2660,8 @@ function MainApp({ locationParams }) {
                     onRemoveMessageRef=${removeMessageRef}
                     onClearMessageRefs=${clearMessageRefs}
                     onSetMessageRefs=${setMessageRefsFromCompose}
+                    onSwitchChat=${handleBranchPickerChange}
+                    onRenameSession=${handleRenameCurrentBranch}
                     activeEditorPath=${chatOnlyMode ? null : tabStripActiveId}
                     onAttachEditorFile=${chatOnlyMode ? undefined : attachActiveEditorFile}
                     onOpenFilePill=${openFileFromPill}

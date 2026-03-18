@@ -2726,6 +2726,24 @@ body {
     padding: var(--spacing-xs);
 }
 
+.compose-mention-btn {
+    font-family: var(--font-family-mono);
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    min-width: 28px;
+    min-height: 28px;
+}
+
+.compose-mention-btn span {
+    display: inline-block;
+    transform: translateY(-0.5px);
+}
+
+.compose-mention-btn.active {
+    background-color: var(--accent-soft, rgba(29, 155, 240, 0.1));
+}
+
 .compose-actions .icon-btn svg {
     width: 18px;
     height: 18px;
