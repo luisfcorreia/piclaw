@@ -92,6 +92,6 @@ Only import code/UI changes.
 
 Do not import:
 - `piclaw/dist/`
-- `piclaw/skills/`
+- `runtime/skills/`
 - `skel/.pi/skills/`
 - `docs/`

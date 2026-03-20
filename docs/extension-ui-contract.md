@@ -124,6 +124,6 @@ Use this decision order:
 
 - `piclaw/src/channels/web/ui-bridge.ts`
 - `piclaw/src/channels/web/sse.ts`
-- `piclaw/web/src/ui/extension-ui-events.ts`
-- `piclaw/web/src/app.ts`
+- `runtime/web/src/ui/extension-ui-events.ts`
+- `runtime/web/src/app.ts`
 - `docs/web-pane-extensions.md`

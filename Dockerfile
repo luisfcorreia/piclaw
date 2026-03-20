@@ -58,7 +58,7 @@ COPY supervisor/supervisord.workspace.conf /usr/local/share/piclaw/supervisor/su
 COPY supervisor/conf.d/ /usr/local/share/piclaw/supervisor/conf.d/
 COPY scripts/docker/install-agent-runtime.sh /tmp/install-agent-runtime.sh
 COPY scripts/docker/build-piclaw-package.sh /tmp/build-piclaw-package.sh
-COPY piclaw/package.json /tmp/piclaw-package.json
+COPY package.json /tmp/piclaw-package.json
 RUN chmod +x /entrypoint.sh /usr/local/bin/run-piclaw.sh /tmp/install-agent-runtime.sh /tmp/build-piclaw-package.sh
 
 # Layer 4: Install Homebrew, Bun, and Pi Coding Agent globally
@@ -77,10 +77,12 @@ RUN mkdir -p /home/agent/.pi/agent/skills /home/agent/.pi/agent/sessions \
 COPY --chown=agent:agent skel/ /home/agent/workspace-skel/
 
 # Ship piclaw global skills (IPC: schedule, send-message)
-COPY --chown=agent:agent piclaw/skills/ /home/agent/.pi/agent/skills/
+COPY --chown=agent:agent runtime/skills/ /home/agent/.pi/agent/skills/
 
-# Ship piclaw orchestrator and install globally
-COPY --chown=agent:agent piclaw/ /home/agent/piclaw/
+# Ship piclaw orchestrator repo layout and install globally
+COPY --chown=agent:agent package.json bun.lock README.md LICENSE /home/agent/piclaw/
+COPY --chown=agent:agent docs/install-from-repo.md /home/agent/piclaw/docs/install-from-repo.md
+COPY --chown=agent:agent runtime/ /home/agent/piclaw/runtime/
 RUN /tmp/build-piclaw-package.sh && \
     PI_CLI="$(readlink -f /usr/local/lib/bun/bin/pi)" && \
     sed -i '1s/env node/env bun/' "$PI_CLI" && \

@@ -42,7 +42,7 @@ function resolveExistingPath(label: string, candidates: string[]): string {
 }
 
 const PICLAW_ROOT = resolveExistingPath("piclaw source root", [
-  "/workspace/piclaw/piclaw",
+  "/workspace/piclaw/runtime",
   "/home/agent/piclaw/piclaw",
   "/usr/local/lib/bun/install/global/node_modules/piclaw",
 ]);
@@ -487,7 +487,7 @@ writeFileSync(htmlPath, html, "utf8");
 
 const playwrightPackageJson = resolveExistingPath("playwright package.json", [
   "/workspace/scripts/playwright/package.json",
-  "/home/agent/piclaw/scripts/playwright/package.json",
+  "/home/agent/runtime/scripts/playwright/package.json",
 ]);
 const require = createRequire(playwrightPackageJson);
 const { chromium } = require("playwright");

@@ -29,13 +29,13 @@ function resolveExistingPath(label: string, candidates: string[]): string {
 }
 
 const dbModulePath = resolveExistingPath("piclaw db module", [
-  "/workspace/piclaw/piclaw/src/db.ts",
-  "/home/agent/piclaw/piclaw/src/db.ts",
+  "/workspace/piclaw/runtime/src/db.ts",
+  "/home/agent/piclaw/runtime/src/db.ts",
   "/usr/local/lib/bun/install/global/node_modules/piclaw/src/db.ts",
 ]);
 const messagesCrudModulePath = resolveExistingPath("messages-crud module", [
-  "/workspace/piclaw/piclaw/src/extensions/messages-crud.ts",
-  "/home/agent/piclaw/piclaw/src/extensions/messages-crud.ts",
+  "/workspace/piclaw/runtime/src/extensions/messages-crud.ts",
+  "/home/agent/piclaw/runtime/src/extensions/messages-crud.ts",
   "/usr/local/lib/bun/install/global/node_modules/piclaw/src/extensions/messages-crud.ts",
 ]);
 

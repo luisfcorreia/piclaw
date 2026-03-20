@@ -32,7 +32,7 @@ GHCR_IMAGE := $(REGISTRY)/$(GHCR_OWNER)/$(IMAGE):$(TAG)
 BUN_ROOT ?= $(or $(BUN_INSTALL),/usr/local/lib/bun)
 GLOBAL_PKG := $(BUN_ROOT)/install/global/package.json
 GLOBAL_LOCK := $(BUN_ROOT)/install/global/bun.lock
-PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' piclaw/package.json)
+PI_AGENT_VERSION ?= $(shell jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' package.json)
 
 .PHONY: help up down enter build build-piclaw build-web build-ts vendor update-mermaid-vendor pack \
         local-install restart lint test test-coverage \
@@ -58,54 +58,54 @@ build: ## Build Docker image
 # ── Build pipeline ───────────────────────────────────────────────────
 
 vendor: ## Build the checked-in vendored bundles + metadata
-	cd piclaw && bun run build:vendor
+	cd runtime && bun run build:vendor
 	@ls -lh \
-		piclaw/web/static/js/vendor/beautiful-mermaid.js \
-		piclaw/web/static/js/vendor/beautiful-mermaid.meta.json \
-		piclaw/extensions/editor/vendor/codemirror.js \
-		piclaw/extensions/editor/vendor/codemirror.meta.json \
-		piclaw/web/static/js/vendor/preact-htm.js \
-		piclaw/web/static/js/vendor/preact-htm.meta.json \
-		piclaw/web/static/js/marked.min.js \
-		piclaw/web/static/js/marked.meta.json \
-		piclaw/web/static/js/vendor/katex.min.js \
-		piclaw/web/static/js/vendor/katex.meta.json \
-		piclaw/web/src/styles/katex.bundle.css \
-		piclaw/web/src/styles/katex.bundle.meta.json \
-		piclaw/web/static/fonts/KaTeX_*.woff2 \
-		piclaw/web/static/fonts/vendor/firacode-nerd-font-mono-regular.ttf \
-		piclaw/web/static/fonts/vendor/firacode-nerd-font-mono-bold.ttf \
-		piclaw/web/static/fonts/vendor/firacode-nerd-font.meta.json \
-		piclaw/web/static/js/vendor/ghostty-web.js \
-		piclaw/web/static/js/vendor/ghostty-vt.wasm \
-		piclaw/web/static/js/vendor/ghostty-web.meta.json \
-		piclaw/extensions/office-viewer/vendor/docx-preview.min.js \
-		piclaw/extensions/office-viewer/vendor/xlsx.full.min.js \
-		piclaw/extensions/office-viewer/vendor/PptxViewJS.min.js \
-		piclaw/extensions/office-viewer/vendor/jszip.min.js \
-		piclaw/extensions/office-viewer/vendor/inter-latin.woff2 \
-		piclaw/extensions/office-viewer/vendor/inter-latin-ext.woff2 \
-		piclaw/extensions/office-viewer/vendor/office-viewer-libs.meta.json
+		runtime/web/static/js/vendor/beautiful-mermaid.js \
+		runtime/web/static/js/vendor/beautiful-mermaid.meta.json \
+		runtime/extensions/editor/vendor/codemirror.js \
+		runtime/extensions/editor/vendor/codemirror.meta.json \
+		runtime/web/static/js/vendor/preact-htm.js \
+		runtime/web/static/js/vendor/preact-htm.meta.json \
+		runtime/web/static/js/marked.min.js \
+		runtime/web/static/js/marked.meta.json \
+		runtime/web/static/js/vendor/katex.min.js \
+		runtime/web/static/js/vendor/katex.meta.json \
+		runtime/web/src/styles/katex.bundle.css \
+		runtime/web/src/styles/katex.bundle.meta.json \
+		runtime/web/static/fonts/KaTeX_*.woff2 \
+		runtime/web/static/fonts/vendor/firacode-nerd-font-mono-regular.ttf \
+		runtime/web/static/fonts/vendor/firacode-nerd-font-mono-bold.ttf \
+		runtime/web/static/fonts/vendor/firacode-nerd-font.meta.json \
+		runtime/web/static/js/vendor/ghostty-web.js \
+		runtime/web/static/js/vendor/ghostty-vt.wasm \
+		runtime/web/static/js/vendor/ghostty-web.meta.json \
+		runtime/extensions/office-viewer/vendor/docx-preview.min.js \
+		runtime/extensions/office-viewer/vendor/xlsx.full.min.js \
+		runtime/extensions/office-viewer/vendor/PptxViewJS.min.js \
+		runtime/extensions/office-viewer/vendor/jszip.min.js \
+		runtime/extensions/office-viewer/vendor/inter-latin.woff2 \
+		runtime/extensions/office-viewer/vendor/inter-latin-ext.woff2 \
+		runtime/extensions/office-viewer/vendor/office-viewer-libs.meta.json
 
 update-mermaid-vendor: ## Rebuild or upgrade vendored mermaid (use MERMAID_VERSION=1.2.3 to upgrade)
-	cd piclaw && bun run update:vendor:mermaid $(if $(MERMAID_VERSION),--version $(MERMAID_VERSION),)
-	@ls -lh piclaw/web/static/js/vendor/beautiful-mermaid.js piclaw/web/static/js/vendor/beautiful-mermaid.meta.json
+	cd runtime && bun run update:vendor:mermaid $(if $(MERMAID_VERSION),--version $(MERMAID_VERSION),)
+	@ls -lh runtime/web/static/js/vendor/beautiful-mermaid.js runtime/web/static/js/vendor/beautiful-mermaid.meta.json
 
 build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (includes vendor bundle)
-	cd piclaw && bun run build:web
-	@cd piclaw && bun test test/channels/web/web-build.test.ts test/channels/web/post-link-preview-content.test.ts
+	cd runtime && bun run build:web
+	@cd runtime && bun test test/channels/web/web-build.test.ts test/channels/web/post-link-preview-content.test.ts
 	@ls -lh \
-		piclaw/web/static/dist/app.bundle.js \
-		piclaw/web/static/dist/app.bundle.js.map \
-		piclaw/web/static/dist/app.bundle.css \
-		piclaw/web/static/dist/editor.bundle.js \
-		piclaw/web/static/dist/editor.bundle.js.map \
-		piclaw/web/static/dist/login.bundle.js \
-		piclaw/web/static/dist/login.bundle.js.map \
-		piclaw/web/static/dist/login.bundle.css
+		runtime/web/static/dist/app.bundle.js \
+		runtime/web/static/dist/app.bundle.js.map \
+		runtime/web/static/dist/app.bundle.css \
+		runtime/web/static/dist/editor.bundle.js \
+		runtime/web/static/dist/editor.bundle.js.map \
+		runtime/web/static/dist/login.bundle.js \
+		runtime/web/static/dist/login.bundle.js.map \
+		runtime/web/static/dist/login.bundle.css
 
 build-ts: ## Type-check TypeScript (no dist/ output needed; bun runs .ts directly)
-	cd piclaw && bun run build
+	cd runtime && bun run build
 # NOTE: dist/ is generated by tsc but nothing uses it at runtime. The bin
 # entry and main field both point to src/index.ts. Consider switching to
 # `tsc --noEmit` (typecheck only) and excluding dist/ from the tarball.
@@ -118,8 +118,8 @@ PACK_DIR ?= /tmp/piclaw-pack
 
 pack: build-piclaw ## Pack piclaw into a .tgz (outside the repo)
 	rm -rf $(PACK_DIR) && mkdir -p $(PACK_DIR)
-	cd piclaw && bun pm pack --destination $(PACK_DIR)
-	@ls -lh $(PACK_DIR)/piclaw-runtime-*.tgz
+	bun pm pack --destination $(PACK_DIR)
+	@ls -lh $(PACK_DIR)/piclaw-*.tgz
 
 restart: ## Restart piclaw (auto-detects supervisor or systemd)
 	@if command -v supervisorctl >/dev/null 2>&1 && \
@@ -140,11 +140,11 @@ restart: ## Restart piclaw (auto-detects supervisor or systemd)
 
 local-install: pack ## Pack, install globally, and restart piclaw
 	@set -e; \
-	VERSION=$$(jq -r .version piclaw/package.json); \
-	TGZ="$$(ls -t $(PACK_DIR)/piclaw-runtime-*.tgz | head -1)"; \
+	VERSION=$$(jq -r .version package.json); \
+	TGZ="$$(ls -t $(PACK_DIR)/piclaw-*.tgz | head -1)"; \
 	if [ -z "$$TGZ" ]; then echo "[local-install] No package tarball found in $(PACK_DIR)"; exit 1; fi; \
 	echo "[local-install] Installing v$${VERSION} globally..."; \
-	printf '{"dependencies":{"@mariozechner/pi-coding-agent":"$(PI_AGENT_VERSION)","piclaw-runtime":"%s"}}\n' \
+	printf '{"dependencies":{"@mariozechner/pi-coding-agent":"$(PI_AGENT_VERSION)","piclaw":"%s"}}\n' \
 		"$$TGZ" | sudo tee $(GLOBAL_PKG) >/dev/null; \
 	sudo rm -f $(GLOBAL_LOCK); \
 	sudo BUN_INSTALL=$(BUN_ROOT) BUN_INSTALL_CACHE_DIR=/tmp/bun-cache \
@@ -152,10 +152,7 @@ local-install: pack ## Pack, install globally, and restart piclaw
 		--registry https://registry.npmjs.org; \
 	sudo chmod -R a+rX $(BUN_ROOT); \
 	rm -f "$$TGZ"; \
-	DEST_REAL=$(BUN_ROOT)/install/global/node_modules/piclaw-runtime; \
-	DEST_COMPAT=$(BUN_ROOT)/install/global/node_modules/piclaw; \
-	sudo rm -rf "$$DEST_COMPAT"; \
-	sudo ln -sfn "$$DEST_REAL" "$$DEST_COMPAT"; \
+	DEST_REAL=$(BUN_ROOT)/install/global/node_modules/piclaw; \
 	if [ -d "$$DEST_REAL/extensions" ] && [ -d "$$DEST_REAL/node_modules" ]; then \
 		sudo ln -sfn "$$DEST_REAL/node_modules" "$$DEST_REAL/extensions/node_modules" 2>/dev/null || true; \
 	fi; \
@@ -166,23 +163,23 @@ local-install: pack ## Pack, install globally, and restart piclaw
 # ── Quality ──────────────────────────────────────────────────────────
 
 lint: ## Lint piclaw sources
-	cd piclaw && bun run lint
+	cd runtime && bun run lint
 
 test: ## Run piclaw tests
-	cd piclaw && bun run test
+	cd runtime && bun run test
 
 test-coverage: ## Run piclaw tests with coverage
-	cd piclaw && bun run test:coverage
+	cd runtime && bun run test:coverage
 
 # ── Versioning ───────────────────────────────────────────────────────
 
-sync-version: ## Sync piclaw/package.json version with VERSION
+sync-version: ## Sync package.json version with VERSION
 	@set -e; \
 	VERSION=$$(cat VERSION); \
 	tmp=$$(mktemp); \
-	jq --arg version "$$VERSION" '.version=$$version' piclaw/package.json > $$tmp; \
-	mv $$tmp piclaw/package.json; \
-	echo "Synced piclaw/package.json to version $$VERSION"
+	jq --arg version "$$VERSION" '.version=$$version' package.json > $$tmp; \
+	mv $$tmp package.json; \
+	echo "Synced package.json to version $$VERSION"
 
 bump-minor: ## Bump minor version, build, commit, and tag
 	@OLD=$$(cat VERSION); \
@@ -192,7 +189,7 @@ bump-minor: ## Bump minor version, build, commit, and tag
 	echo $$NEW > VERSION; \
 	$(MAKE) sync-version; \
 	$(MAKE) build-piclaw; \
-	git add VERSION piclaw/package.json piclaw/web/static; \
+	git add VERSION package.json runtime/web/static; \
 	git commit -m "Bump version to $$NEW"; \
 	git tag "v$$NEW"; \
 	echo "Bumped version: $$OLD -> $$NEW (tagged v$$NEW)"
@@ -208,7 +205,7 @@ bump-patch: ## Bump patch version, build, commit, and tag
 	echo $$NEW > VERSION; \
 	$(MAKE) sync-version; \
 	$(MAKE) build-piclaw; \
-	git add VERSION piclaw/package.json piclaw/web/static; \
+	git add VERSION package.json runtime/web/static; \
 	git commit -m "Bump version to $$NEW"; \
 	git tag "v$$NEW"; \
 	echo "Bumped version: $$OLD -> $$NEW (tagged v$$NEW)"

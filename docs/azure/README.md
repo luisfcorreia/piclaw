@@ -38,13 +38,11 @@ Clone your Piclaw repo into `/workspace/piclaw`.
 
 ```bash
 cd /workspace/piclaw && make build-piclaw
-cd /workspace/piclaw/piclaw
+cd /workspace/piclaw
 bun pm pack --destination /tmp
-TARBALL=$(ls -t /tmp/piclaw-runtime-*.tgz | head -1)
+TARBALL=$(ls -t /tmp/piclaw-*.tgz | head -1)
 sudo BUN_INSTALL=/usr/local/lib/bun bun add -g "$TARBALL"
 sudo chmod -R a+rX /usr/local/lib/bun
-sudo rm -rf /usr/local/lib/bun/install/global/node_modules/piclaw
-sudo ln -sfn /usr/local/lib/bun/install/global/node_modules/piclaw-runtime /usr/local/lib/bun/install/global/node_modules/piclaw
 rm -f "$TARBALL"
 
 # Symlink piclaw into PATH
@@ -116,7 +114,7 @@ Ensure ports 80/443 are open and DNS points to the VM.
 
 If you want managed‑identity Azure OpenAI + Foundry providers:
 
-- The extension is bundled at `piclaw/extensions/azure-openai.ts` inside the package — no manual copy needed.
+- The extension is bundled at `runtime/extensions/azure-openai.ts` inside the package — no manual copy needed.
 - Configure:
   - `AOAI_BASE_URL` (Responses API base URL)
   - `AOAI_MODEL_ID` / `AOAI_MODEL_NAME` / `AOAI_MODEL_IDS`

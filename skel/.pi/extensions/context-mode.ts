@@ -11,13 +11,13 @@ import { isBashToolResult } from "@mariozechner/pi-coding-agent";
 import {
   createBatchExecTool,
   createToolOutputSearchTool,
-} from "/workspace/piclaw/piclaw/src/tools/context-tools.ts";
+} from "/workspace/piclaw/runtime/src/tools/context-tools.ts";
 import {
   buildPreview,
   saveToolOutput,
   readToolOutputFile,
   startToolOutputCleanup,
-} from "/workspace/piclaw/piclaw/src/tool-output.ts";
+} from "/workspace/piclaw/runtime/src/tool-output.ts";
 
 const STORE_THRESHOLD_BYTES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_BYTES || "4096", 10);
 const STORE_THRESHOLD_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_LINES || "40", 10);

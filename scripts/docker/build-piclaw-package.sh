@@ -27,16 +27,16 @@ bun install
 bun run build
 bun run build:web
 
-rm -f piclaw-runtime-*.tgz
+rm -f piclaw-*.tgz
 PACK_DIR="$(mktemp -d)"
 bun pm pack --outdir "$PACK_DIR"
 
-TARBALL="$(find "$PACK_DIR" -maxdepth 1 -name 'piclaw-runtime-*.tgz' | head -n1)"
+TARBALL="$(find "$PACK_DIR" -maxdepth 1 -name 'piclaw-*.tgz' | head -n1)"
 if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
-  TARBALL="$(find . -maxdepth 1 -name 'piclaw-runtime-*.tgz' | head -n1)"
+  TARBALL="$(find . -maxdepth 1 -name 'piclaw-*.tgz' | head -n1)"
 fi
 if [ -z "$TARBALL" ] || [ ! -f "$TARBALL" ]; then
-  echo "piclaw-runtime tarball not found" >&2
+  echo "piclaw tarball not found" >&2
   exit 1
 fi
 
@@ -50,17 +50,14 @@ GLOBAL_LOCK="$BUN_INSTALL/install/global/bun.lock"
 # entries from previous runs. Keep pi-coding-agent explicitly installed so
 # the standalone `pi` CLI stays aligned with piclaw's dependency version.
 PI_AGENT_VERSION="$(jq -r '.dependencies["@mariozechner/pi-coding-agent"] // "0.58.3"' package.json)"
-printf '{"dependencies":{"@mariozechner/pi-coding-agent":"%s","piclaw-runtime":"%s"}}\n' "$PI_AGENT_VERSION" "$TARBALL" | sudo tee "$GLOBAL_PKG" >/dev/null
+printf '{"dependencies":{"@mariozechner/pi-coding-agent":"%s","piclaw":"%s"}}\n' "$PI_AGENT_VERSION" "$TARBALL" | sudo tee "$GLOBAL_PKG" >/dev/null
 sudo rm -f "$GLOBAL_LOCK"
 sudo BUN_INSTALL="$BUN_INSTALL" "$BUN_INSTALL/bin/bun" install -g "$TARBALL" --registry https://registry.npmjs.org
 
 rm -f "$TARBALL"
 rm -rf "$PACK_DIR"
 
-DEST_REAL="$BUN_INSTALL/install/global/node_modules/piclaw-runtime"
-DEST_COMPAT="$BUN_INSTALL/install/global/node_modules/piclaw"
-sudo rm -rf "$DEST_COMPAT"
-sudo ln -sfn "$DEST_REAL" "$DEST_COMPAT"
+DEST_REAL="$BUN_INSTALL/install/global/node_modules/piclaw"
 if [ -d "$DEST_REAL/extensions" ] && [ -d "$DEST_REAL/node_modules" ]; then
   sudo ln -sfn "$DEST_REAL/node_modules" "$DEST_REAL/extensions/node_modules" 2>/dev/null || true
 fi

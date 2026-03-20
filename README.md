@@ -232,7 +232,7 @@ make local-install   # pack, install globally, restart piclaw
 Tests use Bun. Sequential mode is recommended for SQLite safety:
 
 ```bash
-cd piclaw && bun test --max-concurrency=1
+cd runtime && bun test --max-concurrency=1
 ```
 
 ## Release
