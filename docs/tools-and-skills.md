@@ -82,6 +82,19 @@ Each skill keeps its script alongside its `SKILL.md` for portability. Current se
 | `feature-refinement-flow` | Structured 20-question refinement flow before implementation |
 | `situate-daily-notes` | Situation report and Obsidian-style daily summary notes |
 | `timeline-cleanup` | Delete low-value timeline messages by keyword patterns |
+| `proxmox-management` | Manage Proxmox VM lifecycle, USB mapping passthrough, and backup-restore moves |
+
+The packaged Proxmox helper now lives at `runtime/scripts/proxmox.ts` and can be invoked from the repo with:
+
+```bash
+bun run proxmox -- vm status --vmid 117
+bun run proxmox -- vm inspect --vmid 117
+bun run proxmox -- vm start --vmid 117
+bun run proxmox -- vm stop --vmid 117
+bun run proxmox -- vm resume --vmid 117
+bun run proxmox -- vm restart --vmid 117
+bun run proxmox -- vm ip --vmid 117
+```
 
 ## Web extension UI note
 

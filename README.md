@@ -44,6 +44,13 @@ docker run -d \
 
 Open `http://localhost:8080`.
 
+To use `pi` interactively inside the container:
+
+```bash
+docker exec -u agent -it piclaw bash
+cd /workspace && pi
+```
+
 ### Install directly from the repo with Bun
 
 > [!NOTE]
@@ -61,17 +68,25 @@ bun add -g github:rcarmo/piclaw
 
 See [docs/install-from-repo.md](docs/install-from-repo.md) for scope and caveats.
 
-To use `pi` interactively inside the container:
-
-```bash
-docker exec -u agent -it piclaw bash
-cd /workspace && pi
-```
-
 ### Build from source
 
 > [!NOTE]
 > Source builds are primarily for development and local testing.
+
+### Packaged operator helper scripts
+
+The repo now includes packaged Bun helper scripts under `runtime/scripts/` for
+operator-style tasks. For example, the Proxmox helper can be invoked from the
+repo with:
+
+```bash
+bun run proxmox -- vm status --vmid 117
+bun run proxmox -- vm resume --vmid 117
+bun run proxmox -- vm restart --vmid 117
+```
+
+These scripts are included in the packaged artifact because `runtime/scripts/`
+is part of the published file set.
 
 ```bash
 make build
