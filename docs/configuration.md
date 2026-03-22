@@ -19,12 +19,30 @@ This document covers all `piclaw` configuration options: environment variables, 
 | `PICLAW_WEB_HOST` | `0.0.0.0` | Bind address |
 | `PICLAW_WEB_IDLE_TIMEOUT` | `0` (disabled) | Drop idle clients after this many seconds |
 | `PICLAW_WEB_TERMINAL_ENABLED` | `0` | Enable the authenticated web terminal backend/pane; disabled by default for security |
+| `PICLAW_WEB_VNC_TARGETS` | _(empty)_ | JSON allowlist for VNC targets (or use `PICLAW_VNC_TARGETS`). Supports array or object form. |
+| `PICLAW_WEB_VNC_ALLOW_DIRECT` | `0` | Allow direct VNC targets supplied at runtime (`PICLAW_VNC_ALLOW_DIRECT` alias) |
 | `PICLAW_WEB_TLS_CERT` | _(empty)_ | Path to TLS certificate; enables HTTPS |
 | `PICLAW_WEB_TLS_KEY` | _(empty)_ | Path to TLS private key; enables HTTPS |
 | `PICLAW_WEB_MAX_CONTENT_CHARS` | `262144` | Max message size in characters; oversized messages are truncated with metadata |
 | `PICLAW_TRUST_PROXY` | `0` | Trust `Forwarded` / `X-Forwarded-*` headers from a reverse proxy for origin, host, proto, and client IP handling |
 
 If `PICLAW_WEB_TLS_CERT` and `PICLAW_WEB_TLS_KEY` are both omitted, piclaw checks for `.piclaw/certs/sandbox.local.crt` and `.piclaw/certs/sandbox.local.key` and enables HTTPS automatically if both exist.
+
+### VNC target examples
+
+- **Array form**:
+
+```bash
+export PICLAW_WEB_VNC_TARGETS='[{"id":"lab","host":"192.168.1.50","port":5901,"readOnly":false},{"id":"pi","host":"pi.local","port":5900}]'
+```
+
+- **Object form** (keyed by target id):
+
+```bash
+export PICLAW_WEB_VNC_TARGETS='{ "lab": { "id": "lab", "host": "192.168.1.50", "port": 5901 }, "pi": { "host": "192.168.1.20", "port": 5900 } }'
+```
+
+When direct-connect is allowed, the UI accepts inputs like `server` + `port` from the VNC target picker and connects to `<host>:<port>` directly.
 
 CLI overrides: `piclaw --port`, `--host`, `--idle-timeout`, `--tls-cert`, `--tls-key`.
 

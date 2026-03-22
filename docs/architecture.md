@@ -81,6 +81,11 @@ piclaw/
     │   │   ├── editor-loader.ts # Lazy proxy for editor bundle
     │   │   ├── tab-store.ts     # Framework-agnostic tab state
     │   │   ├── terminal-pane.ts # Terminal dock scaffold
+    │   │   ├── vnc-pane.ts      # VNC remote-display pane (RFB client)
+    │   │   ├── remote-display-protocol.ts # Remote display protocol interface + events
+    │   │   ├── remote-display-socket.ts # Transport wrapper (metrics + control messages)
+    │   │   ├── remote-display-decoder.ts # WASM fast-path decoder + JS fallback
+    │   │   ├── remote-display-vnc.ts # VNC protocol adapter (negotiation + frame parsing)
     │   │   ├── drawio-pane.ts   # Draw.io editor pane (iframe embed)
     │   │   ├── office-viewer-pane.ts  # Office document viewer pane (iframe route-backed)
     │   │   ├── csv-viewer-pane.ts     # CSV/TSV table viewer pane
@@ -142,6 +147,8 @@ The web UI uses a separate **pane extension** system for content-area components
 | `image-viewer` | tabs | `web/src/panes/image-viewer-pane.ts` |
 | `workspace-preview` | tabs | `web/src/panes/workspace-preview-pane.ts` |
 | `terminal` | dock | `web/src/panes/terminal-pane.ts` |
+| `terminal-tab` | tabs | `web/src/panes/terminal-pane.ts` |
+| `vnc-viewer` | tabs | `web/src/panes/vnc-pane.ts` |
 
 The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, 889 KB) on first file open. Specialized viewers (draw.io, office, CSV, PDF, image) use route-backed iframes served through the extension route system, and their workspace-preview affordances now normalize around explicit “Edit/Open in Tab” promotion actions. See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract and [extension-ui-contract.md](extension-ui-contract.md) for how pane extensions fit alongside timeline-native UI and the lower-level `extension_ui_*` bridge.
 
@@ -161,11 +168,14 @@ Page load
   │   │   ├── pane-types.ts ────────── contracts (types only, zero runtime)
   │   │   ├── pane-registry.ts ─────── PaneRegistry singleton
   │   │   ├── editor-loader.ts ─────── LazyEditorInstance proxy + editorPaneExtension
-  │   │   ├── terminal-pane.ts ─────── TerminalPaneExtension (feature-flagged)
+  │   │   ├── terminal-pane.ts ─────── Terminal dock/tab pane extension (feature-flagged)
+  │   │   ├── vnc-pane.ts ──────────── VNC pane extension (tabs)
   │   │   └── tab-store.ts ────────── TabStore singleton
   │   │
   │   ├── paneRegistry.register(editorPaneExtension) ← loader proxy, NOT real editor
-  │   └── paneRegistry.register(terminalPaneExtension) ← if feature flag on
+  │   ├── paneRegistry.register(terminalPaneExtension) ← if terminal feature is enabled
+  │   ├── paneRegistry.register(terminalTabPaneExtension) ← adds `piclaw://terminal`
+  │   └── paneRegistry.register(vncPaneExtension) ← enables `piclaw://vnc`
   │
   └── First file opened:
       ├── paneRegistry.resolve({path}) → editorPaneExtension (loader)
@@ -201,6 +211,9 @@ Page load
 - The **code editor** is a standalone pane extension (`extensions/editor/`) using CodeMirror 6 directly (no Preact wrapper). It opens in the tabbed content area when a file is clicked in the explorer. Supports syntax highlighting for 12 languages, search/replace, line wrapping, dirty tracking, Cmd+S save, vim mode, whitespace toggle, and accent-aware theming. The editor bundle is lazy-loaded on first file open. Backend endpoints: `GET /workspace/file?mode=edit` (full content up to 256 KB) and `PUT /workspace/file` (save).
 - **Adaptive Cards** are rendered in the web timeline from `content_blocks` using the vendored Microsoft `adaptivecards` SDK. Action handling routes through `POST /agent/card-action`; submissions are also persisted as `adaptive_card_submission` blocks so the timeline can render compact receipts instead of raw text fallbacks. Finished cards are re-rendered with their submitted values populated, inputs locked read-only, and a concise state banner. Agent-owned cards should be posted through the internal `send_adaptive_card` tool (or equivalent agent-response message path) rather than a local slash command.
 - The **tab strip** provides multi-file editing with dirty indicators, pin support, MRU-based tab switching, context menus (Close / Close Others / Close All / Pin / Preview), and keyboard shortcuts (Ctrl+Tab, Ctrl+W).
+- Operational remote surfaces:
+  - `piclaw://terminal` opens the terminal tab (`TERMINAL_TAB_PATH`) via `GET /terminal/session` and `GET /terminal/ws`/`WebSocket` upgrades.
+  - `piclaw://vnc[/<target>]` opens the VNC pane via `GET /vnc/session` and `GET /vnc/ws`/`WebSocket` upgrades, then brokers raw TCP to the target (`WebSocketTcpBridge` + `VncSessionService`).
 - **Markdown preview** is available for `.md` / `.mdx` / `.markdown` files via the tab context menu → Preview. Shows a live split-view with a resizable splitter.
 - **Message permalinks**: clicking a timeline timestamp inserts a `message:{id}` pill in the compose box; Ctrl+Click copies a shareable URL; clicking a reference scrolls to and highlights the target.
 - **Multi-turn threading**: when the agent produces multiple turns in a single response, subsequent turns are stored with a `thread_id` pointing to the first turn's message. The UI renders threaded replies indented with a left border.

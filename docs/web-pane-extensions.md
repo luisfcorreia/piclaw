@@ -21,7 +21,9 @@ UI, and the lower-level `extension_ui_*` bridge, see
 | `pdf-viewer` | tabs | Inline PDF viewer. Workspace preview exposes an **Open in Tab** CTA. |
 | `image-viewer` | tabs | Inline image viewer with zoom. Workspace preview exposes an **Open in Tab** CTA. |
 | `workspace-preview` | tabs | Default workspace preview surface. Generic text previews keep the lightweight explorer-header editor action instead. |
-| `terminal` | dock | Authenticated terminal pane (feature-flagged). |
+| `terminal` | dock | Authenticated terminal pane (feature-flagged, default hidden to workspace actions if disabled). |
+| `terminal-tab` | tabs | Same terminal pane instance, opened via explicit tab path `piclaw://terminal`. |
+| `vnc-viewer` | tabs | VNC remote-display client at `piclaw://vnc` and `piclaw://vnc/<target>`. |
 
 ## Choosing the right surface
 
@@ -36,6 +38,88 @@ Prefer other surfaces when:
 
 - the interaction belongs in conversation history → use timeline messages or Adaptive Cards
 - the interaction is only a lightweight browser-session signal → use the `extension_ui_*` browser-event bridge
+
+## Terminal and VNC tabs
+
+Two built-ins are operational, non-file-backed tab surfaces:
+
+- `terminal-tab` (`piclaw://terminal`) — authenticated shell terminal
+- `vnc-viewer` (`piclaw://vnc[/<target>]`) — VNC remote display viewer
+
+Typical entry points:
+
+- Workspace context actions in `WorkspaceExplorer`:
+  - **Open terminal in tab**
+  - **Open VNC in tab**
+- Programmatic tab launching from host code: `openEditor(path)`, where `path` is
+  `TERMINAL_TAB_PATH` (`piclaw://terminal`) or `piclaw://vnc` / `piclaw://vnc/<encoded-target>`.
+
+They share the same pane host model (`openEditor(path)`), but route to very different backend services.
+
+### Terminal tab flow
+
+```mermaid
+flowchart TD
+    UI[Workspace menu / context menu] -->|Open terminal in tab| Open[openEditor(TERMINAL_TAB_PATH)]
+    Open --> Registry[PaneRegistry.resolve(path)]
+    Registry -->|priority 10000| TabExt[terminalTabPaneExtension]
+    TabExt -->|mount()| TerminalInstance[TerminalPaneInstance]
+    TerminalInstance -->|GET /terminal/session| Sess[/terminal/session]
+    Sess -->|enabled + ws_path| SocketInit[/terminal/ws]
+    SocketInit --> Upgrader[WebSocket upgrade /auth + CSRF checks]
+    Upgrader --> Service[TerminalSessionService
+resolveOwnerFromRequest]
+    Service --> Pty[spawn `/usr/bin/script -qf -c /usr/bin/bash -i`]
+    Pty -->|stdout/stderr| Service
+    Service -->|JSON output/resize| TerminalInstance
+    TerminalInstance -->|ghostty-web render| RemoteUI[Canvas-like terminal UI]
+```
+
+**Implementation choices**
+
+- Uses a separate dock extension (`terminalPaneExtension`) for background terminal UX and a tab-capable extension (`terminalTabPaneExtension`) for explicit tab access.
+- WebSocket payload is JSON (`{ type: 'input' | 'resize' }`) with `type:'output'` and `type:'exit'` replies from backend.
+- PTY session state (process, socket clients, PTY path) is retained per web session token.
+- Resize is propagated as terminal columns/rows and mirrored into PTY via `ioctl(TIOCSWINSZ)` + SIGWINCH.
+- Terminal frontend is vendored `ghostty-web` with a light theme sync loop so the remote canvas follows web theme changes.
+
+### VNC tab flow
+
+```mermaid
+flowchart TD
+    User[User] -->|Open VNC in tab| OpenVnc[openEditor(VNC_TAB_PREFIX)]
+    OpenVnc --> Registry2[PaneRegistry.resolve(path)]
+    Registry2 -->|priority 9000| VncExt[vncPaneExtension]
+    VncExt --> VncInstance[VncPaneInstance]
+    VncInstance -->|GET /vnc/session?target=...| Sess2[/vnc/session]
+    Sess2 -->|target metadata + ws_path| SocketReq[/vnc/ws?target=...]
+    SocketReq --> Upgrader2[WebSocket upgrade + /auth + CSRF]
+    Upgrader2 --> VncService[VncSessionService
+resolveOwnerFromRequest]
+    VncService --> Bridge[WebSocketTcpBridge
+create TCP socket]
+    Bridge --> Target[(Remote VNC host:port)]
+    Target -->|RFB protocol bytes| VncInstance
+    VncInstance --> Decoder[VncRemoteDisplayProtocol + WASM decoder]
+    Decoder --> Canvas[Canvas framebuffer rendering]
+```
+
+**Implementation choices**
+
+- `vnc` pane is path-based (`piclaw://vnc`, `piclaw://vnc/<target>`); the target is parsed from the path.
+- VNC targets are resolved from:
+  1. `PICLAW_WEB_VNC_TARGETS` / `PICLAW_VNC_TARGETS` allow-list (JSON array or map)
+  2. Optional direct-connect when `PICLAW_WEB_VNC_ALLOW_DIRECT` / `PICLAW_VNC_ALLOW_DIRECT` is enabled
+- `WebSocketTcpBridge` is protocol-agnostic:
+  - forwards binary traffic between websocket clients and TCP sockets
+  - keeps per-connection byte counters for UI metrics
+  - handles `ping`/`pong` as control plane messages
+- Client render path supports remote-framebuffer negotiation events (`protocol-version`, `security-types`, `display-init`, `framebuffer-update`) and scales pixels into a contained canvas.
+- Input is mapped through dedicated utilities:
+  - `vnc-input.ts` for pointer/key encoding
+  - `remote-display-socket.ts` for transport metrics and control message parsing
+  - `remote-display-decoder.ts` for optional AssemblyScript/WASM fast-path raw decoding (JS fallback exists)
+- A fallback is attempted when no paintable frame appears quickly after `display-init` (RAW encoding request), which helps compatibility with servers that do not send the preferred encoding set.
 
 ## Concepts
 
@@ -241,6 +325,8 @@ Verify no leaked listeners or DOM nodes after pane lifecycle:
 | `image-viewer` | tabs | 10 | `web/src/panes/image-viewer-pane.ts` | Inline image viewer with zoom for common image formats; workspace preview promotes via **Open in Tab**. |
 | `workspace-preview` | tabs | — | `web/src/panes/workspace-preview-pane.ts` | Default workspace preview surface for the explorer sidebar; generic text previews rely on the explorer header's editor action instead of pane-body CTA duplication. |
 | `terminal` | dock | — | `web/src/panes/terminal-pane.ts` | Terminal dock pane. Feature-flagged behind `PICLAW_WEB_TERMINAL_ENABLED`. |
+| `terminal-tab` | tabs | 10_000 | `web/src/panes/terminal-pane.ts` | Same terminal implementation opened by explicit path `piclaw://terminal` from the pane registry. |
+| `vnc-viewer` | tabs | 9_000 | `web/src/panes/vnc-pane.ts` | VNC viewer tab (`piclaw://vnc`, optional `/target`) with allowlist and optional direct-connect mode. |
 
 ### Editor extension architecture
 

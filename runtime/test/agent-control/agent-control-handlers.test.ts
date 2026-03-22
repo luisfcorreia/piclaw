@@ -6,15 +6,28 @@
  * and error/success result formatting.
  */
 
-import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, truncateSync, writeFileSync } from "fs";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { existsSync, mkdirSync, readdirSync, rmSync, truncateSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { withChatContext } from "../../src/core/chat-context.js";
 import { getTestWorkspace, setEnv } from "../helpers.js";
 
 let restoreEnv: (() => void) | null = null;
 
+function cleanupRotatedSessionArtifacts(): void {
+  const cwd = process.cwd();
+  for (const entry of readdirSync(cwd)) {
+    if (!entry.startsWith("rotated-") || !entry.endsWith(".jsonl")) continue;
+    rmSync(join(cwd, entry), { force: true });
+  }
+}
+
+beforeEach(() => {
+  cleanupRotatedSessionArtifacts();
+});
+
 afterEach(() => {
+  cleanupRotatedSessionArtifacts();
   restoreEnv?.();
   restoreEnv = null;
 });
@@ -40,7 +53,7 @@ class RichSession {
   pendingMessageCount = 0;
   sessionId = "session-1";
   sessionName = "";
-  sessionFile = "session.json";
+  sessionFile = "./session.json";
   isBashRunning = false;
   abortCalls = 0;
   abortRetryCalls = 0;
