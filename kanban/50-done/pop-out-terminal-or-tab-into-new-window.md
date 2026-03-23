@@ -1,10 +1,10 @@
 ---
 id: pop-out-terminal-or-tab-into-new-window
 title: Allow opening the terminal or a given tab in a pop-out window
-status: doing
+status: done
 priority: medium
 created: 2026-03-15
-updated: 2026-03-22
+updated: 2026-03-23
 target_release: next
 estimate: M
 risk: medium
