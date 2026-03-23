@@ -36,7 +36,7 @@ function matchesOriginCandidate(originUrl, expectedProto, expectedHost) {
 }
 const SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
-    "X-Frame-Options": "DENY",
+    "X-Frame-Options": "SAMEORIGIN",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     // Cross-origin isolation headers (COOP/COEP) are NOT set globally.
@@ -47,7 +47,7 @@ const SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
         "img-src 'self' https: http: data: blob:; font-src 'self' data:; connect-src 'self'; " +
         "frame-src 'self'; " +
-        "frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        "frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
 };
 /** Clone a response and append baseline security headers. */
 export function withSecurityHeaders(response, isTls) {
