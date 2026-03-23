@@ -1,10 +1,10 @@
 ---
 id: migrate-vnc-decoding-to-full-wasm-pipeline
 title: Migrate VNC decoding pipeline to a fuller WASM backend
-status: next
+status: done
 priority: high
 created: 2026-03-22
-updated: 2026-03-22
+updated: 2026-03-23
 target_release: next
 estimate: XL
 risk: high
