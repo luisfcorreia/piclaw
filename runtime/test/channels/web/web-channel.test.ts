@@ -2417,10 +2417,12 @@ test("recoverInflightRuns rolls back cursor and retries the run", async () => {
   });
 
   // Simulate a crash mid-run: inflight marker exists, cursor advanced.
+  // Use a stale startedAt (> MAX_INFLIGHT_AGE) to trigger rollback.
+  const staleStartedAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
   db.beginChatRun("web:default", ts, {
     prevTs: "",
     messageId,
-    startedAt: ts,
+    startedAt: staleStartedAt,
   });
 
   let ran = 0;
@@ -2524,7 +2526,7 @@ test("recoverInflightRuns ignores older terminal replies before the inflight sta
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
 
-  const baseMs = Date.now() - 5000;
+  const baseMs = Date.now() - 31 * 60 * 1000;
   const prevUserTs = new Date(baseMs).toISOString();
   const prevReplyTs = new Date(baseMs + 1000).toISOString();
   const currentUserTs = new Date(baseMs + 2000).toISOString();

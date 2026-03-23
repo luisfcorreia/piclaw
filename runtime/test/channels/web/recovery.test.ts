@@ -62,13 +62,9 @@ describe("web recovery helpers", () => {
       { chatJid: "web:2", afterTs: "2026-01-01T00:04:15Z" },
       { chatJid: "web:3", afterTs: "2026-01-01T00:04:30Z" },
     ]);
-    expect(cleared).toEqual(["web:1", "web:2"]);
-    expect(rolledBack).toEqual([{ chatJid: "web:3", prevTs: "t3" }]);
-    expect(enqueued).toHaveLength(1);
-    expect(enqueued[0].key).toBe("resume:web:3");
-
-    await enqueued[0].task();
-    expect(processed).toEqual([{ chatJid: "web:3", agentId: "default" }]);
+    expect(cleared).toEqual(["web:1", "web:2", "web:3"]);
+    expect(rolledBack).toEqual([]);
+    expect(enqueued).toHaveLength(0);
   });
 
   test("recoverInflightRuns rolls back stale inflight markers to preserve pending turns", () => {
