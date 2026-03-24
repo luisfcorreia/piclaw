@@ -218,6 +218,9 @@ describe("messages tool extension", () => {
     expect(result.details.messages[0].context_before).toHaveLength(2);
     expect(result.details.messages[0].context_after).toHaveLength(1);
     expect(result.details.messages[0].context_before[0].created_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(result.content[0].text).toContain("target message body");
+    expect(result.content[0].text).toContain("before message two");
+    expect(result.content[0].text).toContain("after message one");
   });
 
   test("get missing row_ids are reported", async () => {

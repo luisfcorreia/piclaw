@@ -413,9 +413,13 @@ function executeGet(params: MessagesParams, defaultChat: string): AgentToolResul
 
   const output = messages
     .map((item) => {
-      const header = `- [${item.message.rowid}] ${item.message.sender_name || item.message.sender}`;
-      const before = item.context_before.map((r) => `  b${r.rowid}: ${r.sender_name || r.sender}`).join("\n");
-      const after = item.context_after.map((r) => `  a${r.rowid}: ${r.sender_name || r.sender}`).join("\n");
+      const header = `- [${item.message.rowid}] ${item.message.sender_name || item.message.sender}: ${item.message.content}`;
+      const before = item.context_before
+        .map((r) => `  [${r.rowid}] ${r.sender_name || r.sender}: ${r.content}`)
+        .join("\n");
+      const after = item.context_after
+        .map((r) => `  [${r.rowid}] ${r.sender_name || r.sender}: ${r.content}`)
+        .join("\n");
       const parts = [header];
       if (before) parts.push(`  before:\n${before}`);
       if (after) parts.push(`  after:\n${after}`);
