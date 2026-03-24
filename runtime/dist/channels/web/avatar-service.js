@@ -166,8 +166,13 @@ export async function ensureAvatarCache(kind, source) {
         return existing;
     }
     const loaded = await loadAvatarSource(sanitized);
-    if (!loaded)
+    if (!loaded) {
+        if (existing && existsSync(existing.file)) {
+            console.warn(`[avatar] Failed to refresh ${kind} avatar from ${sanitized}; keeping cached avatar from ${existing.source}`);
+            return existing;
+        }
         return null;
+    }
     const normalizedType = normalizeContentType(loaded.contentType);
     if (kind === "agent" && !isManifestIconType(normalizedType)) {
         console.warn(`[avatar] Agent avatar has content type "${normalizedType}" which is not valid for PWA manifest icons. ` +

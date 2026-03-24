@@ -20,7 +20,7 @@ function parsePasskeyAction(action) {
 function parseTotpAction(action) {
     if (!action)
         return undefined;
-    return action === "enrol" || action === "enroll" ? action : undefined;
+    return action === "enrol" || action === "enroll" || action === "reset" ? action : undefined;
 }
 function parseSearchScope(value) {
     if (!value)
@@ -214,13 +214,15 @@ export function parsePasskey(args, raw) {
         raw,
     };
 }
-/** Parse /totp arguments: action. */
+/** Parse /totp arguments: action [confirmation-code]. */
 export function parseTotp(args, raw) {
     const tokens = splitArgs(args);
     const action = parseTotpAction(tokens[0]?.toLowerCase());
+    const code = action === "reset" ? tokens.slice(1).join(" ").trim() || undefined : undefined;
     return {
         type: "totp",
         action,
+        code,
         raw,
     };
 }

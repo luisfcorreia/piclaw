@@ -179,7 +179,13 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
   }
 
   const loaded = await loadAvatarSource(sanitized);
-  if (!loaded) return null;
+  if (!loaded) {
+    if (existing && existsSync(existing.file)) {
+      console.warn(`[avatar] Failed to refresh ${kind} avatar from ${sanitized}; keeping cached avatar from ${existing.source}`);
+      return existing;
+    }
+    return null;
+  }
 
   const normalizedType = normalizeContentType(loaded.contentType);
   if (kind === "agent" && !isManifestIconType(normalizedType)) {

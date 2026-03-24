@@ -63,3 +63,9 @@ export function deleteExpiredWebSessions(now = new Date()) {
     const info = db.prepare("DELETE FROM web_sessions WHERE expires_at <= ?").run(nowIso);
     return Number(info.changes || 0);
 }
+/** Delete all web auth sessions and return number of removed records. */
+export function deleteAllWebSessions() {
+    const db = getDb();
+    const info = db.prepare("DELETE FROM web_sessions").run();
+    return Number(info.changes || 0);
+}

@@ -56,6 +56,10 @@ export class WebAuthGateway {
             json: this.deps.json,
         });
     }
+    /** Update the live TOTP secret used by runtime auth checks. */
+    setTotpSecret(secret) {
+        this.config.totpSecret = (secret || "").trim();
+    }
     getClientKey(req) {
         return getRequestClientKey(req);
     }

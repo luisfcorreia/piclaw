@@ -15,21 +15,39 @@ import { getTestWorkspace, setEnv } from "../helpers.js";
 let restoreEnv: (() => void) | null = null;
 
 // ── Config fixture ──────────────────────────────────────────────
-// Tests that call applyControlCommand with agent_avatar / user_github
-// write to the real PICLAW_CONFIG_PATH. Save and restore around all tests.
-const CONFIG_PATH = resolve(process.env.PICLAW_WORKSPACE || "/workspace", ".piclaw", "config.json");
+// Tests that exercise config-writing handlers must never touch the real
+// workspace config. Resolve the path lazily from the current test env and
+// hard-fail if it ever points at /workspace/.piclaw/config.json.
 let savedConfig: string | null = null;
+let savedConfigPath: string | null = null;
+
+function getConfigPath(): string {
+  const configPath = resolve(process.env.PICLAW_WORKSPACE || "/workspace", ".piclaw", "config.json");
+  if (configPath === "/workspace/.piclaw/config.json") {
+    throw new Error("Refusing to use the production config path in tests");
+  }
+  return configPath;
+}
 
 function saveConfig() {
-  try { savedConfig = readFileSync(CONFIG_PATH, "utf-8"); } catch { savedConfig = null; }
+  const configPath = getConfigPath();
+  savedConfigPath = configPath;
+  try { savedConfig = readFileSync(configPath, "utf-8"); } catch { savedConfig = null; }
 }
 
 function restoreConfig() {
+  if (!savedConfigPath) {
+    savedConfig = null;
+    return;
+  }
   if (savedConfig !== null) {
-    mkdirSync(dirname(CONFIG_PATH), { recursive: true });
-    writeFileSync(CONFIG_PATH, savedConfig, "utf-8");
+    mkdirSync(dirname(savedConfigPath), { recursive: true });
+    writeFileSync(savedConfigPath, savedConfig, "utf-8");
+  } else {
+    rmSync(savedConfigPath, { force: true });
   }
   savedConfig = null;
+  savedConfigPath = null;
 }
 
 function cleanupRotatedSessionArtifacts(): void {

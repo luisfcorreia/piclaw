@@ -8,6 +8,7 @@
  */
 
 import { extname, resolve } from "path";
+import { statSync } from "fs";
 
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const DOCS_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "docs");
@@ -25,6 +26,40 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
   ".wasm": "application/wasm",
 };
+
+const APP_ASSET_VERSION_PLACEHOLDER = "__APP_ASSET_VERSION__";
+const LOGIN_ASSET_VERSION_PLACEHOLDER = "__LOGIN_ASSET_VERSION__";
+const APP_VERSION_FILES = ["dist/app.bundle.js", "dist/app.bundle.css"];
+const LOGIN_VERSION_FILES = ["dist/login.bundle.js", "dist/login.bundle.css"];
+
+function readAssetVersion(relPaths: string[]): string {
+  let newestMtimeMs = 0;
+  for (const relPath of relPaths) {
+    const filePath = resolve(STATIC_DIR, relPath);
+    try {
+      const stats = statSync(filePath);
+      newestMtimeMs = Math.max(newestMtimeMs, stats.mtimeMs || 0);
+    } catch {
+      // Ignore missing assets and fall back below.
+    }
+  }
+
+  if (newestMtimeMs > 0) {
+    return Math.floor(newestMtimeMs).toString(36);
+  }
+
+  return "dev";
+}
+
+function renderHtmlTemplate(relPath: string, html: string): string {
+  if (relPath === "index.html") {
+    return html.replaceAll(APP_ASSET_VERSION_PLACEHOLDER, readAssetVersion(APP_VERSION_FILES));
+  }
+  if (relPath === "login.html") {
+    return html.replaceAll(LOGIN_ASSET_VERSION_PLACEHOLDER, readAssetVersion(LOGIN_VERSION_FILES));
+  }
+  return html;
+}
 
 /** Serve a static file from the web/static directory. */
 export async function serveStatic(relPath: string, notFound: () => Response): Promise<Response> {
@@ -48,6 +83,16 @@ export async function serveStatic(relPath: string, notFound: () => Response): Pr
       : (relPath === "dist" || relPath.startsWith("dist/") || relPath.includes("/dist/"))
         ? "no-cache, no-store, must-revalidate"
         : "public, max-age=3600";
+
+  if (ext === ".html") {
+    const rendered = renderHtmlTemplate(relPath, await file.text());
+    return new Response(rendered, {
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": cacheControl,
+      },
+    });
+  }
 
   return new Response(file, {
     headers: {

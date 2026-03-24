@@ -15,7 +15,7 @@
 import { initTheme } from "@mariozechner/pi-coding-agent";
 import { WebauthnChallengeTracker } from "./web/webauthn-challenges.js";
 import { TotpFailureTracker } from "./web/totp-failure-tracker.js";
-import { ASSISTANT_AVATAR, ASSISTANT_NAME, USER_AVATAR, USER_AVATAR_BACKGROUND, USER_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT, WEB_TLS_CERT, WEB_TLS_KEY, WEB_SESSION_TTL, WEB_TOTP_SECRET, WEB_INTERNAL_SECRET, WEB_PASSKEY_MODE, WEB_TERMINAL_ENABLED, DEBUG_CARD_SUBMISSIONS, } from "../core/config.js";
+import { ASSISTANT_AVATAR, ASSISTANT_NAME, USER_AVATAR, USER_AVATAR_BACKGROUND, USER_NAME, WEB_HOST, WEB_IDLE_TIMEOUT, WEB_PORT, WEB_TLS_CERT, WEB_TLS_KEY, WEB_SESSION_TTL, WEB_TOTP_SECRET, WEB_TOTP_WINDOW, WEB_INTERNAL_SECRET, WEB_PASSKEY_MODE, WEB_TERMINAL_ENABLED, DEBUG_CARD_SUBMISSIONS, setWebTotpSecret, } from "../core/config.js";
 import { startWorkspaceWatcher } from "./web/handlers/workspace.js";
 import { RequestRouterService } from "./web/request-router-service.js";
 import { checkCsrfOrigin } from "./web/http/security.js";
@@ -24,7 +24,7 @@ import { handleAgentMessage as handleAgentMessageRequest, processChat as process
 import { SseHub } from "./web/sse-hub.js";
 import { UiBridge } from "./web/ui-bridge.js";
 import { ResponseService } from "./web/http/response-service.js";
-import { deleteMessageByRowId, replaceMessageContent, getChatBranchByChatJid, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, purgeExpiredLinkPreviewImageCache, setDeferredQueuedFollowups, } from "../db.js";
+import { createWebSession, DEFAULT_WEB_USER_ID, deleteAllWebSessions, deleteMessageByRowId, replaceMessageContent, getChatBranchByChatJid, getChatCursor, getDb, getInflightMessageId, getMessageByRowId, getMessageThreadRootIdById, getDeferredQueuedFollowups, purgeExpiredLinkPreviewImageCache, setDeferredQueuedFollowups, } from "../db.js";
 import { WebChannelState } from "./web/channel-state.js";
 import { AgentStatusStore } from "./web/agent-status-store.js";
 import { FollowupPlaceholderStore } from "./web/followup-placeholders.js";
@@ -52,10 +52,16 @@ import { WebAuthGateway } from "./web/auth-gateway.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
 import { RemoteInteropService } from "../remote/service.js";
+import { randomSessionToken, verifyTotp } from "./web/auth.js";
+import { hashTotpSecret, parseTotpCardToken } from "./web/totp-card.js";
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
 const LINK_PREVIEW_CACHE_PURGE_INTERVAL_MS = 12 * 60 * 60 * 1000;
+function getWebSessionTtlSeconds() {
+    const rawTtl = Number.isFinite(WEB_SESSION_TTL) ? WEB_SESSION_TTL : 0;
+    return Math.max(60, rawTtl || 0);
+}
 function formatSseEvent(eventType, data) {
     return `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -1013,6 +1019,7 @@ export class WebChannel {
         if (!normalized.postId || normalized.postId <= 0) {
             return this.json({ error: "Missing or invalid post_id" }, 400);
         }
+        const sourcePostId = normalized.postId;
         if (!normalized.cardId) {
             return this.json({ error: "Missing or invalid card_id" }, 400);
         }
@@ -1025,7 +1032,7 @@ export class WebChannel {
         if (normalized.actionType !== "Action.Submit") {
             return this.json({ error: `Unsupported action type: ${normalized.actionType}` }, 400);
         }
-        const sourceInteraction = getMessageByRowId(chatJid, normalized.postId);
+        const sourceInteraction = getMessageByRowId(chatJid, sourcePostId);
         if (!sourceInteraction) {
             return this.json({ error: "Source post not found" }, 404);
         }
@@ -1053,27 +1060,36 @@ export class WebChannel {
         const submissionText = buildAdaptiveCardSubmissionText(normalized.actionTitle, normalized.cardId, sanitizedSubmissionData);
         const submissionBlock = buildAdaptiveCardSubmitBlock({
             cardId: normalized.cardId,
-            sourcePostId: normalized.postId,
+            sourcePostId,
             title: normalized.actionTitle || undefined,
             data: sanitizedSubmissionData,
             submittedAt,
         });
-        // ── Login flow cards: handle without agent ────────────────
+        // ── Login/TOTP flow cards: handle without agent ───────────
+        const rawSubmissionData = normalized.actionData && typeof normalized.actionData === "object"
+            ? normalized.actionData
+            : null;
         const submissionData = sanitizedSubmissionData;
+        const updateSourceCard = (contentBlocks) => {
+            if (!contentBlocks)
+                return null;
+            const interaction = replaceMessageContent(chatJid, sourcePostId, sourceInteraction.data?.content || "", {
+                contentBlocks,
+                linkPreviews: Array.isArray(sourceInteraction.data?.link_previews) ? sourceInteraction.data.link_previews : undefined,
+                mediaIds: Array.isArray(sourceInteraction.data?.media_ids) ? sourceInteraction.data.media_ids : undefined,
+            });
+            if (interaction) {
+                this.interactionBroadcaster.broadcastInteractionUpdated(interaction);
+            }
+            return interaction;
+        };
         const loginIntents = new Set(["login-step1", "login-step1-method", "login-step2", "login-step3"]);
         const isLoginFlow = submissionData && typeof submissionData.intent === "string" && loginIntents.has(submissionData.intent);
         if (isLoginFlow) {
             // Update the source card to completed state (no separate user message needed)
             const updatedCardInteraction = submitBehavior === "keep_active"
                 ? null
-                : replaceMessageContent(chatJid, normalized.postId, sourceInteraction.data?.content || "", {
-                    contentBlocks: updatedCardBlocks,
-                    linkPreviews: Array.isArray(sourceInteraction.data?.link_previews) ? sourceInteraction.data.link_previews : undefined,
-                    mediaIds: Array.isArray(sourceInteraction.data?.media_ids) ? sourceInteraction.data.media_ids : undefined,
-                });
-            if (updatedCardInteraction) {
-                this.interactionBroadcaster.broadcastInteractionUpdated(updatedCardInteraction);
-            }
+                : updateSourceCard(updatedCardBlocks);
             // Route through applyControlCommand to access authStorage/modelRegistry
             const routePrefix = submissionData.intent === "login-step1" ? "__step1 "
                 : submissionData.intent === "login-step1-method" ? "__step1method "
@@ -1093,11 +1109,81 @@ export class WebChannel {
             return this.json({
                 status: "ok",
                 card_updated: Boolean(updatedCardInteraction),
-                source_post_id: normalized.postId,
+                source_post_id: sourcePostId,
                 card_id: normalized.cardId,
                 submitted_at: submittedAt,
                 auth_result: authResult.status,
             }, 200);
+        }
+        const isTotpFlow = rawSubmissionData && rawSubmissionData.intent === "totp-confirm";
+        if (isTotpFlow) {
+            const safeSubmissionMeta = {
+                action_type: normalized.actionType,
+                title: normalized.actionTitle || undefined,
+                data: { intent: "totp-confirm" },
+                submitted_at: submittedAt,
+            };
+            const completeTotpCard = (state) => updateSourceCard(markAdaptiveCardState(sourceInteraction.data?.content_blocks, normalized.cardId, state, submittedAt, safeSubmissionMeta));
+            const sendTotpFeedback = async (message, state, setCookie) => {
+                await this.sendMessage(chatJid, message, { threadId });
+                const headers = { "Content-Type": "application/json" };
+                if (setCookie)
+                    headers["Set-Cookie"] = setCookie;
+                return new Response(JSON.stringify({
+                    status: "ok",
+                    source_post_id: sourcePostId,
+                    card_id: normalized.cardId,
+                    card_state: state,
+                    submitted_at: submittedAt,
+                    totp_result: state === "completed" ? "success" : "error",
+                    message,
+                }), { status: 200, headers });
+            };
+            const confirmationCode = typeof rawSubmissionData.confirmation_code === "string"
+                ? rawSubmissionData.confirmation_code.trim()
+                : "";
+            const token = typeof rawSubmissionData.__totp_token === "string"
+                ? rawSubmissionData.__totp_token.trim()
+                : "";
+            if (!confirmationCode) {
+                return await sendTotpFeedback("TOTP validation failed: missing confirmation code. No changes were made.", "active");
+            }
+            const parsedTotp = parseTotpCardToken(token);
+            if (!parsedTotp.ok) {
+                completeTotpCard("failed");
+                const message = parsedTotp.error === "expired"
+                    ? "TOTP validation failed: this confirmation card expired. No changes were made. Run /totp again."
+                    : "TOTP validation failed: this confirmation card is invalid. No changes were made. Run /totp again.";
+                return await sendTotpFeedback(message, "failed");
+            }
+            const activeSecret = (WEB_TOTP_SECRET || "").trim();
+            if (hashTotpSecret(activeSecret) !== parsedTotp.state.previousSecretHash) {
+                completeTotpCard("failed");
+                return await sendTotpFeedback("TOTP validation failed: active TOTP state changed since this card was created. No changes were made. Run /totp again.", "failed");
+            }
+            if (!verifyTotp(parsedTotp.state.secret, confirmationCode, WEB_TOTP_WINDOW)) {
+                return await sendTotpFeedback("TOTP validation failed: the code did not match the secret shown in the card. No changes were made.", "active");
+            }
+            let feedback = "TOTP confirmed.";
+            if (parsedTotp.state.flow === "setup") {
+                setWebTotpSecret(parsedTotp.state.secret);
+                this.authGateway.setTotpSecret(parsedTotp.state.secret);
+                feedback = "TOTP setup confirmed. Secret saved. This browser is now TOTP-authenticated.";
+            }
+            else if (parsedTotp.state.flow === "reset") {
+                setWebTotpSecret(parsedTotp.state.secret);
+                this.authGateway.setTotpSecret(parsedTotp.state.secret);
+                deleteAllWebSessions();
+                feedback = "TOTP reset confirmed. New secret saved. Existing web sessions were invalidated. This browser is now TOTP-authenticated.";
+            }
+            else {
+                feedback = "TOTP device validation succeeded. Existing secret unchanged. This browser is now TOTP-authenticated.";
+            }
+            completeTotpCard("completed");
+            const sessionToken = randomSessionToken();
+            createWebSession(sessionToken, DEFAULT_WEB_USER_ID, getWebSessionTtlSeconds(), "totp");
+            const setCookie = this.authGateway.createTotpContext().buildSessionCookie(sessionToken, req);
+            return await sendTotpFeedback(feedback, "completed", setCookie);
         }
         const forwardReq = new Request(`http://internal/agent/${DEFAULT_AGENT_ID}/message`, {
             method: "POST",
@@ -1130,7 +1216,7 @@ export class WebChannel {
         }
         const updatedInteraction = submitBehavior === "keep_active"
             ? null
-            : replaceMessageContent(chatJid, normalized.postId, sourceInteraction.data?.content || "", {
+            : replaceMessageContent(chatJid, sourcePostId, sourceInteraction.data?.content || "", {
                 contentBlocks: updatedCardBlocks,
                 linkPreviews: Array.isArray(sourceInteraction.data?.link_previews) ? sourceInteraction.data.link_previews : undefined,
                 mediaIds: Array.isArray(sourceInteraction.data?.media_ids) ? sourceInteraction.data.media_ids : undefined,
@@ -1142,7 +1228,7 @@ export class WebChannel {
         return this.json({
             ...responseBody,
             card_updated: Boolean(updatedInteraction),
-            source_post_id: normalized.postId,
+            source_post_id: sourcePostId,
             card_id: normalized.cardId,
             card_state: submitBehavior === "keep_active" ? "active" : (updatedInteraction ? targetState : null),
             submitted_at: submittedAt,

@@ -90,6 +90,16 @@ test("static helpers serve files and not-found", async () => {
   expect(okRes.status).toBe(200);
   expect(okRes.headers.get("Content-Type")).toContain("text/html");
   expect(okRes.headers.get("Cache-Control")).toBe("no-cache, no-store, must-revalidate");
+  const indexHtml = await okRes.text();
+  expect(indexHtml).not.toContain("__APP_ASSET_VERSION__");
+  expect(indexHtml).toMatch(/\/static\/dist\/app\.bundle\.js\?v=[a-z0-9]+/i);
+  expect(indexHtml).toMatch(/\/manifest\.json\?v=[a-z0-9]+/i);
+
+  const loginRes = await serveStatic("login.html", () => new Response("nope", { status: 404 }));
+  expect(loginRes.status).toBe(200);
+  const loginHtml = await loginRes.text();
+  expect(loginHtml).not.toContain("__LOGIN_ASSET_VERSION__");
+  expect(loginHtml).toMatch(/\/static\/dist\/login\.bundle\.js\?v=[a-z0-9]+/i);
 
   const appBundleRes = await serveStatic("dist/app.bundle.js", () => new Response("nope", { status: 404 }));
   expect(appBundleRes.status).toBe(200);
