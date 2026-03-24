@@ -152,25 +152,26 @@ function buildExperimentSummary(entries) {
     return { name, metricName, metricUnit, direction, totalRuns, kept, discarded, crashed, checksFailed, bestMetric, confidence, lastDescription };
 }
 // ── Timeline card helpers ───────────────────────────────────────
-function buildStatusCardBlock(experimentId, summary, status) {
+function buildStatusCardBlock(experimentId, summary, status, tmuxSession) {
     const confLabel = summary.confidence !== null
         ? (summary.confidence >= 2.0 ? `${summary.confidence.toFixed(1)}× ✅` : summary.confidence >= 1.0 ? `${summary.confidence.toFixed(1)}× ⚠️` : `${summary.confidence.toFixed(1)}× 🔴`)
         : "—";
     const bestLabel = summary.bestMetric !== null ? `${summary.bestMetric}${summary.metricUnit}` : "—";
     const statusEmoji = status === "running" ? "🔬" : status === "completed" ? "✅" : status === "failed" ? "❌" : "⏹️";
+    const facts = [
+        { title: "Status", value: status },
+        { title: "Runs", value: `${summary.totalRuns} (${summary.kept} kept, ${summary.discarded} discarded${summary.crashed ? `, ${summary.crashed} crashed` : ""})` },
+        { title: `Best ${summary.metricName}`, value: bestLabel },
+        { title: "Confidence", value: confLabel },
+        ...(summary.lastDescription ? [{ title: "Last", value: summary.lastDescription.slice(0, 80) }] : []),
+    ];
     const body = [
         { type: "TextBlock", text: `${statusEmoji} Autoresearch: ${summary.name}`, weight: "Bolder", size: "Medium" },
-        {
-            type: "FactSet",
-            facts: [
-                { title: "Status", value: status },
-                { title: "Runs", value: `${summary.totalRuns} (${summary.kept} kept, ${summary.discarded} discarded${summary.crashed ? `, ${summary.crashed} crashed` : ""})` },
-                { title: `Best ${summary.metricName}`, value: bestLabel },
-                { title: "Confidence", value: confLabel },
-                ...(summary.lastDescription ? [{ title: "Last", value: summary.lastDescription.slice(0, 80) }] : []),
-            ],
-        },
+        { type: "FactSet", facts },
     ];
+    if (tmuxSession && status === "running") {
+        body.push({ type: "TextBlock", text: `\`tmux attach -t ${tmuxSession}\``, spacing: "Small", isSubtle: true });
+    }
     const actions = [];
     if (status === "running") {
         actions.push({ type: "Action.Submit", title: "⏹ Stop Experiment", data: { intent: "autoresearch-stop", experiment_id: experimentId } });
@@ -189,9 +190,9 @@ function buildStatusCardBlock(experimentId, summary, status) {
         },
     };
 }
-function postStatusCard(experimentId, summary, status, chatJid = "web:default") {
+function postStatusCard(experimentId, summary, status, chatJid = "web:default", tmuxSession) {
     try {
-        const card = buildStatusCardBlock(experimentId, summary, status);
+        const card = buildStatusCardBlock(experimentId, summary, status, tmuxSession);
         const fallback = `Autoresearch ${summary.name}: ${summary.totalRuns} runs, best ${summary.metricName}: ${summary.bestMetric !== null ? `${summary.bestMetric}${summary.metricUnit}` : "—"}`;
         postMessagesToolMessage({
             action: "post",
@@ -408,7 +409,7 @@ async function startAutoresearch(params, broadcastEvent) {
                 });
                 // Post timeline card updates on milestones: every 5 runs or on new best
                 if (summary.totalRuns % 5 === 0 || entry.status === "keep") {
-                    postStatusCard(activeExperiment.id, summary, "running");
+                    postStatusCard(activeExperiment.id, summary, "running", "web:default", activeExperiment.tmuxSession);
                 }
             }
         }
@@ -428,7 +429,7 @@ async function startAutoresearch(params, broadcastEvent) {
     // Post initial timeline status card
     const initialSummary = buildExperimentSummary([]);
     initialSummary.name = params.prompt.slice(0, 80);
-    postStatusCard(id, initialSummary, "running");
+    postStatusCard(id, initialSummary, "running", "web:default", tmuxSession);
     return buildResult(parts.join("\n"), {
         experiment_id: id,
         tmux_session: tmuxSession,
