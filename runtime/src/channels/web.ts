@@ -1412,6 +1412,53 @@ export class WebChannel implements WebChannelLike {
 
     const isTotpFlow = rawSubmissionData && rawSubmissionData.intent === "totp-confirm";
 
+    // ── Autoresearch launch card action (model picker) ──────────
+    const isAutoresearchLaunch = rawSubmissionData && rawSubmissionData.intent === "autoresearch-launch";
+    if (isAutoresearchLaunch) {
+      updateSourceCard(
+        markAdaptiveCardState(
+          sourceInteraction.data?.content_blocks,
+          normalized.cardId,
+          "completed",
+          submittedAt,
+          { action_type: normalized.actionType, title: "Launch", data: { intent: "autoresearch-launch" }, submitted_at: submittedAt },
+        ),
+      );
+
+      const selectedModel = typeof rawSubmissionData.model === "string" ? rawSubmissionData.model.trim() : "";
+      if (!selectedModel) {
+        await this.sendMessage(chatJid, "No model selected.", { threadId });
+        return this.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
+      }
+
+      try {
+        const { consumePendingLaunch } = await import("../extensions/autoresearch-supervisor.js");
+        const pending = consumePendingLaunch();
+        if (!pending) {
+          await this.sendMessage(chatJid, "No pending experiment launch found. Use start_autoresearch to set one up.", { threadId });
+          return this.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
+        }
+
+        // Trigger the actual launch by sending the command to the agent
+        await this.sendMessage(chatJid, `Launching with model **${selectedModel}**…`, { threadId });
+
+        // Use the agent tool directly
+        const { startAutoresearchFromCard } = await import("../extensions/autoresearch-supervisor.js");
+        const result = await startAutoresearchFromCard({
+          project_dir: pending.project_dir,
+          prompt: pending.prompt,
+          model: selectedModel,
+          max_iterations: pending.max_iterations,
+        });
+        await this.sendMessage(chatJid, result, { threadId });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await this.sendMessage(chatJid, `Failed to launch experiment: ${msg}`, { threadId });
+      }
+
+      return this.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
+    }
+
     // ── Autoresearch stop card action ──────────────────────────
     const isAutoresearchStop = rawSubmissionData && rawSubmissionData.intent === "autoresearch-stop";
     if (isAutoresearchStop) {

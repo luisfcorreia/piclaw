@@ -319,6 +319,56 @@ const StopSchema = Type.Object({
 
 const StatusSchema = Type.Object({});
 
+// ── Pending launch (for model picker card flow) ─────────────────
+
+interface PendingLaunch {
+  project_dir: string;
+  prompt: string;
+  max_iterations?: number;
+}
+
+let pendingLaunch: PendingLaunch | null = null;
+
+export function getPendingLaunch(): PendingLaunch | null {
+  return pendingLaunch;
+}
+
+export function consumePendingLaunch(): PendingLaunch | null {
+  const launch = pendingLaunch;
+  pendingLaunch = null;
+  return launch;
+}
+
+function buildModelPickerCard(
+  models: Array<{ label: string; provider: string; id: string }>,
+  currentModel: string | null,
+): Record<string, unknown> {
+  const choices = models.map((m) => ({ title: m.label, value: m.label }));
+  const defaultValue = currentModel && choices.find((c) => c.value === currentModel)
+    ? currentModel
+    : choices[0]?.value || "";
+
+  return {
+    type: "adaptive_card",
+    card_id: `autoresearch-model-pick-${Date.now()}`,
+    schema_version: "1.5",
+    state: "active",
+    fallback_text: "Select a model for the autoresearch sub-agent.",
+    payload: {
+      type: "AdaptiveCard",
+      version: "1.5",
+      body: [
+        { type: "TextBlock", text: "🔬 Autoresearch — Select Model", weight: "Bolder", size: "Medium" },
+        { type: "TextBlock", text: "Choose which model the sub-agent should use for the experiment loop.", wrap: true, isSubtle: true },
+        { type: "Input.ChoiceSet", id: "model", style: "compact", choices, value: defaultValue },
+      ],
+      actions: [
+        { type: "Action.Submit", title: "Launch Experiment →", data: { intent: "autoresearch-launch" } },
+      ],
+    },
+  };
+}
+
 // ── Tool implementations ────────────────────────────────────────
 
 function buildResult(text: string, details: Record<string, unknown> = {}): AgentToolResult<Record<string, unknown>> {
@@ -611,6 +661,18 @@ const HINT = [
   "The sub-agent runs pi with the upstream pi-autoresearch extension. You can also view the TUI dashboard by opening the tmux session in the terminal pane.",
 ].join("\n");
 
+/**
+ * Card-action entry point for launching an experiment from a model picker card.
+ * Returns a human-readable result message.
+ */
+export async function startAutoresearchFromCard(
+  params: { project_dir: string; prompt: string; model?: string; max_iterations?: number },
+): Promise<string> {
+  const noop = () => {};
+  const result = await startAutoresearch(params, noop);
+  return result.content[0]?.type === "text" ? (result.content[0] as { text: string }).text : "Launched.";
+}
+
 export const autoresearchSupervisor: ExtensionFactory = (pi: ExtensionAPI) => {
   // Broadcast helper — will be wired to web channel SSE if available
   let broadcastEvent: (type: string, data: unknown) => void = () => {};
@@ -633,7 +695,44 @@ export const autoresearchSupervisor: ExtensionFactory = (pi: ExtensionAPI) => {
     description: "Launch an autonomous experiment loop. Spawns a headless pi sub-agent in a tmux session with the pi-autoresearch extension. The sub-agent optimizes the target metric autonomously.",
     promptSnippet: "start_autoresearch: launch an autonomous experiment loop in a tmux sub-agent.",
     parameters: StartSchema,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params, _signal, _update, ctx) {
+      // If no model specified, show a model picker card and defer launch
+      if (!params.model) {
+        const models: Array<{ label: string; provider: string; id: string }> = [];
+        try {
+          ctx.modelRegistry.refresh();
+          const seen = new Set<string>();
+          for (const m of ctx.modelRegistry.getAvailable()) {
+            if (!m?.provider || !m?.id) continue;
+            const label = `${m.provider}/${m.id}`;
+            if (seen.has(label)) continue;
+            seen.add(label);
+            models.push({ label, provider: m.provider, id: m.id });
+          }
+        } catch { /* ok */ }
+
+        if (models.length === 0) {
+          return buildResult("❌ No models available. Configure a model provider first (/login).");
+        }
+
+        const currentModel = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : null;
+        pendingLaunch = {
+          project_dir: params.project_dir,
+          prompt: params.prompt,
+          max_iterations: params.max_iterations,
+        };
+        const card = buildModelPickerCard(models, currentModel);
+        postMessagesToolMessage({
+          action: "post",
+          type: "agent",
+          chat_jid: "web:default",
+          content: "Select a model for the autoresearch experiment.",
+          content_blocks: [card],
+        }, "web:default");
+
+        return buildResult("Model picker posted. Select a model and click Launch to start the experiment.", { pending: true });
+      }
+
       return startAutoresearch(params, broadcastEvent);
     },
   });
