@@ -59,13 +59,13 @@ launch time. A markdown experiment report is generated on stop/completion.
 
 - [x] Vendored extension + skill files committed (no modifications to upstream)
 - [ ] Model picker Adaptive Card shown at launch (defaults to current model)
-- [ ] pi sub-agent launches in a named tmux session with autoresearch loaded
-- [ ] Git repo auto-initialized if none exists in target directory
-- [ ] autoresearch.jsonl tailed every 2s with results broadcast via SSE
-- [ ] Timeline Adaptive Card shows: run count, best metric, confidence, status
+- [x] pi sub-agent launches in a named tmux session with autoresearch loaded
+- [x] Git repo auto-initialized if none exists in target directory
+- [x] autoresearch.jsonl tailed every 2s with results broadcast via SSE
+- [x] Timeline Adaptive Card shows: run count, best metric, confidence, status
 - [ ] Stop button on card sends SIGINT to tmux session
-- [ ] Markdown experiment report generated on stop/completion
-- [ ] Running tmux session re-detected on piclaw restart (resume tailing)
+- [x] Markdown experiment report generated on stop/completion
+- [x] Running tmux session re-detected on piclaw restart (resume tailing)
 - [ ] Manual end-to-end test passes
 
 ## Implementation Slices
