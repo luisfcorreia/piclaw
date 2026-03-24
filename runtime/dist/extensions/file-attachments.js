@@ -198,10 +198,47 @@ const ATTACHMENT_HINT = [
     "Use export_attachment to save an attachment into /workspace/tmp for shell tools.",
 ].join("\n");
 // ── Factory ───────────────────────────────────────────────
+/** MIME types Claude's API accepts for image content blocks. */
+const VALID_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 /** Extension factory that registers the attach_file tool. */
 export const fileAttachments = (pi) => {
     pi.on("before_agent_start", async (event) => {
         return { systemPrompt: `${event.systemPrompt}\n\n${ATTACHMENT_HINT}` };
+    });
+    // Sanitize session context before each API call: strip image blocks with
+    // invalid MIME types that would cause permanent 400 errors. This recovers
+    // poisoned sessions automatically without manual JSONL editing.
+    pi.on("context", async (event) => {
+        let modified = false;
+        const sanitizeBlocks = (blocks) => {
+            return blocks.map((block) => {
+                if (block?.type === "image") {
+                    const mime = block.mimeType || block.source?.media_type || "";
+                    if (typeof mime === "string" && mime && !VALID_IMAGE_MIMES.has(mime)) {
+                        modified = true;
+                        return { type: "text", text: `[Invalid image block removed: ${mime}]` };
+                    }
+                }
+                if (block?.type === "tool_result" && Array.isArray(block.content)) {
+                    const cleaned = sanitizeBlocks(block.content);
+                    if (modified)
+                        return { ...block, content: cleaned };
+                }
+                return block;
+            });
+        };
+        const messages = event.messages.map((msg) => {
+            if (!Array.isArray(msg?.content))
+                return msg;
+            const prevModified = modified;
+            const cleaned = sanitizeBlocks(msg.content);
+            return modified !== prevModified ? { ...msg, content: cleaned } : msg;
+        });
+        if (modified) {
+            console.log("[file-attachments] Stripped invalid image blocks from session context to prevent API errors");
+            return { messages };
+        }
+        return {};
     });
     pi.registerTool({
         name: "attach_file",
