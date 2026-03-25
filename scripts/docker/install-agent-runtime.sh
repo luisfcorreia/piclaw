@@ -99,7 +99,11 @@ install_bun_release() {
   local expected_checksum
   local actual_checksum
 
-  trap 'rm -rf "$temp_dir"' RETURN
+  # Clean up temp_dir on return. Use a cleanup function so the trap
+  # does not leak $temp_dir into the caller's scope (bash RETURN traps
+  # can propagate with set -u and cause "unbound variable" crashes).
+  _bun_release_cleanup() { rm -rf "$temp_dir"; trap - RETURN; }
+  trap '_bun_release_cleanup' RETURN
 
   if ! curl -fsSL --fail "$url" -o "$bundle"; then
     echo "Unable to download Bun archive: $url" >&2
