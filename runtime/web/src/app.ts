@@ -4,7 +4,6 @@ import { html, render, useState, useEffect, useCallback, useRef, useMemo } from 
 import * as api from './api.js';
 import { paneRegistry, editorPaneExtension, preloadEditorBundle, terminalPaneExtension, terminalTabPaneExtension, TERMINAL_TAB_PATH, vncPaneExtension, VNC_TAB_PREFIX, workspacePreviewPaneExtension, workspaceMarkdownPreviewPaneExtension, officeViewerPaneExtension, csvViewerPaneExtension, pdfViewerPaneExtension, imageViewerPaneExtension, videoViewerPaneExtension, drawioPaneExtension, mindmapPaneExtension, kanbanPaneExtension, tabStore } from './panes/index.js';
 import { getLocalStorageBoolean, getLocalStorageNumber, setLocalStorageItem } from './utils/storage.js';
-import { useSseConnection } from './ui/use-sse-connection.js';
 import { useNotifications } from './ui/use-notifications.js';
 import { useTimeline } from './ui/use-timeline.js';
 import { dedupePosts } from './ui/timeline-utils.js';
@@ -20,28 +19,50 @@ import {
     isIOSDevice,
     useTimestampRefresh,
 } from './ui/app-helpers.js';
-import { handleAgentPanelToggle } from './ui/app-agent-panel-toggle.js';
-import { resolveFilePillOpenAction } from './ui/file-pill-open.js';
-import { parseBtwCommand, buildBtwInjectionText, resolveBtwChatJid } from './ui/btw.js';
 import {
     isStandaloneWebAppMode,
 } from './ui/chat-window.js';
-import { shouldClearQueuedSteerState } from './ui/queue-state.js';
 import { isCompactionStatus } from './ui/status-duration.js';
 import {
-    applyModelStatePayload,
     handleMessageResponseRefresh,
-    loadAgentsBootstrap,
-    refreshActiveChatAgents as refreshActiveChatAgentsState,
-    refreshCurrentChatBranches as refreshCurrentChatBranchesState,
-    refreshModelState as refreshModelStateForChat,
-    updateAgentProfileFromEvent,
-    updateUserProfileFromEvent,
 } from './ui/app-auth-bootstrap.js';
+import {
+    useChatRefreshLifecycle,
+} from './ui/app-chat-refresh-lifecycle.js';
+import {
+    useSidepanelOrchestration,
+} from './ui/app-sidepanel-orchestration.js';
+import {
+    useComposeReferenceOrchestration,
+} from './ui/app-compose-reference-orchestration.js';
+import {
+    useViewRefreshLifecycle,
+} from './ui/app-view-refresh-lifecycle.js';
+import {
+    useRealtimeLifecycleOrchestration,
+} from './ui/app-realtime-lifecycle-orchestration.js';
+import {
+    useAgentStatusLifecycle,
+} from './ui/app-agent-status-lifecycle.js';
+import {
+    useTimelineViewActions,
+} from './ui/app-timeline-view-actions.js';
+import {
+    useAgentActivityOrchestration,
+} from './ui/app-agent-activity-orchestration.js';
+import {
+    useTimelineScrollOrchestration,
+} from './ui/app-timeline-scroll-orchestration.js';
+import {
+    useAppLocationNavigation,
+} from './ui/app-location-navigation.js';
+import {
+    renderResolvedAppShell,
+} from './ui/app-shell-render-router.js';
 import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
 import { resolveOptionalApi } from './ui/optional-api.js';
-import { watchReturnToApp, watchStandaloneWebAppMode } from './ui/app-resume.js';
-import { watchDockToggleShortcut, watchPaneOpenEvents, watchZenModeShortcuts } from './ui/app-browser-events.js';
+import { watchStandaloneWebAppMode } from './ui/app-resume.js';
+import { watchDockToggleShortcut, watchZenModeShortcuts } from './ui/app-browser-events.js';
 import {
     getPanePopoutTitle,
     hasPanePopoutMenuActions,
@@ -60,97 +81,18 @@ import {
     readAppLocationModes,
 } from './ui/app-shell-state.js';
 import {
-    handleConnectionStatusChangeEvent,
-    handleUiVersionDriftEvent,
-    runBackstopRefreshTick,
-} from './ui/app-connection-lifecycle.js';
+    useBranchPaneLifecycle,
+} from './ui/app-branch-pane-lifecycle-actions.js';
 import {
-    closeRenameBranchForm,
-    openRenameBranchForm,
-    pruneCurrentBranch,
-    renameCurrentBranch,
-    restoreBranch,
-    runBranchLoader,
-} from './ui/app-branch-actions.js';
+    useChatPaneRuntimeOrchestration,
+} from './ui/app-chat-pane-runtime-orchestration.js';
 import {
-    createSessionFromCompose,
-    popOutChat,
-    popOutPane,
-} from './ui/app-window-actions.js';
-import {
-    applyChatPaneStateSnapshot,
-    captureChatPaneStateSnapshot,
-} from './ui/app-chat-pane-state.js';
-import {
-    addPendingPanelAction,
-    createPendingPanelActionKey,
-    removePendingPanelAction,
-    runExtensionStatusPanelAction,
-} from './ui/app-extension-status.js';
-import {
-    filterQueuedTimelinePosts,
-} from './ui/app-followup-queue.js';
-import {
-    applyLiveFloatingWidgetUpdate,
-} from './ui/app-floating-widget.js';
-import {
-    buildFloatingWidgetDashboardData,
-    closeFloatingWidgetFromHost,
-    handleFloatingWidgetEventFromHost,
     handleInjectQueuedFollowupAction,
     handleRemoveQueuedFollowupAction,
-    openFloatingWidgetFromHost,
 } from './ui/app-floating-widget-followup.js';
 import {
-    renderBranchLoaderMode,
-    renderPanePopoutMode,
-    resolveAppShellRenderMode,
-} from './ui/app-pane-mode-render.js';
-import {
-    renderMainShell,
-} from './ui/app-main-shell-render.js';
-import {
-    refreshAutoresearchStatusForChat,
-    refreshContextUsageForChat,
-    refreshCurrentView as refreshCurrentViewState,
-    refreshModelAndQueueState as refreshModelAndQueueStateBundle,
-    refreshQueueStateForChat,
-} from './ui/app-status-refresh-orchestration.js';
-import { handleAppSseEvent } from './ui/app-sse-events.js';
-import {
     finalizeStalledResponse as finalizeStalledResponseState,
-    reconcileSilentTurn as reconcileSilentTurnState,
-    refreshAgentStatusForChat,
-    runSilenceWatchdogTick,
 } from './ui/app-agent-status-orchestration.js';
-import {
-    applyStoredSidebarWidth,
-    runTimelineLoadFlow,
-} from './ui/app-boot-load-orchestration.js';
-import {
-    applyStoredPaneLayout,
-    closeTransferredPaneSource,
-    navigateToSelectedBranch,
-    resolvePanePopoutTransfer,
-} from './ui/app-branch-pane-orchestration.js';
-import {
-    appendUniqueStringRef,
-    normalizeComposeRefs,
-    removeStringRef,
-} from './ui/app-shell-ref-utils.js';
-import {
-    backToTimeline,
-    deleteTimelinePost,
-    loadHashtagTimeline,
-    scrollToTimelineMessage,
-    searchTimeline,
-} from './ui/app-timeline-actions.js';
-import {
-    closeBtwPanelSession,
-    handleBtwInterceptCommand,
-    injectBtwSession,
-    runBtwPromptSession,
-} from './ui/app-btw-orchestration.js';
 
 const CURRENT_APP_ASSET_VERSION = getCurrentAppAssetVersion();
 
@@ -557,14 +499,6 @@ function MainApp({ locationParams, navigate }) {
     );
     const renameBranchNameInputRef = useRef(null);
 
-    const clearIntentToast = useCallback(() => {
-        if (intentToastTimerRef.current) {
-            clearTimeout(intentToastTimerRef.current);
-            intentToastTimerRef.current = null;
-        }
-        setIntentToast(null);
-    }, []);
-
     useTimestampRefresh(30000);
 
     useEffect(() => {
@@ -592,12 +526,6 @@ function MainApp({ locationParams, navigate }) {
     useEffect(() => {
         return installStandaloneMobileViewportFix();
     }, []);
-
-    useEffect(() => {
-        return () => {
-            clearIntentToast();
-        };
-    }, [clearIntentToast]);
 
     useEffect(() => {
         if (!btwSession) {
@@ -649,374 +577,140 @@ function MainApp({ locationParams, navigate }) {
         }
     }, []);
 
-    const addFileRef = useCallback((path) => {
-        setFileRefs((prev) => appendUniqueStringRef(prev, path));
-    }, []);
+    const {
+        addFileRef,
+        removeFileRef,
+        clearFileRefs,
+        setFileRefsFromCompose,
+        showIntentToast,
+        openFileFromPill,
+        attachActiveEditorFile,
+        addMessageRef,
+        scrollToMessage,
+        removeMessageRef,
+        clearMessageRefs,
+        setMessageRefsFromCompose,
+        handleComposeSubmitError,
+    } = useComposeReferenceOrchestration({
+        setIntentToast,
+        intentToastTimerRef,
+        editorOpen,
+        openEditor,
+        resolvePane: (context) => paneRegistry.resolve(context),
+        tabStripActiveId,
+        setFileRefs,
+        setMessageRefs,
+        currentChatJid,
+        getThread: api.getThread,
+        setPosts,
+    });
 
-    const removeFileRef = useCallback((path) => {
-        setFileRefs((prev) => removeStringRef(prev, path));
-    }, []);
     removeFileRefRef.current = removeFileRef;
 
-    const clearFileRefs = useCallback(() => {
-        setFileRefs([]);
-    }, []);
+    const {
+        noteAgentActivity,
+        clearLastActivityTimer,
+        clearLastActivityFlag,
+        showLastActivity,
+        clearAgentRunState,
+        handlePanelToggle,
+    } = useAgentActivityOrchestration({
+        lastActivityTtlMs: LAST_ACTIVITY_TTL_MS,
+        lastActivityTimerRef,
+        lastActivityTokenRef,
+        lastAgentEventRef,
+        lastSilenceNoticeRef,
+        isAgentRunningRef,
+        setIsAgentTurnActive,
+        setAgentStatus,
+        draftBufferRef,
+        thoughtBufferRef,
+        pendingRequestRef,
+        lastAgentResponseRef,
+        currentTurnIdRef,
+        steerQueuedTurnIdRef,
+        agentStatusRef,
+        silentRecoveryRef,
+        thoughtExpandedRef,
+        draftExpandedRef,
+        setCurrentTurnId,
+        setSteerQueuedTurnId,
+        currentTurnIdRefForPanel: currentTurnIdRef,
+        setAgentThoughtVisibility,
+        getAgentThought,
+        setAgentThought,
+        setAgentDraft,
+    });
 
-    const setFileRefsFromCompose = useCallback((next) => {
-        setFileRefs(normalizeComposeRefs(next));
-    }, []);
-
-
-    const showIntentToast = useCallback((title, detail = null, kind = 'info', durationMs = 3000) => {
-        clearIntentToast();
-        setIntentToast({ title, detail: detail || null, kind: kind || 'info' });
-        intentToastTimerRef.current = setTimeout(() => {
-            setIntentToast((current) => (current?.title === title ? null : current));
-        }, durationMs);
-    }, [clearIntentToast]);
-
-    const openFileFromPill = useCallback((rawPath) => {
-        const result = resolveFilePillOpenAction(rawPath, {
-            editorOpen,
-            resolvePane: (context) => paneRegistry.resolve(context),
-        });
-
-        if (result.kind === 'open') {
-            openEditor(result.path);
-            return;
-        }
-
-        if (result.kind === 'toast') {
-            showIntentToast(result.title, result.detail, result.level);
-        }
-    }, [editorOpen, openEditor, showIntentToast]);
-
-    const attachActiveEditorFile = useCallback(() => {
-        const activeId = tabStripActiveId;
-        if (activeId) addFileRef(activeId);
-    }, [tabStripActiveId, addFileRef]);
-
-    const addMessageRef = useCallback((id) => {
-        setMessageRefs((prev) => appendUniqueStringRef(prev, id));
-    }, []);
-
-    /** Scroll to a message by ID; fetch and inject if not in current timeline. */
-    const scrollToMessage = useCallback(async (id, targetChatJid = null) => {
-        await scrollToTimelineMessage({
-            id,
-            targetChatJid,
-            currentChatJid,
-            getThread: api.getThread,
-            setPosts,
-        });
-    }, [currentChatJid, setPosts]);
-
-    const removeMessageRef = useCallback((id) => {
-        setMessageRefs((prev) => removeStringRef(prev, id));
-    }, []);
-
-    const clearMessageRefs = useCallback(() => {
-        setMessageRefs([]);
-    }, []);
-
-    const setMessageRefsFromCompose = useCallback((next) => {
-        setMessageRefs(normalizeComposeRefs(next));
-    }, []);
-
-    const handleComposeSubmitError = useCallback((message) => {
-        const detail = typeof message === 'string' && message.trim() ? message.trim() : 'Could not send your message.';
-        showIntentToast('Compose failed', detail, 'error', 5000);
-    }, [showIntentToast]);
-
-    const noteAgentActivity = useCallback((options = {}) => {
-        const now = Date.now();
-        lastAgentEventRef.current = now;
-        if (options.running) {
-            isAgentRunningRef.current = true;
-            // Only update state if not already active to avoid redundant re-renders
-            setIsAgentTurnActive((prev) => prev ? prev : true);
-        }
-        if (options.clearSilence) {
-            lastSilenceNoticeRef.current = 0;
-        }
-    }, [setIsAgentTurnActive]);
-
-    const clearLastActivityTimer = useCallback(() => {
-        if (lastActivityTimerRef.current) {
-            clearTimeout(lastActivityTimerRef.current);
-            lastActivityTimerRef.current = null;
-        }
-        lastActivityTokenRef.current = 0;
-    }, []);
-
-    // Cleanup: cancel any pending last-activity timer on unmount.
-    // Placed after clearLastActivityTimer definition to avoid TDZ errors.
-    useEffect(() => () => {
-        clearLastActivityTimer();
-    }, [clearLastActivityTimer]);
-
-    const clearLastActivityFlag = useCallback(() => {
-        clearLastActivityTimer();
-        setAgentStatus((prev) => {
-            if (!prev) return prev;
-            if (!(prev.last_activity || prev.lastActivity)) return prev;
-            const { last_activity, lastActivity, ...rest } = prev;
-            return rest;
-        });
-    }, [clearLastActivityTimer]);
-
-    const showLastActivity = useCallback((payload) => {
-        if (!payload) return;
-        clearLastActivityTimer();
-        const token = Date.now();
-        lastActivityTokenRef.current = token;
-        // Strip tool/intent details - only show a minimal "last active" hint
-        setAgentStatus({ type: payload.type || 'active', last_activity: true });
-        lastActivityTimerRef.current = setTimeout(() => {
-            if (lastActivityTokenRef.current !== token) return;
-            setAgentStatus((prev) => {
-                if (!prev || !(prev.last_activity || prev.lastActivity)) return prev;
-                return null;
-            });
-        }, LAST_ACTIVITY_TTL_MS);
-    }, [clearLastActivityTimer]);
-
-    const clearAgentRunState = useCallback(() => {
-        isAgentRunningRef.current = false;
-        setIsAgentTurnActive(false);
-        lastAgentEventRef.current = null;
-        lastSilenceNoticeRef.current = 0;
-        draftBufferRef.current = '';
-        thoughtBufferRef.current = '';
-        pendingRequestRef.current = null;
-        lastAgentResponseRef.current = null;
-        currentTurnIdRef.current = null;
-        steerQueuedTurnIdRef.current = null;
-        agentStatusRef.current = null;
-        silentRecoveryRef.current = { inFlight: false, lastAttemptAt: 0, turnId: null };
-        clearLastActivityTimer();
-        setCurrentTurnId(null);
-        setSteerQueuedTurnId(null);
-        thoughtExpandedRef.current = false;
-        draftExpandedRef.current = false;
-    }, [clearLastActivityTimer, setCurrentTurnId, setSteerQueuedTurnId, setIsAgentTurnActive]);
-
-    const clearQueuedSteerStateIfStale = useCallback((remainingQueueCount) => {
-        if (!shouldClearQueuedSteerState({
-            remainingQueueCount,
-            currentTurnId: currentTurnIdRef.current,
-            isAgentTurnActive,
-        })) {
-            return;
-        }
-        steerQueuedTurnIdRef.current = null;
-        setSteerQueuedTurnId(null);
-    }, [isAgentTurnActive, setSteerQueuedTurnId]);
-
-    const snapshotCurrentChatPaneState = useCallback(() => captureChatPaneStateSnapshot({
+    const {
+        clearQueuedSteerStateIfStale,
+        snapshotCurrentChatPaneState,
+        restoreChatPaneState,
+        setActiveTurn,
+        notifyForFinalResponse,
+    } = useChatPaneRuntimeOrchestration({
+        isAgentTurnActive,
+        steerQueuedTurnId,
+        currentTurnId,
+        steerQueuedTurnIdRef,
+        setSteerQueuedTurnId,
         agentStatus,
         agentDraft,
         agentPlan,
         agentThought,
         pendingRequest,
-        currentTurnId,
-        steerQueuedTurnId,
-        isAgentTurnActive,
+        pendingRequestRef,
         followupQueueItems,
         activeModel,
         activeThinkingLevel,
         supportsThinking,
         activeModelUsage,
         contextUsage,
-        isAgentRunning: isAgentRunningRef.current,
-        wasAgentActive: wasAgentActiveRef.current,
-        draftBuffer: draftBufferRef.current,
-        thoughtBuffer: thoughtBufferRef.current,
-        lastAgentEvent: lastAgentEventRef.current,
-        lastSilenceNotice: lastSilenceNoticeRef.current,
-        lastAgentResponse: lastAgentResponseRef.current,
-        currentTurnIdRef: currentTurnIdRef.current,
-        steerQueuedTurnIdRef: steerQueuedTurnIdRef.current,
-        thoughtExpanded: thoughtExpandedRef.current,
-        draftExpanded: draftExpandedRef.current,
-        agentStatusRef: agentStatusRef.current,
-        silentRecovery: silentRecoveryRef.current,
-    }), [
-        activeModel,
-        activeModelUsage,
-        activeThinkingLevel,
-        agentDraft,
-        agentPlan,
-        agentStatus,
-        agentThought,
-        contextUsage,
-        currentTurnId,
-        followupQueueItems,
-        isAgentTurnActive,
-        pendingRequest,
-        steerQueuedTurnId,
-        supportsThinking,
-    ]);
-
-    const restoreChatPaneState = useCallback((snapshot) => {
-        applyChatPaneStateSnapshot({
-            snapshot,
-            clearLastActivityTimer,
-            refs: {
-                isAgentRunningRef,
-                wasAgentActiveRef,
-                lastAgentEventRef,
-                lastSilenceNoticeRef,
-                draftBufferRef,
-                thoughtBufferRef,
-                pendingRequestRef,
-                lastAgentResponseRef,
-                currentTurnIdRef,
-                steerQueuedTurnIdRef,
-                agentStatusRef,
-                silentRecoveryRef,
-                thoughtExpandedRef,
-                draftExpandedRef,
-            },
-            setters: {
-                setIsAgentTurnActive,
-                setAgentStatus,
-                setAgentDraft,
-                setAgentPlan,
-                setAgentThought,
-                setPendingRequest,
-                setCurrentTurnId,
-                setSteerQueuedTurnId,
-                setFollowupQueueItems,
-                setActiveModel,
-                setActiveThinkingLevel,
-                setSupportsThinking,
-                setActiveModelUsage,
-                setContextUsage,
-            },
-        });
-    }, [clearLastActivityTimer, setCurrentTurnId, setFollowupQueueItems, setIsAgentTurnActive, setSteerQueuedTurnId]);
-
-    const setActiveTurn = useCallback((turnId) => {
-        if (!turnId) return;
-        if (currentTurnIdRef.current === turnId) return;
-        currentTurnIdRef.current = turnId;
-        silentRecoveryRef.current = { inFlight: false, lastAttemptAt: 0, turnId };
-        setCurrentTurnId(turnId);
-        steerQueuedTurnIdRef.current = null;
-        setSteerQueuedTurnId(null);
-        draftBufferRef.current = '';
-        thoughtBufferRef.current = '';
-        setAgentDraft({ text: '', totalLines: 0 });
-        setAgentPlan('');
-        setAgentThought({ text: '', totalLines: 0 });
-        setPendingRequest(null);
-        pendingRequestRef.current = null;
-        lastAgentResponseRef.current = null;
-        thoughtExpandedRef.current = false;
-        draftExpandedRef.current = false;
-    }, [setCurrentTurnId, setSteerQueuedTurnId]);
-
-
-    const notifyForFinalResponse = useCallback((turnId) => {
-        if (typeof document !== 'undefined') {
-            const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
-            if (!document.hidden && hasFocus) return;
-        }
-        const entry = lastAgentResponseRef.current;
-        if (!entry || !entry.post) return;
-        if (turnId && entry.turnId && entry.turnId !== turnId) return;
-        const post = entry.post;
-        if (post.id && lastNotifiedIdRef.current === post.id) return;
-        const content = String(post?.data?.content || '').trim();
-        if (!content) return;
-        lastNotifiedIdRef.current = post.id || lastNotifiedIdRef.current;
-        lastAgentResponseRef.current = null;
-        const body = content.replace(/\s+/g, ' ').slice(0, 200);
-        const agentsMap = agentsRef.current || {};
-        const agent = post?.data?.agent_id ? agentsMap[post.data.agent_id] : null;
-        const title = agent?.name || 'Pi';
-        notify(title, body);
-    }, [notify]);
-
-    const handlePanelToggle = useCallback(async (panelKey, expanded) => {
-        await handleAgentPanelToggle({
-            panelKey,
-            expanded,
-            currentTurnIdRef,
-            thoughtExpandedRef,
-            draftExpandedRef,
-            setAgentThoughtVisibility,
-            getAgentThought,
-            thoughtBufferRef,
-            draftBufferRef,
-            setAgentThought,
-            setAgentDraft,
-        });
-    }, []);
-
+        isAgentRunningRef,
+        wasAgentActiveRef,
+        draftBufferRef,
+        thoughtBufferRef,
+        lastAgentEventRef,
+        lastSilenceNoticeRef,
+        lastAgentResponseRef,
+        currentTurnIdRef,
+        thoughtExpandedRef,
+        draftExpandedRef,
+        agentStatusRef,
+        silentRecoveryRef,
+        clearLastActivityTimer,
+        setIsAgentTurnActive,
+        setAgentStatus,
+        setAgentDraft,
+        setAgentPlan,
+        setAgentThought,
+        setPendingRequest,
+        setCurrentTurnId,
+        setFollowupQueueItems,
+        setActiveModel,
+        setActiveThinkingLevel,
+        setSupportsThinking,
+        setActiveModelUsage,
+        setContextUsage,
+        lastNotifiedIdRef,
+        agentsRef,
+        notify,
+    });
 
     // Scroll to bottom of timeline (column-reverse: bottom is scrollTop=0)
     // Only auto-scroll if user is already near the bottom (within 150px).
     const scrollToBottomRef = useRef(null);
-    const scrollToBottom = useCallback(() => {
-        const el = timelineRef.current;
-        if (!el) return;
-        // column-reverse: scrollTop=0 is bottom, negative values mean scrolled up
-        const scrolledUp = Math.abs(el.scrollTop) > 150;
-        if (!scrolledUp) {
-            el.scrollTop = 0;
-        }
-    }, []);
+    const {
+        scrollToBottom,
+        preserveTimelineScroll,
+        preserveTimelineScrollTop,
+        filterQueuedPosts,
+    } = useTimelineScrollOrchestration({
+        timelineRef,
+        viewStateRef,
+        followupQueueRowIdsRef,
+    });
     scrollToBottomRef.current = scrollToBottom;
-
-    const preserveTimelineScroll = useCallback((mutate) => {
-        const container = timelineRef.current;
-        if (!container || typeof mutate !== 'function') {
-            mutate?.();
-            return;
-        }
-        const { currentHashtag: activeHashtag, searchQuery: activeSearch, searchOpen: activeSearchOpen } = viewStateRef.current || {};
-        const reverseTimeline = !((activeSearch || activeSearchOpen) && !activeHashtag);
-        const anchor = reverseTimeline
-            ? container.scrollHeight - container.scrollTop
-            : container.scrollTop;
-        mutate();
-        requestAnimationFrame(() => {
-            const target = timelineRef.current;
-            if (!target) return;
-            if (reverseTimeline) {
-                const nextTop = Math.max(target.scrollHeight - anchor, 0);
-                target.scrollTop = nextTop;
-            } else {
-                const maxScroll = Math.max(target.scrollHeight - target.clientHeight, 0);
-                const nextTop = Math.min(anchor, maxScroll);
-                target.scrollTop = nextTop;
-            }
-        });
-    }, []);
-
-    const preserveTimelineScrollTop = useCallback((mutate) => {
-        const container = timelineRef.current;
-        if (!container || typeof mutate !== 'function') {
-            mutate?.();
-            return;
-        }
-        const anchor = container.scrollTop;
-        mutate();
-        requestAnimationFrame(() => {
-            const target = timelineRef.current;
-            if (!target) return;
-            const maxScroll = Math.max(target.scrollHeight - target.clientHeight, 0);
-            target.scrollTop = Math.min(anchor, maxScroll);
-        });
-    }, []);
-
-    /** Ref-stable filter: hides placeholder rows and their parent user messages.
-     *  Reads from refs so callback identity never changes — this breaks the
-     *  re-render cascade that previously destabilised handleSseEvent → SSE.
-     *  Returns the same array reference when nothing is filtered. */
-    const filterQueuedPosts = useCallback((items) => filterQueuedTimelinePosts(items, followupQueueRowIdsRef.current), []);
 
     const {
         posts: rawPosts,
@@ -1080,100 +774,53 @@ function MainApp({ locationParams, navigate }) {
     }, [currentHashtag, searchQuery, searchOpen]);
 
 
-    const refreshQueueState = useCallback(() => {
-        refreshQueueStateForChat({
-            currentChatJid,
-            queueRefreshGenRef,
-            activeChatJidRef,
-            dismissedQueueRowIdsRef,
-            getAgentQueueState,
-            setFollowupQueueItems,
-            clearQueuedSteerStateIfStale,
-        });
-    }, [clearQueuedSteerStateIfStale, currentChatJid]);
-
-    const refreshContextUsage = useCallback(async () => {
-        await refreshContextUsageForChat({
-            currentChatJid,
-            activeChatJidRef,
-            getAgentContext,
-            setContextUsage,
-        });
-    }, [currentChatJid]);
-
-    const refreshAutoresearchStatus = useCallback(async () => {
-        await refreshAutoresearchStatusForChat({
-            currentChatJid,
-            activeChatJidRef,
-            getAutoresearchStatus,
-            setExtensionStatusPanels,
-            setPendingExtensionPanelActions,
-        });
-    }, [currentChatJid]);
-
-    const refreshAgentStatus = useCallback(async () => {
-        return await refreshAgentStatusForChat({
-            currentChatJid,
-            getAgentStatus,
-            activeChatJidRef,
-            wasAgentActiveRef,
-            viewStateRef,
-            refreshTimeline,
-            clearAgentRunState,
-            agentStatusRef,
-            pendingRequestRef,
-            thoughtBufferRef,
-            draftBufferRef,
-            setAgentStatus,
-            setAgentDraft,
-            setAgentPlan,
-            setAgentThought,
-            setPendingRequest,
-            setActiveTurn,
-            noteAgentActivity,
-            clearLastActivityFlag,
-        });
-    }, [clearAgentRunState, clearLastActivityFlag, currentChatJid, noteAgentActivity, refreshTimeline, setActiveTurn]);
-
-    const reconcileSilentTurn = useCallback(async () => {
-        return await reconcileSilentTurnState({
-            isAgentRunningRef,
-            pendingRequestRef,
-            currentTurnIdRef,
-            silentRecoveryRef,
-            silenceRefreshMs: SILENCE_REFRESH_MS,
-            viewStateRef,
-            refreshTimeline,
-            refreshQueueState,
-            refreshAgentStatus,
-        });
-    }, [refreshAgentStatus, refreshQueueState, refreshTimeline]);
-
-    // Silence watchdog: detect stream quiet periods and trigger server re-sync.
-    useEffect(() => {
-        const intervalMs = Math.min(1000, Math.max(100, Math.floor(SILENCE_WARNING_MS / 2)));
-        const interval = setInterval(() => {
-            runSilenceWatchdogTick({
-                isAgentRunningRef,
-                pendingRequestRef,
-                lastAgentEventRef,
-                lastSilenceNoticeRef,
-                agentStatusRef,
-                silenceWarningMs: SILENCE_WARNING_MS,
-                silenceFinalizeMs: SILENCE_FINALIZE_MS,
-                silenceRefreshMs: SILENCE_REFRESH_MS,
-                isCompactionStatus,
-                setAgentStatus,
-                reconcileSilentTurn,
-            });
-        }, intervalMs);
-
-        return () => clearInterval(interval);
-    }, [reconcileSilentTurn]);
-
-    const handleUiVersionDrift = useCallback((serverVersion) => {
-        return handleUiVersionDriftEvent({
-            serverVersion,
+    const {
+        refreshQueueState,
+        refreshContextUsage,
+        refreshAutoresearchStatus,
+        refreshAgentStatus,
+        handleUiVersionDrift,
+        handleConnectionStatusChange,
+    } = useAgentStatusLifecycle({
+        currentChatJid,
+        activeChatJidRef,
+        queueRefreshGenRef,
+        dismissedQueueRowIdsRef,
+        getAgentQueueState,
+        setFollowupQueueItems,
+        clearQueuedSteerStateIfStale,
+        getAgentContext,
+        setContextUsage,
+        getAutoresearchStatus,
+        setExtensionStatusPanels,
+        setPendingExtensionPanelActions,
+        getAgentStatus,
+        wasAgentActiveRef,
+        viewStateRef,
+        refreshTimeline,
+        clearAgentRunState,
+        agentStatusRef,
+        pendingRequestRef,
+        thoughtBufferRef,
+        draftBufferRef,
+        setAgentStatus,
+        setAgentDraft,
+        setAgentPlan,
+        setAgentThought,
+        setPendingRequest,
+        setActiveTurn,
+        noteAgentActivity,
+        clearLastActivityFlag,
+        isAgentRunningRef,
+        currentTurnIdRef,
+        silentRecoveryRef,
+        silenceRefreshMs: SILENCE_REFRESH_MS,
+        lastAgentEventRef,
+        lastSilenceNoticeRef,
+        silenceWarningMs: SILENCE_WARNING_MS,
+        silenceFinalizeMs: SILENCE_FINALIZE_MS,
+        isCompactionStatus,
+        serverVersionContext: {
             currentAppAssetVersion: CURRENT_APP_ASSET_VERSION,
             staleUiVersionRef,
             staleUiReloadScheduledRef,
@@ -1181,170 +828,81 @@ function MainApp({ locationParams, navigate }) {
             isAgentRunningRef,
             pendingRequestRef,
             showIntentToast,
-        });
-    }, [isAgentRunningRef, pendingRequestRef, showIntentToast]);
-
-    const handleConnectionStatusChange = useCallback((status) => {
-        handleConnectionStatusChangeEvent({
-            status,
-            setConnectionStatus,
-            setAgentStatus,
-            setAgentDraft,
-            setAgentPlan,
-            setAgentThought,
-            setPendingRequest,
-            pendingRequestRef,
-            clearAgentRunState,
-            hasConnectedOnceRef,
-            viewStateRef,
-            refreshTimeline,
-            refreshAgentStatus,
-            refreshQueueState,
-            refreshContextUsage,
-        });
-    }, [clearAgentRunState, refreshTimeline, refreshAgentStatus, refreshQueueState, refreshContextUsage]);
+        },
+        setConnectionStatus,
+        setPendingRequestForConnection: setPendingRequest,
+        hasConnectedOnceRef,
+    });
 
 
-    // Handle hashtag click
-    const handleHashtagClick = useCallback(async (hashtag) => {
-        await loadHashtagTimeline({
-            hashtag,
-            setCurrentHashtag,
-            setPosts,
-            loadPosts,
-        });
-    }, [loadPosts]);
-
-    // Go back to timeline
-    const handleBackToTimeline = useCallback(async () => {
-        await backToTimeline({
-            setCurrentHashtag,
-            setSearchQuery,
-            setPosts,
-            loadPosts,
-        });
-    }, [loadPosts]);
-
-    // Handle search
-    const handleSearch = useCallback(async (query, scope = searchScope) => {
-        await searchTimeline({
-            query,
-            scope,
-            currentChatJid,
-            currentRootChatJid,
-            searchPosts,
-            setSearchScope,
-            setSearchQuery,
-            setCurrentHashtag,
-            setPosts,
-            setHasMore,
-        });
-    }, [currentChatJid, currentRootChatJid, searchScope]);
-
-    const enterSearchMode = useCallback(() => {
-        setSearchOpen(true);
-        setSearchQuery(null);
-        setCurrentHashtag(null);
-        setSearchScope('current');
-        setPosts([]);
-    }, []);
-
-    const exitSearchMode = useCallback(() => {
-        setSearchOpen(false);
-        setSearchQuery(null);
-        loadPosts();
-    }, [loadPosts]);
+    const {
+        handleHashtagClick,
+        handleBackToTimeline,
+        handleSearch,
+        enterSearchMode,
+        exitSearchMode,
+        isMainTimelineView,
+        handleDeletePost,
+    } = useTimelineViewActions({
+        currentHashtag,
+        searchQuery,
+        searchOpen,
+        searchScope,
+        currentChatJid,
+        currentRootChatJid,
+        posts,
+        loadPosts,
+        searchPosts,
+        setCurrentHashtag,
+        setSearchQuery,
+        setSearchOpen,
+        setSearchScope,
+        setPosts,
+        setHasMore,
+        preserveTimelineScrollTop,
+        setRemovingPostIds,
+        deletePost,
+        hasMoreRef,
+        loadMoreRef,
+    });
 
     const navigateToSearchResult = useCallback(() => {}, []);
 
-    const isMainTimelineView = !currentHashtag && !searchQuery && !searchOpen;
-
-    const handleDeletePost = useCallback(async (post) => {
-        await deleteTimelinePost({
-            post,
-            posts,
-            currentChatJid,
-            deletePost,
-            preserveTimelineScrollTop,
-            setPosts,
-            setRemovingPostIds,
-            hasMoreRef,
-            loadMoreRef,
-        });
-    }, [currentChatJid, posts, preserveTimelineScrollTop]);
-
-    const loadAgents = useCallback(async () => {
-        await loadAgentsBootstrap({
-            getAgents,
-            setAgents,
-            setUserProfile,
-            applyBranding,
-        });
-    }, [applyBranding]);
-
-    useEffect(() => {
-        loadAgents();
-        applyStoredSidebarWidth({
-            readStoredNumber: getLocalStorageNumber,
-            sidebarWidthRef,
-            shellElement: appShellRef.current,
-        });
-    }, [loadAgents]);
+    const {
+        updateAgentProfile,
+        updateUserProfile,
+        applyModelState,
+        refreshModelState,
+        refreshActiveChatAgents,
+        refreshCurrentChatBranches,
+        refreshModelAndQueueState,
+    } = useChatRefreshLifecycle({
+        getAgents,
+        setAgents,
+        setUserProfile,
+        applyBranding,
+        readStoredNumber: getLocalStorageNumber,
+        sidebarWidthRef,
+        appShellRef,
+        currentChatJid,
+        currentRootChatJid,
+        getAgentModels,
+        getActiveChatAgents,
+        getChatBranches,
+        activeChatJidRef,
+        setActiveChatAgents,
+        setCurrentChatBranches,
+        setActiveModel,
+        setActiveThinkingLevel,
+        setSupportsThinking,
+        setActiveModelUsage,
+        agentsRef,
+        refreshQueueState,
+        refreshContextUsage,
+        refreshAutoresearchStatus,
+    });
 
     const isComposeBoxAgentActive = isAgentTurnActive || agentStatus !== null;
-
-    const updateAgentProfile = useCallback((payload) => {
-        updateAgentProfileFromEvent({
-            payload,
-            agentsRef,
-            setAgents,
-            applyBranding,
-        });
-    }, [applyBranding]);
-
-    const updateUserProfile = useCallback((payload) => {
-        updateUserProfileFromEvent({
-            payload,
-            setUserProfile,
-        });
-    }, []);
-
-    const applyModelState = useCallback((payload) => {
-        applyModelStatePayload({
-            payload,
-            setActiveModel,
-            setActiveThinkingLevel,
-            setSupportsThinking,
-            setActiveModelUsage,
-        });
-    }, []);
-
-    const refreshModelState = useCallback(() => {
-        refreshModelStateForChat({
-            currentChatJid,
-            getAgentModels,
-            activeChatJidRef,
-            applyModelState,
-        });
-    }, [applyModelState, currentChatJid]);
-
-    const refreshActiveChatAgents = useCallback(() => {
-        refreshActiveChatAgentsState({
-            currentChatJid,
-            getActiveChatAgents,
-            getChatBranches,
-            activeChatJidRef,
-            setActiveChatAgents,
-        });
-    }, [currentChatJid]);
-
-    const refreshCurrentChatBranches = useCallback(() => {
-        refreshCurrentChatBranchesState({
-            currentRootChatJid,
-            getChatBranches,
-            setCurrentChatBranches,
-        });
-    }, [currentRootChatJid]);
 
     const handleInjectQueuedFollowup = useCallback((queuedItem) => {
         handleInjectQueuedFollowupAction({
@@ -1386,562 +944,206 @@ function MainApp({ locationParams, navigate }) {
         });
     }, [refreshActiveChatAgents, refreshAutoresearchStatus, refreshCurrentChatBranches, refreshContextUsage, refreshQueueState]);
 
-    const handleExtensionPanelAction = useCallback(async (panel, action) => {
-        const panelKey = typeof panel?.key === 'string' ? panel.key : '';
-        const actionKey = typeof action?.key === 'string' ? action.key : '';
-        const pendingKey = createPendingPanelActionKey(panelKey, actionKey);
-        if (!panelKey || !actionKey) return;
-        setPendingExtensionPanelActions((prev) => addPendingPanelAction(prev, panelKey, actionKey));
-        try {
-            const result = await runExtensionStatusPanelAction({
-                panel,
-                action,
-                currentChatJid,
-                stopAutoresearch,
-                dismissAutoresearch,
-                writeClipboard: (text) => navigator.clipboard.writeText(text),
-            });
-            if (result.refreshAutoresearchStatus) {
-                void refreshAutoresearchStatus();
-            }
-            if (result.toast) {
-                showIntentToast(result.toast.title, result.toast.detail, result.toast.kind, result.toast.durationMs);
-            }
-        } catch (error) {
-            showIntentToast('Panel action failed', error?.message || 'Could not complete that action.', 'warning');
-        } finally {
-            setPendingExtensionPanelActions((prev) => removePendingPanelAction(prev, pendingKey));
-        }
-    }, [currentChatJid, refreshAutoresearchStatus, showIntentToast]);
-
-    const closeBtwPanel = useCallback(() => {
-        closeBtwPanelSession({
-            btwAbortRef,
-            setBtwSession,
-        });
-    }, []);
-
-    const runBtwPrompt = useCallback(async (question) => {
-        return await runBtwPromptSession({
-            question,
-            currentChatJid,
-            streamSidePrompt,
-            resolveBtwChatJid,
-            showIntentToast,
-            btwAbortRef,
-            setBtwSession,
-        });
-    }, [currentChatJid, showIntentToast]);
-
-    const handleBtwIntercept = useCallback(async ({ content }) => {
-        return await handleBtwInterceptCommand({
-            content,
-            parseBtwCommand,
-            closeBtwPanel,
-            runBtwPrompt,
-            showIntentToast,
-        });
-    }, [closeBtwPanel, runBtwPrompt, showIntentToast]);
-
-    const handleBtwRetry = useCallback(() => {
-        if (btwSession?.question) {
-            void runBtwPrompt(btwSession.question);
-        }
-    }, [btwSession, runBtwPrompt]);
-
-    const handleBtwInject = useCallback(async () => {
-        await injectBtwSession({
-            btwSession,
-            buildBtwInjectionText,
-            isComposeBoxAgentActive,
-            currentChatJid,
-            sendAgentMessage: api.sendAgentMessage,
-            handleMessageResponse,
-            showIntentToast,
-        });
-    }, [btwSession, currentChatJid, handleMessageResponse, isComposeBoxAgentActive, showIntentToast]);
-
-    const buildFloatingWidgetDashboardSnapshot = useCallback(async (requestPayload = null) => {
-        return buildFloatingWidgetDashboardData({
-            requestPayload,
-            currentChatJid,
-            currentRootChatJid,
-            getAgentStatus,
-            getAgentContext,
-            getAgentQueueState,
-            getAgentModels,
-            getActiveChatAgents,
-            getChatBranches,
-            getTimeline: api.getTimeline,
-            rawPosts,
-            activeChatAgents,
-            currentChatBranches,
-            contextUsage,
-            followupQueueItems: followupQueueItemsRef.current,
-            activeModel,
-            activeThinkingLevel,
-            supportsThinking,
-            isAgentTurnActive,
-        });
-    }, [activeChatAgents, activeModel, activeThinkingLevel, contextUsage, currentChatBranches, currentChatJid, currentRootChatJid, isAgentTurnActive, rawPosts, supportsThinking]);
-
-    const refreshModelAndQueueState = useCallback(() => {
-        refreshModelAndQueueStateBundle({
-            refreshModelState,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            refreshQueueState,
-            refreshContextUsage,
-            refreshAutoresearchStatus,
-        });
-    }, [refreshActiveChatAgents, refreshAutoresearchStatus, refreshContextUsage, refreshCurrentChatBranches, refreshModelState, refreshQueueState]);
-
-    useEffect(() => {
-        refreshModelAndQueueState();
-        const interval = setInterval(() => {
-            refreshModelState();
-            refreshActiveChatAgents();
-            refreshCurrentChatBranches();
-            refreshQueueState();
-        }, 60_000);
-        return () => clearInterval(interval);
-    }, [refreshModelAndQueueState, refreshModelState, refreshActiveChatAgents, refreshCurrentChatBranches, refreshQueueState]);
-
-    useEffect(() => {
-        setExtensionStatusPanels(new Map());
-        setPendingExtensionPanelActions(new Set());
-    }, [currentChatJid]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        void runTimelineLoadFlow({
-            currentHashtag,
-            searchQuery,
-            searchScope,
-            currentChatJid,
-            currentRootChatJid,
-            loadPosts,
-            searchPosts,
-            setPosts,
-            setHasMore,
-            scrollToBottom,
-            isCancelled: () => cancelled,
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [
+    const {
+        handleExtensionPanelAction,
+        closeBtwPanel,
+        handleBtwIntercept,
+        handleBtwRetry,
+        handleBtwInject,
+        handleOpenFloatingWidget,
+        handleCloseFloatingWidget,
+        handleFloatingWidgetEvent,
+    } = useSidepanelOrchestration({
         currentChatJid,
+        currentRootChatJid,
+        isComposeBoxAgentActive,
+        showIntentToast,
+        setPendingExtensionPanelActions,
+        refreshAutoresearchStatus,
+        stopAutoresearch,
+        dismissAutoresearch,
+        streamSidePrompt,
+        btwAbortRef,
+        btwSession,
+        setBtwSession,
+        sendAgentMessage: api.sendAgentMessage,
+        handleMessageResponse,
+        dismissedLiveWidgetKeysRef,
+        setFloatingWidget,
+        getAgentStatus,
+        getAgentContext,
+        getAgentQueueState,
+        getAgentModels,
+        getActiveChatAgents,
+        getChatBranches,
+        getTimeline: api.getTimeline,
+        rawPosts,
+        activeChatAgents,
+        currentChatBranches,
+        contextUsage,
+        followupQueueItemsRef,
+        activeModel,
+        activeThinkingLevel,
+        supportsThinking,
+        isAgentTurnActive,
+    });
+
+    const {
+        refreshCurrentView,
+        applyLiveGeneratedWidgetUpdate,
+    } = useViewRefreshLifecycle({
+        currentChatJid,
+        currentRootChatJid,
         currentHashtag,
         searchQuery,
         searchScope,
-        currentRootChatJid,
         loadPosts,
-        scrollToBottom,
-        setHasMore,
+        searchPosts,
         setPosts,
-    ]);
-
-    useEffect(() => {
-        const ownerChatJid = paneStateOwnerChatJidRef.current || currentChatJid;
-        chatPaneStateByChatRef.current.set(ownerChatJid, snapshotCurrentChatPaneState());
-    }, [currentChatJid, snapshotCurrentChatPaneState]);
-
-    useEffect(() => {
-        const ownerChatJid = paneStateOwnerChatJidRef.current || currentChatJid;
-        if (ownerChatJid === currentChatJid) return;
-        chatPaneStateByChatRef.current.set(ownerChatJid, snapshotCurrentChatPaneState());
-        paneStateOwnerChatJidRef.current = currentChatJid;
-        dismissedQueueRowIdsRef.current.clear();
-        restoreChatPaneState(chatPaneStateByChatRef.current.get(currentChatJid) || null);
-        void refreshQueueState();
-        void refreshAgentStatus();
-        void refreshContextUsage();
-    }, [currentChatJid, refreshAgentStatus, refreshContextUsage, refreshQueueState, restoreChatPaneState, snapshotCurrentChatPaneState]);
-
-    const refreshCurrentView = useCallback(() => {
-        refreshCurrentViewState({
-            viewStateRef,
-            refreshTimeline,
-            refreshModelAndQueueState,
-        });
-    }, [refreshModelAndQueueState, refreshTimeline]);
-
-    const applyLiveGeneratedWidgetUpdate = useCallback((data, fallbackStatus = 'streaming') => {
-        const updatedAt = new Date().toISOString();
-        setFloatingWidget((current) => applyLiveFloatingWidgetUpdate(current, data, {
-            fallbackStatus,
-            currentChatJid,
-            dismissedSessionKeys: dismissedLiveWidgetKeysRef.current,
-            updatedAt,
-        }));
-    }, [currentChatJid]);
-
-    const handleSseEvent = useCallback((eventType, data) => {
-        handleAppSseEvent(eventType, data, {
-            currentChatJid,
-            updateAgentProfile,
-            updateUserProfile,
-            currentTurnIdRef,
-            activeChatJidRef,
-            pendingRequestRef,
-            draftBufferRef,
-            thoughtBufferRef,
-            steerQueuedTurnIdRef,
-            thoughtExpandedRef,
-            draftExpandedRef,
-            draftThrottleRef,
-            thoughtThrottleRef,
-            viewStateRef,
-            followupQueueItemsRef,
-            dismissedQueueRowIdsRef,
-            scrollToBottomRef,
-            hasMoreRef,
-            loadMoreRef,
-            lastAgentResponseRef,
-            wasAgentActiveRef,
-            setActiveTurn,
-            applyLiveGeneratedWidgetUpdate,
-            setFloatingWidget,
-            clearLastActivityFlag,
-            handleUiVersionDrift,
-            setAgentStatus,
-            setAgentDraft,
-            setAgentPlan,
-            setAgentThought,
-            setPendingRequest,
-            clearAgentRunState,
-            getAgentStatus,
-            noteAgentActivity,
-            showLastActivity,
-            refreshTimeline,
-            refreshModelAndQueueState,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            notifyForFinalResponse,
-            setContextUsage,
-            refreshContextUsage,
-            refreshQueueState,
-            setFollowupQueueItems,
-            clearQueuedSteerStateIfStale,
-            setSteerQueuedTurnId,
-            applyModelState,
-            getAgentContext,
-            setExtensionStatusPanels,
-            setPendingExtensionPanelActions,
-            refreshActiveEditorFromWorkspace,
-            showIntentToast,
-            removeStalledPost,
-            setPosts,
-            preserveTimelineScrollTop,
-        });
-    }, [
-        applyLiveGeneratedWidgetUpdate,
-        applyModelState,
-        clearAgentRunState,
-        clearLastActivityFlag,
-        clearQueuedSteerStateIfStale,
-        currentChatJid,
-        handleUiVersionDrift,
-        noteAgentActivity,
-        notifyForFinalResponse,
-        refreshActiveChatAgents,
-        refreshActiveEditorFromWorkspace,
-        refreshContextUsage,
-        refreshCurrentChatBranches,
-        refreshModelAndQueueState,
+        setHasMore,
+        scrollToBottom,
+        setExtensionStatusPanels,
+        setPendingExtensionPanelActions,
+        paneStateOwnerChatJidRef,
+        chatPaneStateByChatRef,
+        snapshotCurrentChatPaneState,
+        restoreChatPaneState,
+        dismissedQueueRowIdsRef,
         refreshQueueState,
+        refreshAgentStatus,
+        refreshContextUsage,
+        viewStateRef,
         refreshTimeline,
-        removeStalledPost,
-        setActiveTurn,
-        setFollowupQueueItems,
-        showIntentToast,
-        showLastActivity,
+        refreshModelAndQueueState,
+        setFloatingWidget,
+        dismissedLiveWidgetKeysRef,
+    });
+
+    useRealtimeLifecycleOrchestration({
+        currentChatJid,
+        posts,
+        scrollToMessage,
+        handleConnectionStatusChange,
+        loadPosts,
+        refreshCurrentView,
         updateAgentProfile,
         updateUserProfile,
-    ]);
+        currentTurnIdRef,
+        activeChatJidRef,
+        pendingRequestRef,
+        draftBufferRef,
+        thoughtBufferRef,
+        steerQueuedTurnIdRef,
+        thoughtExpandedRef,
+        draftExpandedRef,
+        draftThrottleRef,
+        thoughtThrottleRef,
+        viewStateRef,
+        followupQueueItemsRef,
+        dismissedQueueRowIdsRef,
+        scrollToBottomRef,
+        hasMoreRef,
+        loadMoreRef,
+        lastAgentResponseRef,
+        wasAgentActiveRef,
+        setActiveTurn,
+        applyLiveGeneratedWidgetUpdate,
+        setFloatingWidget,
+        clearLastActivityFlag,
+        handleUiVersionDrift,
+        setAgentStatus,
+        setAgentDraft,
+        setAgentPlan,
+        setAgentThought,
+        setPendingRequest,
+        clearAgentRunState,
+        getAgentStatus,
+        noteAgentActivity,
+        showLastActivity,
+        refreshTimeline,
+        refreshModelAndQueueState,
+        refreshActiveChatAgents,
+        refreshCurrentChatBranches,
+        notifyForFinalResponse,
+        setContextUsage,
+        refreshContextUsage,
+        refreshQueueState,
+        setFollowupQueueItems,
+        clearQueuedSteerStateIfStale,
+        setSteerQueuedTurnId,
+        applyModelState,
+        getAgentContext,
+        setExtensionStatusPanels,
+        setPendingExtensionPanelActions,
+        refreshActiveEditorFromWorkspace,
+        showIntentToast,
+        removeStalledPost,
+        setPosts,
+        preserveTimelineScrollTop,
+        finalizeStalledResponse,
+        connectionStatus,
+        agentStatus,
+        refreshAgentStatus,
+        refreshAutoresearchStatus,
+    });
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const api = window.__PICLAW_TEST_API || {};
-        api.emit = handleSseEvent;
-        api.reset = () => {
-            removeStalledPost();
-            clearAgentRunState();
-            setAgentStatus(null);
-            setAgentDraft({ text: '', totalLines: 0 });
-            setAgentPlan('');
-            setAgentThought({ text: '', totalLines: 0 });
-            setPendingRequest(null);
-        };
-        api.finalize = () => finalizeStalledResponse();
-        window.__PICLAW_TEST_API = api;
-        return () => {
-            if (window.__PICLAW_TEST_API === api) {
-                window.__PICLAW_TEST_API = undefined;
-            }
-        };
-    }, [clearAgentRunState, finalizeStalledResponse, handleSseEvent, removeStalledPost]);
-
-    // Set up SSE connection
-    useSseConnection({ handleSseEvent, handleConnectionStatusChange, loadPosts, onWake: refreshCurrentView, chatJid: currentChatJid });
-
-    // Scroll to hash-linked message on load.
-    useEffect(() => {
-        if (!posts || posts.length === 0) return;
-        const hash = location.hash;
-        if (!hash || !hash.startsWith('#msg-')) return;
-        const msgId = hash.slice(5);
-        scrollToMessage(msgId);
-        history.replaceState(null, '', location.pathname + location.search);
-    }, [posts, scrollToMessage]);
-
-    // Adaptive backstop poller: 15s while active, 60s while idle.
-    const isAgentActive = agentStatus !== null;
-    useEffect(() => {
-        if (connectionStatus !== 'connected') return;
-        const intervalMs = isAgentActive ? 15000 : 60000;
-        const interval = setInterval(() => {
-            runBackstopRefreshTick({
-                viewStateRef,
-                isAgentActive,
-                refreshTimeline,
-                refreshQueueState,
-                refreshAgentStatus,
-                refreshContextUsage,
-                refreshAutoresearchStatus,
-            });
-        }, intervalMs);
-        return () => clearInterval(interval);
-    }, [connectionStatus, isAgentActive, refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState, refreshTimeline]);
-
-    // Returning to the tab/webapp should restore context immediately.
-    useEffect(() => {
-        return watchReturnToApp(() => {
-            refreshAgentStatus();
-            refreshContextUsage();
-            refreshQueueState();
-            refreshAutoresearchStatus();
-        });
-    }, [refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState]);
-
-    const toggleWorkspace = useCallback(() => {
-        setWorkspaceOpen((prev) => !prev);
-    }, []);
-
-    const handleBranchPickerChange = useCallback((nextChatJid) => {
-        navigateToSelectedBranch({
-            hasWindow: typeof window !== 'undefined',
-            nextChatJid,
-            currentChatJid,
-            chatOnlyMode,
-            currentHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-            navigate,
-        });
-    }, [chatOnlyMode, currentChatJid, navigate]);
-
-    const openRenameCurrentBranchForm = useCallback(() => {
-        openRenameBranchForm({
-            hasWindow: typeof window !== 'undefined',
-            currentBranchRecord,
-            renameBranchInFlight: renameBranchInFlightRef.current,
-            renameBranchLockUntil: renameBranchLockUntilRef.current,
-            getFormLock: getRenameBranchFormLock,
-            setRenameBranchNameDraft,
-            setIsRenameBranchFormOpen,
-        });
-    }, [currentBranchRecord]);
-
-    const closeRenameCurrentBranchForm = useCallback(() => {
-        closeRenameBranchForm({
-            setIsRenameBranchFormOpen,
-            setRenameBranchNameDraft,
-        });
-    }, []);
-
-    const handleRenameCurrentBranch = useCallback(async (nextName) => {
-        await renameCurrentBranch({
-            hasWindow: typeof window !== 'undefined',
-            currentBranchRecord,
-            nextName,
-            openRenameForm: openRenameCurrentBranchForm,
-            renameBranchInFlightRef,
-            renameBranchLockUntilRef,
-            getFormLock: getRenameBranchFormLock,
-            setIsRenamingBranch,
-            renameChatBranch,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            showIntentToast,
-            closeRenameForm: closeRenameCurrentBranchForm,
-        });
-    }, [closeRenameCurrentBranchForm, currentBranchRecord, refreshActiveChatAgents, refreshCurrentChatBranches, openRenameCurrentBranchForm, setIsRenamingBranch, showIntentToast]);
-
-    const handlePruneCurrentBranch = useCallback(async (targetChatJid = null) => {
-        await pruneCurrentBranch({
-            hasWindow: typeof window !== 'undefined',
-            targetChatJid,
-            currentChatJid,
-            currentBranchRecord,
-            currentChatBranches,
-            activeChatAgents,
-            pruneChatBranch,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-            chatOnlyMode,
-            navigate,
-        });
-    }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
-
-    const handleRestoreBranch = useCallback(async (targetChatJid) => {
-        await restoreBranch({
-            targetChatJid,
-            restoreChatBranch,
-            currentChatBranches,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-            chatOnlyMode,
-            navigate,
-        });
-    }, [chatOnlyMode, currentChatBranches, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
-
-    useEffect(() => {
-        if (!branchLoaderMode || typeof window === 'undefined') return;
-        let cancelled = false;
-
-        void runBranchLoader({
-            branchLoaderSourceChatJid,
-            forkChatBranch: api.forkChatBranch,
-            setBranchLoaderState,
-            navigate,
-            baseHref: window.location.href,
-            isCancelled: () => cancelled,
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [branchLoaderMode, branchLoaderSourceChatJid, navigate]);
-
-    const handleOpenFloatingWidget = useCallback((widget) => {
-        openFloatingWidgetFromHost({
-            widget,
-            dismissedLiveWidgetKeysRef,
-            setFloatingWidget,
-        });
-    }, []);
-
-    const handleCloseFloatingWidget = useCallback(() => {
-        closeFloatingWidgetFromHost({
-            dismissedLiveWidgetKeysRef,
-            setFloatingWidget,
-        });
-    }, []);
-
-    const handleFloatingWidgetEvent = useCallback((event, widget) => {
-        handleFloatingWidgetEventFromHost({
-            event,
-            widget,
-            currentChatJid,
-            isComposeBoxAgentActive,
-            setFloatingWidget,
-            handleCloseFloatingWidget,
-            handleMessageResponse,
-            showIntentToast,
-            sendAgentMessage: api.sendAgentMessage,
-            buildFloatingWidgetDashboardSnapshot,
-        });
-    }, [buildFloatingWidgetDashboardSnapshot, currentChatJid, handleCloseFloatingWidget, handleMessageResponse, isComposeBoxAgentActive, showIntentToast]);
-
-    useEffect(() => {
-        dismissedLiveWidgetKeysRef.current.clear();
-        setFloatingWidget(null);
-    }, [currentChatJid]);
-
-    const handleCreateSessionFromCompose = useCallback(async () => {
-        await createSessionFromCompose({
-            currentChatJid,
-            chatOnlyMode,
-            forkChatBranch: api.forkChatBranch,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            showIntentToast,
-            navigate,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-        });
-    }, [chatOnlyMode, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
-
-    const handlePopOutPane = useCallback(async (path, label) => {
-        await popOutPane({
-            hasWindow: typeof window !== 'undefined',
-            isWebAppMode,
-            path,
-            label,
-            showIntentToast,
-            currentChatJid,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-            resolveSourceTransfer: (panePath) => resolvePanePopoutTransfer({
-                panePath,
-                tabStripActiveId,
-                editorInstanceRef,
-                dockInstanceRef,
-                terminalTabPath: TERMINAL_TAB_PATH,
-            }),
-            closeSourcePaneIfTransferred: (panePath) => {
-                closeTransferredPaneSource({
-                    panePath,
-                    terminalTabPath: TERMINAL_TAB_PATH,
-                    dockVisible,
-                    resolveTab: (value) => tabStore.get(value),
-                    closeTab: handleTabClose,
-                    setDockVisible,
-                });
-            },
-        });
-    }, [currentChatJid, dockVisible, handleTabClose, isWebAppMode, showIntentToast, tabStripActiveId]);
-
-    // Listen for preview-card / pane events that request opening a tab or standalone pane window.
-    useEffect(() => watchPaneOpenEvents({
-        openTab: (path, label) => openEditor(path, label ? { label } : undefined),
-        popOutPane: (path, label) => {
-            void handlePopOutPane(path, label);
-        },
-    }), [handlePopOutPane, openEditor]);
-
-    const handlePopOutChat = useCallback(async () => {
-        await popOutChat({
-            hasWindow: typeof window !== 'undefined',
-            isWebAppMode,
-            currentChatJid,
-            currentRootChatJid,
-            forkChatBranch: api.forkChatBranch,
-            getActiveChatAgents: api.getActiveChatAgents,
-            getChatBranches,
-            setActiveChatAgents,
-            setCurrentChatBranches,
-            showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-        });
-    }, [currentChatJid, currentRootChatJid, isWebAppMode, showIntentToast]);
-
-    useEffect(() => {
-        applyStoredPaneLayout({
-            hasWindow: typeof window !== 'undefined',
-            editorOpen,
-            shellElement: appShellRef.current,
-            editorWidthRef,
-            dockHeightRef,
-            sidebarWidthRef,
-            readStoredNumber: getLocalStorageNumber,
-        });
-    }, [editorOpen]);
-
+    const {
+        toggleWorkspace,
+        handleBranchPickerChange,
+        openRenameCurrentBranchForm,
+        closeRenameCurrentBranchForm,
+        handleRenameCurrentBranch,
+        handlePruneCurrentBranch,
+        handleRestoreBranch,
+        handleCreateSessionFromCompose,
+        handlePopOutPane,
+        handlePopOutChat,
+    } = useBranchPaneLifecycle({
+        setWorkspaceOpen,
+        currentChatJid,
+        chatOnlyMode,
+        navigate,
+        currentBranchRecord,
+        renameBranchInFlightRef,
+        renameBranchLockUntilRef,
+        getFormLock: getRenameBranchFormLock,
+        setRenameBranchNameDraft,
+        setIsRenameBranchFormOpen,
+        setIsRenamingBranch,
+        renameChatBranch,
+        refreshActiveChatAgents,
+        refreshCurrentChatBranches,
+        showIntentToast,
+        currentChatBranches,
+        activeChatAgents,
+        pruneChatBranch,
+        restoreChatBranch,
+        branchLoaderMode,
+        branchLoaderSourceChatJid,
+        forkChatBranch: api.forkChatBranch,
+        setBranchLoaderState,
+        currentRootChatJid,
+        isWebAppMode,
+        getActiveChatAgents: api.getActiveChatAgents,
+        getChatBranches,
+        setActiveChatAgents,
+        setCurrentChatBranches,
+        openEditor,
+        tabStripActiveId,
+        editorInstanceRef,
+        dockInstanceRef,
+        terminalTabPath: TERMINAL_TAB_PATH,
+        dockVisible,
+        resolveTab: (value) => tabStore.get(value),
+        closeTab: handleTabClose,
+        setDockVisible,
+        editorOpen,
+        shellElement: appShellRef.current,
+        editorWidthRef,
+        dockHeightRef,
+        sidebarWidthRef,
+        readStoredNumber: getLocalStorageNumber,
+    });
 
     // Keyboard shortcut: Ctrl+` to toggle dock (only when dock panes exist)
     useEffect(() => {
@@ -1962,17 +1164,11 @@ function MainApp({ locationParams, navigate }) {
 
     const steerQueued = Boolean(steerQueuedTurnId && (steerQueuedTurnId === (agentStatus?.turn_id || currentTurnId)));
 
-    const appShellRenderMode = resolveAppShellRenderMode({
+    return renderResolvedAppShell({
         branchLoaderMode,
         panePopoutMode,
-    });
-
-    if (appShellRenderMode === 'branch-loader') {
-        return renderBranchLoaderMode(branchLoaderState);
-    }
-
-    if (appShellRenderMode === 'pane-popout') {
-        return renderPanePopoutMode({
+        branchLoaderState,
+        panePopoutOptions: {
             appShellRef,
             editorOpen,
             hidePanePopoutControls,
@@ -1986,173 +1182,149 @@ function MainApp({ locationParams, navigate }) {
             editorContainerRef,
             getPaneContent: () => editorInstanceRef.current?.getContent?.(),
             panePopoutPath,
-        });
-    }
-
-    return renderMainShell({
-        appShellRef,
-        workspaceOpen,
-        editorOpen,
-        chatOnlyMode,
-        zenMode,
-        isRenameBranchFormOpen,
-        closeRenameCurrentBranchForm,
-        handleRenameCurrentBranch,
-        renameBranchNameDraft,
-        renameBranchNameInputRef,
-        setRenameBranchNameDraft,
-        renameBranchDraftState,
-        isRenamingBranch,
-        addFileRef,
-        openEditor,
-        openTerminalTab,
-        openVncTab,
-        hasDockPanes,
-        toggleDock,
-        dockVisible,
-        handleSplitterMouseDown,
-        handleSplitterTouchStart,
-        showEditorPaneContainer,
-        tabStripTabs,
-        tabStripActiveId,
-        handleTabActivate,
-        handleTabClose,
-        handleTabCloseOthers,
-        handleTabCloseAll,
-        handleTabTogglePin,
-        handleTabTogglePreview,
-        handleTabEditSource,
-        previewTabs,
-        tabPaneOverrides,
-        toggleZenMode,
-        handlePopOutPane,
-        isWebAppMode,
-        editorContainerRef,
-        editorInstanceRef,
-        handleDockSplitterMouseDown,
-        handleDockSplitterTouchStart,
-        TERMINAL_TAB_PATH,
-        dockContainerRef,
-        handleEditorSplitterMouseDown,
-        handleEditorSplitterTouchStart,
-        searchQuery,
-        isIOSDevice,
-        currentBranchRecord,
-        currentChatJid,
-        currentChatBranches,
-        handleBranchPickerChange,
-        formatBranchPickerLabel,
-        openRenameCurrentBranchForm,
-        handlePruneCurrentBranch,
-        currentHashtag,
-        handleBackToTimeline,
-        activeSearchScopeLabel,
-        posts,
-        isMainTimelineView,
-        hasMore,
-        loadMore,
-        timelineRef,
-        handleHashtagClick,
-        addMessageRef,
-        scrollToMessage,
-        openFileFromPill,
-        handleDeletePost,
-        handleOpenFloatingWidget,
-        agents,
-        userProfile,
-        removingPostIds,
-        agentStatus,
-        isCompactionStatus,
-        agentDraft,
-        agentPlan,
-        agentThought,
-        pendingRequest,
-        intentToast,
-        currentTurnId,
-        steerQueued,
-        handlePanelToggle,
-        btwSession,
-        closeBtwPanel,
-        handleBtwRetry,
-        handleBtwInject,
-        floatingWidget,
-        handleCloseFloatingWidget,
-        handleFloatingWidgetEvent,
-        extensionStatusPanels,
-        pendingExtensionPanelActions,
-        handleExtensionPanelAction,
-        searchOpen,
-        followupQueueItems,
-        handleInjectQueuedFollowup,
-        handleRemoveQueuedFollowup,
-        viewStateRef,
-        loadPosts,
-        scrollToBottom,
-        searchScope,
-        handleSearch,
-        setSearchScope,
-        enterSearchMode,
-        exitSearchMode,
-        fileRefs,
-        removeFileRef,
-        clearFileRefs,
-        setFileRefsFromCompose,
-        messageRefs,
-        removeMessageRef,
-        clearMessageRefs,
-        setMessageRefsFromCompose,
-        handleCreateSessionFromCompose,
-        handleRestoreBranch,
-        attachActiveEditorFile,
-        followupQueueCount,
-        handleBtwIntercept,
-        handleMessageResponse,
-        handleComposeSubmitError,
-        handlePopOutChat,
-        isComposeBoxAgentActive,
-        activeChatAgents,
-        connectionStatus,
-        activeModel,
-        activeModelUsage,
-        activeThinkingLevel,
-        supportsThinking,
-        contextUsage,
-        notificationsEnabled,
-        notificationPermission,
-        handleToggleNotifications,
-        setActiveModel,
-        applyModelState,
-        setPendingRequest,
-        pendingRequestRef,
-        toggleWorkspace,
+        },
+        mainShellOptions: {
+            appShellRef,
+            workspaceOpen,
+            editorOpen,
+            chatOnlyMode,
+            zenMode,
+            isRenameBranchFormOpen,
+            closeRenameCurrentBranchForm,
+            handleRenameCurrentBranch,
+            renameBranchNameDraft,
+            renameBranchNameInputRef,
+            setRenameBranchNameDraft,
+            renameBranchDraftState,
+            isRenamingBranch,
+            addFileRef,
+            openEditor,
+            openTerminalTab,
+            openVncTab,
+            hasDockPanes,
+            toggleDock,
+            dockVisible,
+            handleSplitterMouseDown,
+            handleSplitterTouchStart,
+            showEditorPaneContainer,
+            tabStripTabs,
+            tabStripActiveId,
+            handleTabActivate,
+            handleTabClose,
+            handleTabCloseOthers,
+            handleTabCloseAll,
+            handleTabTogglePin,
+            handleTabTogglePreview,
+            handleTabEditSource,
+            previewTabs,
+            tabPaneOverrides,
+            toggleZenMode,
+            handlePopOutPane,
+            isWebAppMode,
+            editorContainerRef,
+            editorInstanceRef,
+            handleDockSplitterMouseDown,
+            handleDockSplitterTouchStart,
+            TERMINAL_TAB_PATH,
+            dockContainerRef,
+            handleEditorSplitterMouseDown,
+            handleEditorSplitterTouchStart,
+            searchQuery,
+            isIOSDevice,
+            currentBranchRecord,
+            currentChatJid,
+            currentChatBranches,
+            handleBranchPickerChange,
+            formatBranchPickerLabel,
+            openRenameCurrentBranchForm,
+            handlePruneCurrentBranch,
+            currentHashtag,
+            handleBackToTimeline,
+            activeSearchScopeLabel,
+            posts,
+            isMainTimelineView,
+            hasMore,
+            loadMore,
+            timelineRef,
+            handleHashtagClick,
+            addMessageRef,
+            scrollToMessage,
+            openFileFromPill,
+            handleDeletePost,
+            handleOpenFloatingWidget,
+            agents,
+            userProfile,
+            removingPostIds,
+            agentStatus,
+            isCompactionStatus,
+            agentDraft,
+            agentPlan,
+            agentThought,
+            pendingRequest,
+            intentToast,
+            currentTurnId,
+            steerQueued,
+            handlePanelToggle,
+            btwSession,
+            closeBtwPanel,
+            handleBtwRetry,
+            handleBtwInject,
+            floatingWidget,
+            handleCloseFloatingWidget,
+            handleFloatingWidgetEvent,
+            extensionStatusPanels,
+            pendingExtensionPanelActions,
+            handleExtensionPanelAction,
+            searchOpen,
+            followupQueueItems,
+            handleInjectQueuedFollowup,
+            handleRemoveQueuedFollowup,
+            viewStateRef,
+            loadPosts,
+            scrollToBottom,
+            searchScope,
+            handleSearch,
+            setSearchScope,
+            enterSearchMode,
+            exitSearchMode,
+            fileRefs,
+            removeFileRef,
+            clearFileRefs,
+            setFileRefsFromCompose,
+            messageRefs,
+            removeMessageRef,
+            clearMessageRefs,
+            setMessageRefsFromCompose,
+            handleCreateSessionFromCompose,
+            handleRestoreBranch,
+            attachActiveEditorFile,
+            followupQueueCount,
+            handleBtwIntercept,
+            handleMessageResponse,
+            handleComposeSubmitError,
+            handlePopOutChat,
+            isComposeBoxAgentActive,
+            activeChatAgents,
+            connectionStatus,
+            activeModel,
+            activeModelUsage,
+            activeThinkingLevel,
+            supportsThinking,
+            contextUsage,
+            notificationsEnabled,
+            notificationPermission,
+            handleToggleNotifications,
+            setActiveModel,
+            applyModelState,
+            setPendingRequest,
+            pendingRequestRef,
+            toggleWorkspace,
+        },
     });
 }
 
 function App() {
-    const [locationHref, setLocationHref] = useState(() =>
-        typeof window === 'undefined' ? 'http://localhost/' : window.location.href
-    );
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-        const handlePopState = () => setLocationHref(window.location.href);
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
-
-    const navigate = useCallback((nextUrl, options = {}) => {
-        if (typeof window === 'undefined') return;
-        const { replace = false } = options || {};
-        const resolved = new URL(String(nextUrl || ''), window.location.href).toString();
-        if (replace) {
-            window.history.replaceState(null, '', resolved);
-        } else {
-            window.history.pushState(null, '', resolved);
-        }
-        setLocationHref(window.location.href);
-    }, []);
-
-    const locationParams = useMemo(() => new URL(locationHref).searchParams, [locationHref]);
+    const { locationParams, navigate } = useAppLocationNavigation();
     return html`<${MainApp} locationParams=${locationParams} navigate=${navigate} />`;
 }
 

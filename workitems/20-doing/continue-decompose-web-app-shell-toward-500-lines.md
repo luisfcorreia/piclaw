@@ -58,6 +58,32 @@ Split the shell into a few larger render/event/controller seams rather than many
 ## Updates
 
 ### 2026-03-29
+- Merged back autoresearch branch `autoresearch/exp-mnc0gztp-go8e` into `main` after a much larger modular tranche focused on orchestration domains and reusable shell utilities.
+- New typed seams landed in this tranche:
+  - `runtime/web/src/ui/app-chat-refresh-lifecycle.ts`
+  - `runtime/web/src/ui/app-sidepanel-orchestration.ts`
+  - `runtime/web/src/ui/app-compose-reference-orchestration.ts`
+  - `runtime/web/src/ui/app-view-refresh-lifecycle.ts`
+  - `runtime/web/src/ui/app-realtime-lifecycle-orchestration.ts`
+  - `runtime/web/src/ui/app-agent-status-lifecycle.ts`
+  - `runtime/web/src/ui/app-chat-pane-runtime-orchestration.ts`
+  - `runtime/web/src/ui/app-timeline-view-actions.ts`
+  - `runtime/web/src/ui/app-agent-activity-orchestration.ts`
+  - `runtime/web/src/ui/app-timeline-scroll-orchestration.ts`
+  - `runtime/web/src/ui/app-location-navigation.ts`
+  - `runtime/web/src/ui/app-shell-render-router.ts`
+  - `runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts`
+- Current size reduction in this ticket after the latest merge-back: `runtime/web/src/app.ts` `2160 → 1332` lines.
+- Validation for the merged branch state:
+  - focused web tests → `171 pass, 0 fail`
+  - `bun run build:web`
+  - `bun run lint`
+  - `bun run typecheck`
+  - `bun run check:stale-dist`
+- Largest new modules in this tranche remained bounded (`app-branch-pane-lifecycle-actions.ts` 659 lines, `app-realtime-lifecycle-orchestration.ts` 342 lines, `app-agent-status-lifecycle.ts` 256 lines), so the reduction came from several coherent domains rather than a replacement mega-module.
+- Quality: ★★★★★ 9/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 2)
+
+### 2026-03-29
 - Merged back autoresearch branch `autoresearch/exp-mnbz6zwp-ccqw` into `main` after a more modular tranche focused on functional groupings instead of a single replacement module.
 - New typed seams landed in this tranche:
   - `runtime/web/src/ui/app-boot-load-orchestration.ts`
