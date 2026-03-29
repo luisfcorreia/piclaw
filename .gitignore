@@ -21,6 +21,7 @@ home/
 workspaces/
 node_modules/
 coverage/
+.bun/
 
 # Pack artifacts
 **/piclaw-*.tgz
