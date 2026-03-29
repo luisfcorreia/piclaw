@@ -41,7 +41,7 @@ import {
 import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
 import { resolveOptionalApi } from './ui/optional-api.js';
 import { watchReturnToApp, watchStandaloneWebAppMode } from './ui/app-resume.js';
-import { watchDockToggleShortcut, watchPaneOpenEvents, watchZenModeShortcuts } from './ui/app-browser-events.js';
+import { watchDockToggleShortcut, watchZenModeShortcuts } from './ui/app-browser-events.js';
 import {
     getPanePopoutTitle,
     hasPanePopoutMenuActions,
@@ -65,18 +65,20 @@ import {
     runBackstopRefreshTick,
 } from './ui/app-connection-lifecycle.js';
 import {
-    closeRenameBranchForm,
-    openRenameBranchForm,
-    pruneCurrentBranch,
-    renameCurrentBranch,
-    restoreBranch,
-    runBranchLoader,
-} from './ui/app-branch-actions.js';
-import {
-    createSessionFromCompose,
-    popOutChat,
-    popOutPane,
-} from './ui/app-window-actions.js';
+    createSessionFromComposeAction,
+    handleBranchPickerChangeAction,
+    openRenameCurrentBranchFormAction,
+    closeRenameCurrentBranchFormAction,
+    renameCurrentBranchAction,
+    pruneCurrentBranchAction,
+    restoreBranchAction,
+    runBranchLoaderModeEffect,
+    popOutPaneAction,
+    popOutChatAction,
+    watchPaneOpenEventBridge,
+    applyStoredPaneLayoutAction,
+    toggleWorkspaceVisibility,
+} from './ui/app-branch-pane-lifecycle-actions.js';
 import {
     applyChatPaneStateSnapshot,
     captureChatPaneStateSnapshot,
@@ -127,12 +129,6 @@ import {
     applyStoredSidebarWidth,
     runTimelineLoadFlow,
 } from './ui/app-boot-load-orchestration.js';
-import {
-    applyStoredPaneLayout,
-    closeTransferredPaneSource,
-    navigateToSelectedBranch,
-    resolvePanePopoutTransfer,
-} from './ui/app-branch-pane-orchestration.js';
 import {
     appendUniqueStringRef,
     normalizeComposeRefs,
@@ -1728,23 +1724,20 @@ function MainApp({ locationParams, navigate }) {
     }, [refreshAgentStatus, refreshAutoresearchStatus, refreshContextUsage, refreshQueueState]);
 
     const toggleWorkspace = useCallback(() => {
-        setWorkspaceOpen((prev) => !prev);
+        toggleWorkspaceVisibility(setWorkspaceOpen);
     }, []);
 
     const handleBranchPickerChange = useCallback((nextChatJid) => {
-        navigateToSelectedBranch({
-            hasWindow: typeof window !== 'undefined',
+        handleBranchPickerChangeAction({
             nextChatJid,
             currentChatJid,
             chatOnlyMode,
-            currentHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
             navigate,
         });
     }, [chatOnlyMode, currentChatJid, navigate]);
 
     const openRenameCurrentBranchForm = useCallback(() => {
-        openRenameBranchForm({
-            hasWindow: typeof window !== 'undefined',
+        openRenameCurrentBranchFormAction({
             currentBranchRecord,
             renameBranchInFlight: renameBranchInFlightRef.current,
             renameBranchLockUntil: renameBranchLockUntilRef.current,
@@ -1755,15 +1748,14 @@ function MainApp({ locationParams, navigate }) {
     }, [currentBranchRecord]);
 
     const closeRenameCurrentBranchForm = useCallback(() => {
-        closeRenameBranchForm({
+        closeRenameCurrentBranchFormAction({
             setIsRenameBranchFormOpen,
             setRenameBranchNameDraft,
         });
     }, []);
 
     const handleRenameCurrentBranch = useCallback(async (nextName) => {
-        await renameCurrentBranch({
-            hasWindow: typeof window !== 'undefined',
+        await renameCurrentBranchAction({
             currentBranchRecord,
             nextName,
             openRenameForm: openRenameCurrentBranchForm,
@@ -1780,8 +1772,7 @@ function MainApp({ locationParams, navigate }) {
     }, [closeRenameCurrentBranchForm, currentBranchRecord, refreshActiveChatAgents, refreshCurrentChatBranches, openRenameCurrentBranchForm, setIsRenamingBranch, showIntentToast]);
 
     const handlePruneCurrentBranch = useCallback(async (targetChatJid = null) => {
-        await pruneCurrentBranch({
-            hasWindow: typeof window !== 'undefined',
+        await pruneCurrentBranchAction({
             targetChatJid,
             currentChatJid,
             currentBranchRecord,
@@ -1791,43 +1782,31 @@ function MainApp({ locationParams, navigate }) {
             refreshActiveChatAgents,
             refreshCurrentChatBranches,
             showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
             chatOnlyMode,
             navigate,
         });
     }, [activeChatAgents, chatOnlyMode, currentBranchRecord, currentChatBranches, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
     const handleRestoreBranch = useCallback(async (targetChatJid) => {
-        await restoreBranch({
+        await restoreBranchAction({
             targetChatJid,
             restoreChatBranch,
             currentChatBranches,
             refreshActiveChatAgents,
             refreshCurrentChatBranches,
             showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
             chatOnlyMode,
             navigate,
         });
     }, [chatOnlyMode, currentChatBranches, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
-    useEffect(() => {
-        if (!branchLoaderMode || typeof window === 'undefined') return;
-        let cancelled = false;
-
-        void runBranchLoader({
-            branchLoaderSourceChatJid,
-            forkChatBranch: api.forkChatBranch,
-            setBranchLoaderState,
-            navigate,
-            baseHref: window.location.href,
-            isCancelled: () => cancelled,
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [branchLoaderMode, branchLoaderSourceChatJid, navigate]);
+    useEffect(() => runBranchLoaderModeEffect({
+        branchLoaderMode,
+        branchLoaderSourceChatJid,
+        forkChatBranch: api.forkChatBranch,
+        setBranchLoaderState,
+        navigate,
+    }), [branchLoaderMode, branchLoaderSourceChatJid, navigate]);
 
     const handleOpenFloatingWidget = useCallback((widget) => {
         openFloatingWidgetFromHost({
@@ -1865,7 +1844,7 @@ function MainApp({ locationParams, navigate }) {
     }, [currentChatJid]);
 
     const handleCreateSessionFromCompose = useCallback(async () => {
-        await createSessionFromCompose({
+        await createSessionFromComposeAction({
             currentChatJid,
             chatOnlyMode,
             forkChatBranch: api.forkChatBranch,
@@ -1873,50 +1852,37 @@ function MainApp({ locationParams, navigate }) {
             refreshCurrentChatBranches,
             showIntentToast,
             navigate,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
         });
     }, [chatOnlyMode, currentChatJid, navigate, refreshActiveChatAgents, refreshCurrentChatBranches, showIntentToast]);
 
     const handlePopOutPane = useCallback(async (path, label) => {
-        await popOutPane({
-            hasWindow: typeof window !== 'undefined',
+        await popOutPaneAction({
             isWebAppMode,
             path,
             label,
             showIntentToast,
             currentChatJid,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
-            resolveSourceTransfer: (panePath) => resolvePanePopoutTransfer({
-                panePath,
-                tabStripActiveId,
-                editorInstanceRef,
-                dockInstanceRef,
-                terminalTabPath: TERMINAL_TAB_PATH,
-            }),
-            closeSourcePaneIfTransferred: (panePath) => {
-                closeTransferredPaneSource({
-                    panePath,
-                    terminalTabPath: TERMINAL_TAB_PATH,
-                    dockVisible,
-                    resolveTab: (value) => tabStore.get(value),
-                    closeTab: handleTabClose,
-                    setDockVisible,
-                });
-            },
+            tabStripActiveId,
+            editorInstanceRef,
+            dockInstanceRef,
+            terminalTabPath: TERMINAL_TAB_PATH,
+            dockVisible,
+            resolveTab: (value) => tabStore.get(value),
+            closeTab: handleTabClose,
+            setDockVisible,
         });
     }, [currentChatJid, dockVisible, handleTabClose, isWebAppMode, showIntentToast, tabStripActiveId]);
 
     // Listen for preview-card / pane events that request opening a tab or standalone pane window.
-    useEffect(() => watchPaneOpenEvents({
-        openTab: (path, label) => openEditor(path, label ? { label } : undefined),
+    useEffect(() => watchPaneOpenEventBridge({
+        openEditor,
         popOutPane: (path, label) => {
             void handlePopOutPane(path, label);
         },
     }), [handlePopOutPane, openEditor]);
 
     const handlePopOutChat = useCallback(async () => {
-        await popOutChat({
-            hasWindow: typeof window !== 'undefined',
+        await popOutChatAction({
             isWebAppMode,
             currentChatJid,
             currentRootChatJid,
@@ -1926,13 +1892,11 @@ function MainApp({ locationParams, navigate }) {
             setActiveChatAgents,
             setCurrentChatBranches,
             showIntentToast,
-            baseHref: typeof window !== 'undefined' ? window.location.href : 'http://localhost/',
         });
     }, [currentChatJid, currentRootChatJid, isWebAppMode, showIntentToast]);
 
     useEffect(() => {
-        applyStoredPaneLayout({
-            hasWindow: typeof window !== 'undefined',
+        applyStoredPaneLayoutAction({
             editorOpen,
             shellElement: appShellRef.current,
             editorWidthRef,
