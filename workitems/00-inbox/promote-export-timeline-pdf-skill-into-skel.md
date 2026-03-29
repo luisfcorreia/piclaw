@@ -1,10 +1,10 @@
 ---
 id: promote-export-timeline-pdf-skill-into-skel
 title: Promote export-timeline-pdf skill into skel
-status: blocked
+status: inbox
 priority: medium
 created: 2026-03-17
-updated: 2026-03-28
+updated: 2026-03-29
 target_release: next
 estimate: S
 risk: medium
@@ -37,8 +37,8 @@ That historical decision is preserved below, but the ticket is now blocked pendi
 
 ## Blockers
 
-- The PDF export flow depends on server-side components that are not available in the current environment/runtime.
-- Until those components exist, the skill cannot be treated as a supported completed feature.
+- Reassessment needed: the ticket was previously treated as blocked because the PDF export flow appeared to depend on missing server-side components in this environment.
+- Move back to inbox is specifically to re-check that assumption before keeping it blocked or re-scoping it.
 
 ## Acceptance Criteria
 
@@ -76,6 +76,11 @@ Path A — block the skill as unsupported until the necessary server-side runtim
 - [ ] Ticket can move out of blocked with fresh validation evidence.
 
 ## Updates
+
+### 2026-03-29
+- Lane change: `30-blocked` → `00-inbox` for reassessment by user request.
+- Reason: re-check whether the missing server-side component assumption is still correct before continuing to treat the ticket as blocked.
+- Quality: ★★★☆☆ 6/10 (problem: 2, scope: 1, test: 1, deps: 1, risk: 1)
 
 ### 2026-03-28
 - Lane retained: `30-blocked` via web blocked-card decision.
