@@ -29,15 +29,11 @@ import {
 import { shouldClearQueuedSteerState } from './ui/queue-state.js';
 import { isCompactionStatus } from './ui/status-duration.js';
 import {
-    applyModelStatePayload,
     handleMessageResponseRefresh,
-    loadAgentsBootstrap,
-    refreshActiveChatAgents as refreshActiveChatAgentsState,
-    refreshCurrentChatBranches as refreshCurrentChatBranchesState,
-    refreshModelState as refreshModelStateForChat,
-    updateAgentProfileFromEvent,
-    updateUserProfileFromEvent,
 } from './ui/app-auth-bootstrap.js';
+import {
+    useChatRefreshLifecycle,
+} from './ui/app-chat-refresh-lifecycle.js';
 import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
 import { resolveOptionalApi } from './ui/optional-api.js';
 import { watchReturnToApp, watchStandaloneWebAppMode } from './ui/app-resume.js';
@@ -115,7 +111,6 @@ import {
     refreshAutoresearchStatusForChat,
     refreshContextUsageForChat,
     refreshCurrentView as refreshCurrentViewState,
-    refreshModelAndQueueState as refreshModelAndQueueStateBundle,
     refreshQueueStateForChat,
 } from './ui/app-status-refresh-orchestration.js';
 import { handleAppSseEvent } from './ui/app-sse-events.js';
@@ -126,7 +121,6 @@ import {
     runSilenceWatchdogTick,
 } from './ui/app-agent-status-orchestration.js';
 import {
-    applyStoredSidebarWidth,
     runTimelineLoadFlow,
 } from './ui/app-boot-load-orchestration.js';
 import {
@@ -1269,78 +1263,41 @@ function MainApp({ locationParams, navigate }) {
         });
     }, [currentChatJid, posts, preserveTimelineScrollTop]);
 
-    const loadAgents = useCallback(async () => {
-        await loadAgentsBootstrap({
-            getAgents,
-            setAgents,
-            setUserProfile,
-            applyBranding,
-        });
-    }, [applyBranding]);
-
-    useEffect(() => {
-        loadAgents();
-        applyStoredSidebarWidth({
-            readStoredNumber: getLocalStorageNumber,
-            sidebarWidthRef,
-            shellElement: appShellRef.current,
-        });
-    }, [loadAgents]);
+    const {
+        updateAgentProfile,
+        updateUserProfile,
+        applyModelState,
+        refreshModelState,
+        refreshActiveChatAgents,
+        refreshCurrentChatBranches,
+        refreshModelAndQueueState,
+    } = useChatRefreshLifecycle({
+        getAgents,
+        setAgents,
+        setUserProfile,
+        applyBranding,
+        readStoredNumber: getLocalStorageNumber,
+        sidebarWidthRef,
+        appShellRef,
+        currentChatJid,
+        currentRootChatJid,
+        getAgentModels,
+        getActiveChatAgents,
+        getChatBranches,
+        activeChatJidRef,
+        setActiveChatAgents,
+        setCurrentChatBranches,
+        setActiveModel,
+        setActiveThinkingLevel,
+        setSupportsThinking,
+        setActiveModelUsage,
+        agentsRef,
+        refreshQueueState,
+        refreshContextUsage,
+        refreshAutoresearchStatus,
+    });
 
     const isComposeBoxAgentActive = isAgentTurnActive || agentStatus !== null;
-
-    const updateAgentProfile = useCallback((payload) => {
-        updateAgentProfileFromEvent({
-            payload,
-            agentsRef,
-            setAgents,
-            applyBranding,
-        });
-    }, [applyBranding]);
-
-    const updateUserProfile = useCallback((payload) => {
-        updateUserProfileFromEvent({
-            payload,
-            setUserProfile,
-        });
-    }, []);
-
-    const applyModelState = useCallback((payload) => {
-        applyModelStatePayload({
-            payload,
-            setActiveModel,
-            setActiveThinkingLevel,
-            setSupportsThinking,
-            setActiveModelUsage,
-        });
-    }, []);
-
-    const refreshModelState = useCallback(() => {
-        refreshModelStateForChat({
-            currentChatJid,
-            getAgentModels,
-            activeChatJidRef,
-            applyModelState,
-        });
-    }, [applyModelState, currentChatJid]);
-
-    const refreshActiveChatAgents = useCallback(() => {
-        refreshActiveChatAgentsState({
-            currentChatJid,
-            getActiveChatAgents,
-            getChatBranches,
-            activeChatJidRef,
-            setActiveChatAgents,
-        });
-    }, [currentChatJid]);
-
-    const refreshCurrentChatBranches = useCallback(() => {
-        refreshCurrentChatBranchesState({
-            currentRootChatJid,
-            getChatBranches,
-            setCurrentChatBranches,
-        });
-    }, [currentRootChatJid]);
 
     const handleInjectQueuedFollowup = useCallback((queuedItem) => {
         handleInjectQueuedFollowupAction({
@@ -1480,28 +1437,6 @@ function MainApp({ locationParams, navigate }) {
             isAgentTurnActive,
         });
     }, [activeChatAgents, activeModel, activeThinkingLevel, contextUsage, currentChatBranches, currentChatJid, currentRootChatJid, isAgentTurnActive, rawPosts, supportsThinking]);
-
-    const refreshModelAndQueueState = useCallback(() => {
-        refreshModelAndQueueStateBundle({
-            refreshModelState,
-            refreshActiveChatAgents,
-            refreshCurrentChatBranches,
-            refreshQueueState,
-            refreshContextUsage,
-            refreshAutoresearchStatus,
-        });
-    }, [refreshActiveChatAgents, refreshAutoresearchStatus, refreshContextUsage, refreshCurrentChatBranches, refreshModelState, refreshQueueState]);
-
-    useEffect(() => {
-        refreshModelAndQueueState();
-        const interval = setInterval(() => {
-            refreshModelState();
-            refreshActiveChatAgents();
-            refreshCurrentChatBranches();
-            refreshQueueState();
-        }, 60_000);
-        return () => clearInterval(interval);
-    }, [refreshModelAndQueueState, refreshModelState, refreshActiveChatAgents, refreshCurrentChatBranches, refreshQueueState]);
 
     useEffect(() => {
         setExtensionStatusPanels(new Map());
