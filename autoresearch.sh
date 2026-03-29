@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 start_ms=$(date +%s%3N)
 
 # Fast syntax/import precheck for key shell seams touched in this loop.
-bun -e "await import('./runtime/web/src/ui/app-branch-actions.ts'); await import('./runtime/web/src/ui/app-window-actions.ts'); await import('./runtime/web/src/ui/app-status-refresh-orchestration.ts'); await import('./runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts'); await import('./runtime/web/src/ui/app-chat-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-sidepanel-orchestration.ts'); await import('./runtime/web/src/ui/app-compose-reference-orchestration.ts');" >/dev/null
+bun -e "await import('./runtime/web/src/ui/app-branch-actions.ts'); await import('./runtime/web/src/ui/app-window-actions.ts'); await import('./runtime/web/src/ui/app-status-refresh-orchestration.ts'); await import('./runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts'); await import('./runtime/web/src/ui/app-chat-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-sidepanel-orchestration.ts'); await import('./runtime/web/src/ui/app-compose-reference-orchestration.ts'); await import('./runtime/web/src/ui/app-view-refresh-lifecycle.ts');" >/dev/null
 
 tests=(
   runtime/test/web/app-branch-actions.test.ts
@@ -27,7 +27,8 @@ for optional_test in \
   runtime/test/web/app-btw-orchestration.test.ts \
   runtime/test/web/app-chat-refresh-lifecycle.test.ts \
   runtime/test/web/app-sidepanel-orchestration.test.ts \
-  runtime/test/web/app-compose-reference-orchestration.test.ts
+  runtime/test/web/app-compose-reference-orchestration.test.ts \
+  runtime/test/web/app-view-refresh-lifecycle.test.ts
   do
   if [[ -f "$optional_test" ]]; then
     tests+=("$optional_test")
@@ -48,6 +49,7 @@ coherent_modules=(
   runtime/web/src/ui/app-chat-refresh-lifecycle.ts
   runtime/web/src/ui/app-sidepanel-orchestration.ts
   runtime/web/src/ui/app-compose-reference-orchestration.ts
+  runtime/web/src/ui/app-view-refresh-lifecycle.ts
   runtime/web/src/ui/app-shell-ref-utils.ts
   runtime/web/src/ui/app-main-shell-composition.ts
   runtime/web/src/ui/app-agent-status-orchestration.ts

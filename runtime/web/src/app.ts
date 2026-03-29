@@ -38,6 +38,9 @@ import {
 import {
     useComposeReferenceOrchestration,
 } from './ui/app-compose-reference-orchestration.js';
+import {
+    useViewRefreshLifecycle,
+} from './ui/app-view-refresh-lifecycle.js';
 import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
 import { resolveOptionalApi } from './ui/optional-api.js';
 import { watchReturnToApp, watchStandaloneWebAppMode } from './ui/app-resume.js';
@@ -87,9 +90,6 @@ import {
     filterQueuedTimelinePosts,
 } from './ui/app-followup-queue.js';
 import {
-    applyLiveFloatingWidgetUpdate,
-} from './ui/app-floating-widget.js';
-import {
     handleInjectQueuedFollowupAction,
     handleRemoveQueuedFollowupAction,
 } from './ui/app-floating-widget-followup.js';
@@ -104,7 +104,6 @@ import {
 import {
     refreshAutoresearchStatusForChat,
     refreshContextUsageForChat,
-    refreshCurrentView as refreshCurrentViewState,
     refreshQueueStateForChat,
 } from './ui/app-status-refresh-orchestration.js';
 import { handleAppSseEvent } from './ui/app-sse-events.js';
@@ -114,9 +113,6 @@ import {
     refreshAgentStatusForChat,
     runSilenceWatchdogTick,
 } from './ui/app-agent-status-orchestration.js';
-import {
-    runTimelineLoadFlow,
-} from './ui/app-boot-load-orchestration.js';
 import {
     backToTimeline,
     deleteTimelinePost,
@@ -1302,77 +1298,36 @@ function MainApp({ locationParams, navigate }) {
         isAgentTurnActive,
     });
 
-    useEffect(() => {
-        setExtensionStatusPanels(new Map());
-        setPendingExtensionPanelActions(new Set());
-    }, [currentChatJid]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        void runTimelineLoadFlow({
-            currentHashtag,
-            searchQuery,
-            searchScope,
-            currentChatJid,
-            currentRootChatJid,
-            loadPosts,
-            searchPosts,
-            setPosts,
-            setHasMore,
-            scrollToBottom,
-            isCancelled: () => cancelled,
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [
+    const {
+        refreshCurrentView,
+        applyLiveGeneratedWidgetUpdate,
+    } = useViewRefreshLifecycle({
         currentChatJid,
+        currentRootChatJid,
         currentHashtag,
         searchQuery,
         searchScope,
-        currentRootChatJid,
         loadPosts,
-        scrollToBottom,
-        setHasMore,
+        searchPosts,
         setPosts,
-    ]);
-
-    useEffect(() => {
-        const ownerChatJid = paneStateOwnerChatJidRef.current || currentChatJid;
-        chatPaneStateByChatRef.current.set(ownerChatJid, snapshotCurrentChatPaneState());
-    }, [currentChatJid, snapshotCurrentChatPaneState]);
-
-    useEffect(() => {
-        const ownerChatJid = paneStateOwnerChatJidRef.current || currentChatJid;
-        if (ownerChatJid === currentChatJid) return;
-        chatPaneStateByChatRef.current.set(ownerChatJid, snapshotCurrentChatPaneState());
-        paneStateOwnerChatJidRef.current = currentChatJid;
-        dismissedQueueRowIdsRef.current.clear();
-        restoreChatPaneState(chatPaneStateByChatRef.current.get(currentChatJid) || null);
-        void refreshQueueState();
-        void refreshAgentStatus();
-        void refreshContextUsage();
-    }, [currentChatJid, refreshAgentStatus, refreshContextUsage, refreshQueueState, restoreChatPaneState, snapshotCurrentChatPaneState]);
-
-    const refreshCurrentView = useCallback(() => {
-        refreshCurrentViewState({
-            viewStateRef,
-            refreshTimeline,
-            refreshModelAndQueueState,
-        });
-    }, [refreshModelAndQueueState, refreshTimeline]);
-
-    const applyLiveGeneratedWidgetUpdate = useCallback((data, fallbackStatus = 'streaming') => {
-        const updatedAt = new Date().toISOString();
-        setFloatingWidget((current) => applyLiveFloatingWidgetUpdate(current, data, {
-            fallbackStatus,
-            currentChatJid,
-            dismissedSessionKeys: dismissedLiveWidgetKeysRef.current,
-            updatedAt,
-        }));
-    }, [currentChatJid]);
+        setHasMore,
+        scrollToBottom,
+        setExtensionStatusPanels,
+        setPendingExtensionPanelActions,
+        paneStateOwnerChatJidRef,
+        chatPaneStateByChatRef,
+        snapshotCurrentChatPaneState,
+        restoreChatPaneState,
+        dismissedQueueRowIdsRef,
+        refreshQueueState,
+        refreshAgentStatus,
+        refreshContextUsage,
+        viewStateRef,
+        refreshTimeline,
+        refreshModelAndQueueState,
+        setFloatingWidget,
+        dismissedLiveWidgetKeysRef,
+    });
 
     const handleSseEvent = useCallback((eventType, data) => {
         handleAppSseEvent(eventType, data, {
