@@ -53,6 +53,9 @@ import {
 import {
     useTimelineScrollOrchestration,
 } from './ui/app-timeline-scroll-orchestration.js';
+import {
+    useAppLocationNavigation,
+} from './ui/app-location-navigation.js';
 import { installStandaloneMobileViewportFix } from './ui/mobile-viewport.js';
 import { resolveOptionalApi } from './ui/optional-api.js';
 import { watchStandaloneWebAppMode } from './ui/app-resume.js';
@@ -1333,30 +1336,7 @@ function MainApp({ locationParams, navigate }) {
 }
 
 function App() {
-    const [locationHref, setLocationHref] = useState(() =>
-        typeof window === 'undefined' ? 'http://localhost/' : window.location.href
-    );
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-        const handlePopState = () => setLocationHref(window.location.href);
-        window.addEventListener('popstate', handlePopState);
-        return () => window.removeEventListener('popstate', handlePopState);
-    }, []);
-
-    const navigate = useCallback((nextUrl, options = {}) => {
-        if (typeof window === 'undefined') return;
-        const { replace = false } = options || {};
-        const resolved = new URL(String(nextUrl || ''), window.location.href).toString();
-        if (replace) {
-            window.history.replaceState(null, '', resolved);
-        } else {
-            window.history.pushState(null, '', resolved);
-        }
-        setLocationHref(window.location.href);
-    }, []);
-
-    const locationParams = useMemo(() => new URL(locationHref).searchParams, [locationHref]);
+    const { locationParams, navigate } = useAppLocationNavigation();
     return html`<${MainApp} locationParams=${locationParams} navigate=${navigate} />`;
 }
 
