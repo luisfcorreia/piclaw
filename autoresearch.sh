@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 start_ms=$(date +%s%3N)
 
 # Fast syntax/import precheck for key shell seams touched in this loop.
-bun -e "await import('./runtime/web/src/ui/app-branch-actions.ts'); await import('./runtime/web/src/ui/app-window-actions.ts'); await import('./runtime/web/src/ui/app-status-refresh-orchestration.ts'); await import('./runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts'); await import('./runtime/web/src/ui/app-chat-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-sidepanel-orchestration.ts'); await import('./runtime/web/src/ui/app-compose-reference-orchestration.ts'); await import('./runtime/web/src/ui/app-view-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-realtime-lifecycle-orchestration.ts'); await import('./runtime/web/src/ui/app-agent-status-lifecycle.ts'); await import('./runtime/web/src/ui/app-chat-pane-runtime-orchestration.ts'); await import('./runtime/web/src/ui/app-timeline-view-actions.ts'); await import('./runtime/web/src/ui/app-agent-activity-orchestration.ts'); await import('./runtime/web/src/ui/app-timeline-scroll-orchestration.ts'); await import('./runtime/web/src/ui/app-location-navigation.ts');" >/dev/null
+bun -e "await import('./runtime/web/src/ui/app-branch-actions.ts'); await import('./runtime/web/src/ui/app-window-actions.ts'); await import('./runtime/web/src/ui/app-status-refresh-orchestration.ts'); await import('./runtime/web/src/ui/app-branch-pane-lifecycle-actions.ts'); await import('./runtime/web/src/ui/app-chat-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-sidepanel-orchestration.ts'); await import('./runtime/web/src/ui/app-compose-reference-orchestration.ts'); await import('./runtime/web/src/ui/app-view-refresh-lifecycle.ts'); await import('./runtime/web/src/ui/app-realtime-lifecycle-orchestration.ts'); await import('./runtime/web/src/ui/app-agent-status-lifecycle.ts'); await import('./runtime/web/src/ui/app-chat-pane-runtime-orchestration.ts'); await import('./runtime/web/src/ui/app-timeline-view-actions.ts'); await import('./runtime/web/src/ui/app-agent-activity-orchestration.ts'); await import('./runtime/web/src/ui/app-timeline-scroll-orchestration.ts'); await import('./runtime/web/src/ui/app-location-navigation.ts'); await import('./runtime/web/src/ui/app-shell-render-router.ts');" >/dev/null
 
 tests=(
   runtime/test/web/app-branch-actions.test.ts
@@ -35,7 +35,8 @@ for optional_test in \
   runtime/test/web/app-timeline-view-actions.test.ts \
   runtime/test/web/app-agent-activity-orchestration.test.ts \
   runtime/test/web/app-timeline-scroll-orchestration.test.ts \
-  runtime/test/web/app-location-navigation.test.ts
+  runtime/test/web/app-location-navigation.test.ts \
+  runtime/test/web/app-shell-render-router.test.ts
   do
   if [[ -f "$optional_test" ]]; then
     tests+=("$optional_test")
@@ -64,6 +65,7 @@ coherent_modules=(
   runtime/web/src/ui/app-agent-activity-orchestration.ts
   runtime/web/src/ui/app-timeline-scroll-orchestration.ts
   runtime/web/src/ui/app-location-navigation.ts
+  runtime/web/src/ui/app-shell-render-router.ts
   runtime/web/src/ui/app-shell-ref-utils.ts
   runtime/web/src/ui/app-main-shell-composition.ts
   runtime/web/src/ui/app-agent-status-orchestration.ts
