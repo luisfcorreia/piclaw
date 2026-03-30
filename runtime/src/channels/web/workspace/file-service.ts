@@ -127,7 +127,10 @@ export class WorkspaceFileService {
     }
   }
 
-  getRaw(pathParam: string | null): { status: number; body: string | Blob; contentType?: string; filePath?: string; size?: number } {
+  getRaw(
+    pathParam: string | null,
+    download = false,
+  ): { status: number; body: string | Blob; contentType?: string; filePath?: string; size?: number; filename?: string; download?: boolean } {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: "Invalid path" };
 
@@ -136,7 +139,15 @@ export class WorkspaceFileService {
       if (stats.isDirectory()) return { status: 400, body: "Path is a directory" };
       const contentType = contentTypeForPath(targetPath);
       const file = Bun.file(targetPath);
-      return { status: 200, body: file, contentType, filePath: targetPath, size: stats.size };
+      return {
+        status: 200,
+        body: file,
+        contentType,
+        filePath: targetPath,
+        size: stats.size,
+        filename: path.basename(targetPath),
+        download,
+      };
     } catch {
       return { status: 404, body: "Not found" };
     }

@@ -75,6 +75,12 @@ test("updateFile/deleteFile and getRaw handle success and errors", () => {
     const raw = service.getRaw(`${prefix}/edit.txt`);
     expect(raw.status).toBe(200);
     expect(raw.contentType).toBe("text/plain");
+    expect(raw.download).toBe(false);
+
+    const rawDownload = service.getRaw(`${prefix}/edit.txt`, true);
+    expect(rawDownload.status).toBe(200);
+    expect(rawDownload.download).toBe(true);
+    expect(rawDownload.filename).toBe("edit.txt");
 
     expect(service.updateFile(`${prefix}/edit.txt`, undefined as any).status).toBe(400);
     expect(service.updateFile(`${prefix}/missing.txt`, "x").status).toBe(404);

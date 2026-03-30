@@ -25,8 +25,8 @@ export class WorkspaceService {
     return this.fileService.getFile(pathParam, maxParam, mode);
   }
 
-  getRaw(pathParam: string | null) {
-    return this.fileService.getRaw(pathParam);
+  getRaw(pathParam: string | null, download = false) {
+    return this.fileService.getRaw(pathParam, download);
   }
 
   getGitBranch(pathParam: string | null) {

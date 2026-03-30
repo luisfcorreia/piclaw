@@ -655,8 +655,17 @@ export async function setWorkspaceVisibility(visible, showHidden = false) {
 /**
  * Get raw workspace file URL (images/SVG)
  */
-export function getWorkspaceRawUrl(path) {
-    return `${API_BASE}/workspace/raw?path=${encodeURIComponent(path)}`;
+export function getWorkspaceRawUrl(path, options = {}) {
+    const query = new URLSearchParams({ path: String(path || '') });
+    if (options.download) query.set('download', '1');
+    return `${API_BASE}/workspace/raw?${query.toString()}`;
+}
+
+/**
+ * Get workspace file download URL.
+ */
+export function getWorkspaceFileDownloadUrl(path) {
+    return getWorkspaceRawUrl(path, { download: true });
 }
 
 /**
