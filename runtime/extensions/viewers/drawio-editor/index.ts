@@ -448,7 +448,10 @@ function loadFile() {
 function startEditor() {
   // Embed mode URL with dark theme
   var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var editorUrl = (${buildEmbeddedDrawioAppUrl.toString()})(!!isDark, !!readOnly);
+  var editorUrl = '/drawio/index.html?embed=1&proto=json&spin=1&modified=0&saveAndExit=0&ui=dark&dark=' + (isDark ? '1' : '0');
+  if (readOnly) {
+    editorUrl += '&chrome=0&toolbar=0&layers=0&edit=0';
+  }
   frame.src = editorUrl;
   frame.style.display = 'block';
   frame.onload = function() {
