@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { getDrawioVendorDirCandidates, resolveDrawioVendorDir } from '../../extensions/viewers/drawio-editor/index.ts';
+import { buildEmbeddedDrawioAppUrl, getDrawioVendorDirCandidates, resolveDrawioVendorDir } from '../../extensions/viewers/drawio-editor/index.ts';
 
 function withTempDir(run: (root: string) => void) {
   const root = mkdtempSync(join(tmpdir(), 'piclaw-drawio-vendor-'));
@@ -34,4 +34,12 @@ test('resolveDrawioVendorDir falls back to workspace source vendor when packaged
 
     expect(resolveDrawioVendorDir(baseDir, join(root, 'workspace'))).toBe(workspaceVendor);
   });
+});
+
+test('buildEmbeddedDrawioAppUrl matches the older editor route and keeps export UI enabled', () => {
+  expect(buildEmbeddedDrawioAppUrl(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&ui=dark&dark=0');
+  expect(buildEmbeddedDrawioAppUrl(true)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&ui=dark&dark=1');
+  expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('noSaveBtn=1');
+  expect(buildEmbeddedDrawioAppUrl(true)).not.toContain('noExitBtn=1');
+  expect(buildEmbeddedDrawioAppUrl(true, true)).toContain('chrome=0');
 });

@@ -1307,6 +1307,7 @@ export function WorkspaceExplorer({
             ? 'File too large to edit'
             : 'File is not editable';
 
+    const selectedHasOpenableTab = Boolean(selectedPath && !selectedIsDir && hasOpenableWorkspaceTab(selectedPath));
     const selectedCanRename = Boolean(selectedPath && selectedPath !== '.');
     const selectedCanDelete = Boolean(selectedPath && !selectedIsDir);
     const selectedCanDownload = Boolean(selectedPath && !selectedIsDir);
@@ -1410,11 +1411,6 @@ export function WorkspaceExplorer({
             cancelRename();
         }
 
-        const allowFirstProgrammaticFileClick = clickedType === 'file'
-            && pendingProgrammaticFileClickRef.current === clickedPath
-            && !isCaretClick
-            && !isActionClick;
-
         if (clickedType === 'dir') {
             pendingProgrammaticFileClickRef.current = null;
             setSelectedPath(clickedPath);
@@ -1435,12 +1431,8 @@ export function WorkspaceExplorer({
             setSelectedPath(clickedPath);
             const node = nodeMapRef.current.get(clickedPath);
             if (node) onFileSelectRef.current?.(node.path, node);
-            const shouldOpenSpecializedTab = !isActionClick && !isCaretClick && hasOpenableWorkspaceTab(clickedPath);
-            if (shouldOpenSpecializedTab) {
-                onOpenEditorRef.current?.(clickedPath, previewRef.current);
-            } else {
-                const shouldAttemptEditableAutoOpen = !isActionClick && !isCaretClick;
-                loadPreviewRef.current?.(clickedPath, { autoOpen: shouldAttemptEditableAutoOpen });
+            if (!isActionClick && !isCaretClick) {
+                loadPreviewRef.current?.(clickedPath);
             }
         }
     }).current;
@@ -1947,6 +1939,11 @@ export function WorkspaceExplorer({
         runMenuAction(() => handleToggleHidden());
     }, [runMenuAction, handleToggleHidden]);
 
+    const handleMenuOpenTab = useCallback(() => {
+        if (!selectedPath || !selectedHasOpenableTab) return;
+        runMenuAction(() => onOpenEditorRef.current?.(selectedPath, preview));
+    }, [runMenuAction, selectedPath, selectedHasOpenableTab, preview]);
+
     const handleMenuOpenEditor = useCallback(() => {
         if (!selectedPath || !canEdit) return;
         runMenuAction(() => onOpenEditorRef.current?.(selectedPath, preview));
@@ -2134,6 +2131,9 @@ export function WorkspaceExplorer({
                                 `}
 
                                 ${selectedPath && html`<div class="workspace-menu-separator"></div>`}
+                                ${selectedHasOpenableTab && html`
+                                    <button class="workspace-menu-item" role="menuitem" onClick=${handleMenuOpenTab}>Open in tab</button>
+                                `}
                                 ${selectedPath && !selectedIsDir && html`
                                     <button class="workspace-menu-item" role="menuitem" onClick=${handleMenuOpenEditor} disabled=${!canEdit}>Open in editor</button>
                                 `}

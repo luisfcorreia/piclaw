@@ -78,6 +78,14 @@ const DRAWIO_FRAME_CSP =
   "img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self'; " +
   "frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
 
+export function buildEmbeddedDrawioAppUrl(isDark: boolean, readOnly = false): string {
+  let editorUrl = `${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&ui=dark&dark=${isDark ? "1" : "0"}`;
+  if (readOnly) {
+    editorUrl += '&chrome=0&toolbar=0&layers=0&edit=0';
+  }
+  return editorUrl;
+}
+
 // ── Editor wrapper page ─────────────────────────────────────────
 
 /**
@@ -309,11 +317,7 @@ function loadFile() {
 function startEditor() {
   // Embed mode URL with dark theme
   var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-  var editorUrl = '${ROUTE_PREFIX}/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0'
-    + '&ui=dark&dark=' + (isDark ? '1' : '0');
-  if (readOnly) {
-    editorUrl += '&chrome=0&toolbar=0&layers=0&edit=0';
-  }
+  var editorUrl = (${buildEmbeddedDrawioAppUrl.toString()})(!!isDark, !!readOnly);
   frame.src = editorUrl;
   frame.style.display = 'block';
   frame.onload = function() {
