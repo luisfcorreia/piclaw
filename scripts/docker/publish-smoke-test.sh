@@ -40,6 +40,10 @@ print_container_logs() {
   if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     echo "[smoke] container logs (${CONTAINER_NAME})"
     docker logs "$CONTAINER_NAME" || true
+    echo "[smoke] piclaw stderr log:"
+    docker exec "$CONTAINER_NAME" cat /var/log/piclaw/piclaw.stderr.log 2>/dev/null || true
+    echo "[smoke] piclaw stdout log:"
+    docker exec "$CONTAINER_NAME" cat /var/log/piclaw/piclaw.stdout.log 2>/dev/null | tail -n 30 || true
   fi
 }
 

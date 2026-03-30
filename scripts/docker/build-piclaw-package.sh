@@ -60,8 +60,8 @@ rm -f "$TARBALL"
 rm -rf "$PACK_DIR"
 
 DEST_REAL="$BUN_INSTALL/install/global/node_modules/piclaw"
-if [ -d "$DEST_REAL/extensions" ] && [ -d "$DEST_REAL/node_modules" ]; then
-  sudo ln -sfn "$DEST_REAL/node_modules" "$DEST_REAL/extensions/node_modules" 2>/dev/null || true
+if [ -d "$DEST_REAL/runtime/extensions" ] && [ -d "$DEST_REAL/node_modules" ]; then
+  sudo ln -sfn "$DEST_REAL/node_modules" "$DEST_REAL/runtime/extensions/node_modules" 2>/dev/null || true
 fi
 
 # Ensure world-readable after install

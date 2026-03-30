@@ -91,6 +91,7 @@ COPY --chown=agent:agent runtime/skills/ /home/agent/.pi/agent/skills/
 
 # Ship piclaw orchestrator repo layout and install globally
 COPY --chown=agent:agent package.json bun.lock README.md LICENSE BUN_VERSION RESTIC_VERSION /home/agent/piclaw/
+COPY --chown=agent:agent scripts/postinstall.ts /home/agent/piclaw/scripts/postinstall.ts
 COPY --chown=agent:agent docs/install-from-repo.md /home/agent/piclaw/docs/install-from-repo.md
 COPY --chown=agent:agent runtime/ /home/agent/piclaw/runtime/
 RUN /tmp/build-piclaw-package.sh && \
