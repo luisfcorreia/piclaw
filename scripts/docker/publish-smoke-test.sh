@@ -133,6 +133,14 @@ if [ "$READY" -ne 1 ]; then
 fi
 
 echo "[smoke] HTTP startup ok"
+
+echo "[smoke] verifying supervisord is running"
+if ! docker exec "$CONTAINER_NAME" sh -c 'pgrep -af supervisord >/dev/null && supervisorctl status >/dev/null'; then
+  echo "[smoke] supervisord or supervisorctl status check failed" >&2
+  print_container_logs
+  exit 1
+fi
+
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
 echo "[smoke] ok"

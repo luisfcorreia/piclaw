@@ -11,6 +11,7 @@ MARKER_FILE="/home/agent/.container_initialized"
 HOME_DIR="/home/agent"
 SKEL_DIR="/etc/skel.agent"
 DEFAULT_SUPERVISOR_CONF="/etc/supervisor/supervisord.conf"
+SUPERVISOR_CONF_ENV_SET="${SUPERVISOR_CONF+x}"
 SUPERVISOR_CONF="${SUPERVISOR_CONF:-$DEFAULT_SUPERVISOR_CONF}"
 WORKSPACE_SUPERVISOR_DIR="/workspace/.piclaw/supervisor"
 SUPERVISOR_DEFAULTS_DIR="/usr/local/share/piclaw/supervisor"
@@ -241,11 +242,48 @@ mkdir -p /var/log/piclaw /var/run/supervisor
 chown -R agent:agent /var/log/piclaw
 chmod 755 /usr/local/bin/run-piclaw.sh 2>/dev/null || true
 
+validate_supervisor_config() {
+    local conf="$1"
+    if [ ! -f "$conf" ]; then
+        return 1
+    fi
+    /usr/bin/supervisord -n -c "$conf" -t >/tmp/piclaw-supervisord-validate.log 2>&1
+}
+
+resolve_supervisor_conf() {
+    local requested="$1"
+
+    if validate_supervisor_config "$requested"; then
+        printf '%s\n' "$requested"
+        return 0
+    fi
+
+    if [ "$SUPERVISOR_CONF_ENV_SET" = "x" ]; then
+        echo "Supervisor config validation failed for explicit SUPERVISOR_CONF=$requested" >&2
+        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+        return 1
+    fi
+
+    if [ "$requested" != "$DEFAULT_SUPERVISOR_CONF" ] && validate_supervisor_config "$DEFAULT_SUPERVISOR_CONF"; then
+        log "Supervisor config $requested failed validation; falling back to $DEFAULT_SUPERVISOR_CONF"
+        cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+        printf '%s\n' "$DEFAULT_SUPERVISOR_CONF"
+        return 0
+    fi
+
+    echo "Supervisor config validation failed for $requested" >&2
+    cat /tmp/piclaw-supervisord-validate.log >&2 2>/dev/null || true
+    return 1
+}
+
 log "=== PiClaw - Pi Coding Agent Sandbox ==="
 
-if [ ! -f "$SUPERVISOR_CONF" ]; then
-    echo "Missing supervisor config at $SUPERVISOR_CONF" >&2
+if [ ! -x /usr/bin/supervisord ]; then
+    echo "Missing supervisord binary at /usr/bin/supervisord" >&2
     exit 1
 fi
+
+SUPERVISOR_CONF="$(resolve_supervisor_conf "$SUPERVISOR_CONF")" || exit 1
+log "Starting supervisord with config: $SUPERVISOR_CONF"
 
 exec /usr/bin/supervisord -n -c "$SUPERVISOR_CONF"
