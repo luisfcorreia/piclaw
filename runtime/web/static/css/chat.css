@@ -230,11 +230,15 @@
 }
 
 .compose-clear-attachments-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
     border: 1px solid var(--border-color);
     background: var(--bg-primary);
     color: var(--text-secondary);
     border-radius: var(--radius-full);
-    padding: 1px 8px;
+    padding: 2px 8px;
     font-size: 11px;
     line-height: 1.15;
     font-weight: 500;
