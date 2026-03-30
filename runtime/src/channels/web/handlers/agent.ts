@@ -877,6 +877,12 @@ export async function processChat(
   let hadIntermediateOutput = false;
   let persistedIntermediateOutput = false;
   let intermediatePersistFailed = false;
+  const isCompactionIntentActive = (): boolean => {
+    const status = channel.getAgentStatus(chatJid);
+    if (!status || typeof status !== "object") return false;
+    const intentKey = status.intent_key ?? status.intentKey;
+    return status.type === "intent" && intentKey === "compaction";
+  };
   const publishDraftFallback = (reason?: "timeout" | "error" | "empty-final") => {
     // Draft fallback should publish the currently visible draft for whichever
     // turn failed to finalize, even if earlier turns in the same session were
@@ -887,12 +893,15 @@ export async function processChat(
     const draftText = typeof draft?.text === "string" ? draft.text.trim() : "";
     if (!draftText) return false;
 
+    const compactionNote = isCompactionIntentActive()
+      ? "\n\nℹ️ Context compaction was in progress."
+      : "";
     const suffix =
       reason === "timeout"
-        ? "\n\n⚠️ Response timed out before finalization."
+        ? `\n\n⚠️ Response timed out before finalization.${compactionNote}`
         : reason === "error"
-          ? "\n\n⚠️ Response ended with an error before finalization."
-          : "";
+          ? `\n\n⚠️ Response ended with an error before finalization.${compactionNote}`
+          : compactionNote;
 
     return storeAgentTurn(channel, emitter, {
       chatJid,

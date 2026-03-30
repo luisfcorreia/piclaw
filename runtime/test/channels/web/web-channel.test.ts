@@ -2154,6 +2154,57 @@ test("processChat treats a persisted timeout fallback as a terminal completion",
   expect(last.data.content).toContain("timed out before finalization");
 });
 
+test("processChat annotates draft fallback when compaction intent is active", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async (_prompt: string, _chatJid: string, options: any) => {
+        options.onEvent?.({ type: "compaction_start", reason: "overflow" });
+        options.onEvent?.({
+          type: "message_update",
+          assistantMessageEvent: { type: "text_start" },
+        });
+        options.onEvent?.({
+          type: "message_update",
+          assistantMessageEvent: { type: "text_delta", delta: "draft during compaction" },
+        });
+        return { status: "error", result: null, error: "Timed out after 1s" };
+      },
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+
+  const timeline = db.getTimeline("web:default", 10);
+  const last = timeline[timeline.length - 1];
+  expect(last.data.content).toContain("draft during compaction");
+  expect(last.data.content).toContain("timed out before finalization");
+  expect(last.data.content).toContain("Context compaction was in progress");
+});
+
 test("processChat publishes final draft fallback even after an intermediate turn", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;
