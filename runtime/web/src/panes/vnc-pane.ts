@@ -30,12 +30,111 @@ export function buildVncTabPath(targetId?: string | null): string {
     return target ? `${VNC_TAB_PREFIX}/${encodeURIComponent(target)}` : VNC_TAB_PREFIX;
 }
 
-export function createVncPopoutTransferPayload(targetId?: string | null): Record<string, string> | null {
+interface StorageLike {
+    getItem(key: string): string | null;
+    setItem(key: string, value: string): void;
+    removeItem(key: string): void;
+    key?(index: number): string | null;
+    length?: number;
+}
+
+const VNC_POPOUT_SECRET_PREFIX = 'piclaw:vnc-popout:';
+const VNC_POPOUT_SECRET_TTL_MS = 60_000;
+
+function getVncPopoutStorage(runtime = globalThis): StorageLike | null {
+    try {
+        return runtime?.localStorage ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function generateVncPopoutSecretToken(runtime = globalThis): string {
+    try {
+        if (typeof runtime?.crypto?.randomUUID === 'function') {
+            return runtime.crypto.randomUUID();
+        }
+    } catch {
+        // fall through
+    }
+    return `vnc-popout-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sweepExpiredVncPopoutSecrets(storage: StorageLike | null, nowMs = Date.now()): void {
+    if (!storage || typeof storage.key !== 'function' || !Number.isFinite(storage.length)) return;
+    const keys: string[] = [];
+    for (let i = 0; i < Number(storage.length || 0); i += 1) {
+        const key = storage.key(i);
+        if (key && key.startsWith(VNC_POPOUT_SECRET_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) {
+        try {
+            const raw = storage.getItem(key);
+            if (!raw) {
+                storage.removeItem(key);
+                continue;
+            }
+            const parsed = JSON.parse(raw);
+            const expiresAt = Number(parsed?.expiresAt || 0);
+            if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+                storage.removeItem(key);
+            }
+        } catch {
+            try { storage.removeItem(key); } catch { /* ignore */ }
+        }
+    }
+}
+
+export function stashVncPopoutPassword(password?: string | null, runtime = globalThis, nowMs = Date.now()): string | null {
+    const normalized = normalizeVncPassword(password);
+    if (normalized === null) return null;
+    const storage = getVncPopoutStorage(runtime);
+    if (!storage) return null;
+    sweepExpiredVncPopoutSecrets(storage, nowMs);
+    const token = generateVncPopoutSecretToken(runtime);
+    try {
+        storage.setItem(`${VNC_POPOUT_SECRET_PREFIX}${token}`, JSON.stringify({
+            password: normalized,
+            expiresAt: nowMs + VNC_POPOUT_SECRET_TTL_MS,
+        }));
+        return token;
+    } catch {
+        return null;
+    }
+}
+
+export function consumeVncPopoutPassword(token?: string | null, runtime = globalThis, nowMs = Date.now()): string | null {
+    const normalizedToken = String(token || '').trim();
+    if (!normalizedToken) return null;
+    const storage = getVncPopoutStorage(runtime);
+    if (!storage) return null;
+    sweepExpiredVncPopoutSecrets(storage, nowMs);
+    const key = `${VNC_POPOUT_SECRET_PREFIX}${normalizedToken}`;
+    try {
+        const raw = storage.getItem(key);
+        storage.removeItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const expiresAt = Number(parsed?.expiresAt || 0);
+        if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) return null;
+        return normalizeVncPassword(parsed?.password);
+    } catch {
+        try { storage.removeItem(key); } catch { /* ignore */ }
+        return null;
+    }
+}
+
+export function createVncPopoutTransferPayload(targetId?: string | null, password?: string | null, runtime = globalThis): Record<string, string> | null {
     const target = String(targetId || '').trim();
     if (!target) return null;
-    return {
+    const payload: Record<string, string> = {
         pane_path: buildVncTabPath(target),
     };
+    const passwordToken = stashVncPopoutPassword(password, runtime);
+    if (passwordToken) {
+        payload.vnc_secret = passwordToken;
+    }
+    return payload;
 }
 
 function parseVncTargetFromPath(path?: string): string | null {
@@ -183,6 +282,11 @@ class VncPaneInstance implements PaneInstance {
         this.targetId = parseVncTargetFromPath(context?.path);
         this.targetLabel = this.targetId || null;
         this.pendingHandoffToken = consumePanePopoutTransferToken('vnc_handoff');
+        const passwordToken = consumePanePopoutTransferToken('vnc_secret');
+        const transferredPassword = consumeVncPopoutPassword(passwordToken);
+        if (transferredPassword !== null) {
+            this.authPassword = transferredPassword;
+        }
 
         this.root = document.createElement('div');
         this.root.className = 'vnc-pane-shell';
@@ -988,7 +1092,7 @@ class VncPaneInstance implements PaneInstance {
     }
 
     async preparePopoutTransfer() {
-        return createVncPopoutTransferPayload(this.targetId);
+        return createVncPopoutTransferPayload(this.targetId, this.authPassword);
     }
 
     getContent() { return undefined; }
