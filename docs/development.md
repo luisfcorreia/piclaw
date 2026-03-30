@@ -32,8 +32,8 @@ make vendor          # rebuild vendored assets
 make lint            # ESLint
 make test            # full test suite
 make ci-fast         # canonical fast CI guardrails + web build
-make local-install   # pack, install globally, restart piclaw
-# or: PICLAW_SKIP_RESTART=1 make local-install  # install only; let the agent call exit_process later
+make local-install   # pack and install piclaw globally (no restart)
+make restart         # restart piclaw via the detected service manager
 ```
 
 ## Testing
