@@ -223,6 +223,9 @@ Core ideas:
 - Added the first runtime-heavy second adopter:
   - VNC now implements the detach/attach lifecycle hooks plus `moveHost(...)`
   - the existing VNC shell/root DOM is relocated into the target host container instead of remounting a fresh pane instance when live move succeeds
+- Added terminal as another live-transfer adopter:
+  - terminal now implements the detach/attach lifecycle hooks plus `moveHost(...)`
+  - the existing terminal shell/root DOM is relocated into the target host container and host-specific listeners/observers are rebound to the new window/document when live move succeeds
 - Remaining gap for later slices: this is now a real transfer-capable pane-instance path for supported panes, but not yet universal same-runtime migration across all pane types.
 
 ## Definition of Done

@@ -119,21 +119,21 @@ function buildTerminalWebSocketUrl(path) {
     return `${protocol}//${window.location.host}${path}`;
 }
 
-function detectDarkTheme() {
-    if (typeof window === 'undefined' || typeof document === 'undefined') return false;
-    const root = document.documentElement;
-    const body = document.body;
+function detectDarkTheme(runtimeWindow = typeof window !== 'undefined' ? window : null, runtimeDocument = typeof document !== 'undefined' ? document : null) {
+    if (!runtimeWindow || !runtimeDocument) return false;
+    const root = runtimeDocument.documentElement;
+    const body = runtimeDocument.body;
     const rootTheme = root?.getAttribute?.('data-theme')?.toLowerCase?.() || '';
     if (rootTheme === 'dark') return true;
     if (rootTheme === 'light') return false;
     if (root?.classList?.contains('dark') || body?.classList?.contains('dark')) return true;
     if (root?.classList?.contains('light') || body?.classList?.contains('light')) return false;
-    return Boolean(window.matchMedia?.('(prefers-color-scheme: dark)')?.matches);
+    return Boolean(runtimeWindow.matchMedia?.('(prefers-color-scheme: dark)')?.matches);
 }
 
-function readThemeVar(name, fallback = '') {
-    if (typeof document === 'undefined') return fallback;
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name)?.trim();
+function readThemeVar(name, fallback = '', runtimeDocument = typeof document !== 'undefined' ? document : null) {
+    if (!runtimeDocument) return fallback;
+    const value = getComputedStyle(runtimeDocument.documentElement).getPropertyValue(name)?.trim();
     return value || fallback;
 }
 
@@ -149,18 +149,18 @@ function withAlpha(hexColor, alphaHex) {
     return hexColor;
 }
 
-function buildTerminalTheme() {
-    const isDark = detectDarkTheme();
+function buildTerminalTheme(runtimeWindow = typeof window !== 'undefined' ? window : null, runtimeDocument = typeof document !== 'undefined' ? document : null) {
+    const isDark = detectDarkTheme(runtimeWindow, runtimeDocument);
     const palette = isDark ? DARK_TERMINAL_PALETTE : LIGHT_TERMINAL_PALETTE;
-    const background = readThemeVar('--bg-primary', isDark ? '#000000' : '#ffffff');
-    const foreground = readThemeVar('--text-primary', isDark ? '#e7e9ea' : '#0f1419');
-    const secondary = readThemeVar('--text-secondary', isDark ? '#71767b' : '#536471');
-    const accent = readThemeVar('--accent-color', '#1d9bf0');
-    const danger = readThemeVar('--danger-color', isDark ? '#ff7b72' : '#cf222e');
-    const success = readThemeVar('--success-color', isDark ? '#7ee787' : '#1a7f37');
-    const hover = readThemeVar('--bg-hover', isDark ? '#1d1f23' : '#e8ebed');
-    const border = readThemeVar('--border-color', isDark ? '#2f3336' : '#eff3f4');
-    const selectionBackground = readThemeVar('--accent-soft-strong', withAlpha(accent, isDark ? '47' : '33'));
+    const background = readThemeVar('--bg-primary', isDark ? '#000000' : '#ffffff', runtimeDocument);
+    const foreground = readThemeVar('--text-primary', isDark ? '#e7e9ea' : '#0f1419', runtimeDocument);
+    const secondary = readThemeVar('--text-secondary', isDark ? '#71767b' : '#536471', runtimeDocument);
+    const accent = readThemeVar('--accent-color', '#1d9bf0', runtimeDocument);
+    const danger = readThemeVar('--danger-color', isDark ? '#ff7b72' : '#cf222e', runtimeDocument);
+    const success = readThemeVar('--success-color', isDark ? '#7ee787' : '#1a7f37', runtimeDocument);
+    const hover = readThemeVar('--bg-hover', isDark ? '#1d1f23' : '#e8ebed', runtimeDocument);
+    const border = readThemeVar('--border-color', isDark ? '#2f3336' : '#eff3f4', runtimeDocument);
+    const selectionBackground = readThemeVar('--accent-soft-strong', withAlpha(accent, isDark ? '47' : '33'), runtimeDocument);
 
     return {
         background,
@@ -188,8 +188,21 @@ function buildTerminalTheme() {
     };
 }
 
+export function relocateTerminalPaneRoot(root: HTMLElement | null | undefined, container: HTMLElement | null | undefined): boolean {
+    if (!root || !container || typeof container.appendChild !== 'function') return false;
+    try {
+        container.innerHTML = '';
+    } catch {
+        /* expected: fake hosts/tests may not support innerHTML resets. */
+    }
+    container.appendChild(root);
+    return true;
+}
+
 class TerminalPaneInstance implements PaneInstance {
     private container: HTMLElement;
+    private ownerDocument: Document;
+    private ownerWindow: Window & typeof globalThis;
     private disposed = false;
     private termEl: HTMLElement;
     private bodyEl: HTMLElement;
@@ -210,16 +223,18 @@ class TerminalPaneInstance implements PaneInstance {
 
     constructor(container: HTMLElement, _context: PaneContext) {
         this.container = container;
+        this.ownerDocument = container.ownerDocument || document;
+        this.ownerWindow = (this.ownerDocument.defaultView || window) as Window & typeof globalThis;
 
-        this.termEl = document.createElement('div');
+        this.termEl = this.ownerDocument.createElement('div');
         this.termEl.className = 'terminal-pane-content';
         this.termEl.setAttribute('tabindex', '0');
 
-        this.statusEl = document.createElement('span');
+        this.statusEl = this.ownerDocument.createElement('span');
         this.statusEl.className = 'terminal-pane-status';
         this.statusEl.textContent = 'Loading terminal…';
 
-        this.bodyEl = document.createElement('div');
+        this.bodyEl = this.ownerDocument.createElement('div');
         this.bodyEl.className = 'terminal-pane-body';
         this.bodyEl.innerHTML = '<div class="terminal-placeholder">Bootstrapping ghostty-web…</div>';
 
@@ -304,7 +319,7 @@ class TerminalPaneInstance implements PaneInstance {
                 cursorBlink: true,
                 fontFamily: TERMINAL_FONT_FAMILY,
                 fontSize: 13,
-                theme: buildTerminalTheme(),
+                theme: buildTerminalTheme(this.ownerWindow, this.ownerDocument),
             });
 
             let fitAddon = null;
@@ -335,7 +350,7 @@ class TerminalPaneInstance implements PaneInstance {
 
     private applyTheme() {
         if (!this.terminal) return;
-        const theme = buildTerminalTheme();
+        const theme = buildTerminalTheme(this.ownerWindow, this.ownerDocument);
         const themeSignature = JSON.stringify(theme);
         const themeChanged = this.lastAppliedThemeSignature !== null && this.lastAppliedThemeSignature !== themeSignature;
         try {
@@ -413,15 +428,15 @@ class TerminalPaneInstance implements PaneInstance {
     }
 
     private installThemeSync() {
-        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (!this.ownerWindow || !this.ownerDocument) return;
         const syncTheme = () => requestAnimationFrame(() => this.applyTheme());
         syncTheme();
 
         const onThemeChange = () => syncTheme();
-        window.addEventListener('piclaw-theme-change', onThemeChange);
+        this.ownerWindow.addEventListener('piclaw-theme-change', onThemeChange);
         this.themeChangeListener = onThemeChange;
 
-        const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+        const media = this.ownerWindow.matchMedia?.('(prefers-color-scheme: dark)');
         const onMediaChange = () => syncTheme();
         if (media?.addEventListener) media.addEventListener('change', onMediaChange);
         else if (media?.addListener) media.addListener(onMediaChange);
@@ -431,12 +446,12 @@ class TerminalPaneInstance implements PaneInstance {
         const observer = typeof MutationObserver !== 'undefined'
             ? new MutationObserver(() => syncTheme())
             : null;
-        observer?.observe(document.documentElement, {
+        observer?.observe(this.ownerDocument.documentElement, {
             attributes: true,
             attributeFilter: ['class', 'data-theme', 'style'],
         });
-        if (document.body) {
-            observer?.observe(document.body, {
+        if (this.ownerDocument.body) {
+            observer?.observe(this.ownerDocument.body, {
                 attributes: true,
                 attributeFilter: ['class', 'data-theme'],
             });
@@ -445,12 +460,12 @@ class TerminalPaneInstance implements PaneInstance {
     }
 
     private installResizeSync() {
-        if (typeof window === 'undefined') return;
+        if (!this.ownerWindow) return;
 
         const onDockResize = () => this.scheduleResize();
         const onWindowResize = () => this.scheduleResize();
-        window.addEventListener('dock-resize', onDockResize);
-        window.addEventListener('resize', onWindowResize);
+        this.ownerWindow.addEventListener('dock-resize', onDockResize);
+        this.ownerWindow.addEventListener('resize', onWindowResize);
         this.dockResizeListener = onDockResize;
         this.windowResizeListener = onWindowResize;
 
@@ -543,6 +558,75 @@ class TerminalPaneInstance implements PaneInstance {
         this.socket.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
     }
 
+    private detachHostListeners(): void {
+        try {
+            if (this.themeChangeListener) {
+                this.ownerWindow?.removeEventListener?.('piclaw-theme-change', this.themeChangeListener);
+            }
+        } catch {
+            /* expected: window listeners may already be detached during teardown. */
+        }
+        try {
+            if (this.mediaQuery && this.mediaQueryListener) {
+                if (this.mediaQuery.removeEventListener) this.mediaQuery.removeEventListener('change', this.mediaQueryListener);
+                else if (this.mediaQuery.removeListener) this.mediaQuery.removeListener(this.mediaQueryListener);
+            }
+        } catch {
+            /* expected: media-query listeners differ across browser implementations. */
+        }
+        try {
+            if (this.dockResizeListener) {
+                this.ownerWindow?.removeEventListener?.('dock-resize', this.dockResizeListener);
+            }
+            if (this.windowResizeListener) {
+                this.ownerWindow?.removeEventListener?.('resize', this.windowResizeListener);
+            }
+        } catch {
+            /* expected: resize listeners may already be detached during teardown. */
+        }
+        try {
+            this.themeObserver?.disconnect?.();
+        } catch {
+            /* expected: mutation observer may already be disconnected. */
+        }
+        try {
+            this.resizeObserver?.disconnect?.();
+        } catch {
+            /* expected: resize observer may already be disconnected. */
+        }
+        this.themeChangeListener = null;
+        this.mediaQuery = null;
+        this.mediaQueryListener = null;
+        this.themeObserver = null;
+        this.resizeObserver = null;
+        this.dockResizeListener = null;
+        this.windowResizeListener = null;
+    }
+
+    beforeDetachFromHost(): void {
+        this.setStatus('Moving terminal…');
+    }
+
+    afterAttachToHost(): void {
+        this.installThemeSync();
+        this.installResizeSync();
+        this.scheduleResize();
+        requestAnimationFrame(() => this.focus());
+    }
+
+    moveHost(container: HTMLElement): boolean {
+        if (this.disposed) return false;
+        this.detachHostListeners();
+        this.container = container;
+        this.ownerDocument = container.ownerDocument || this.ownerDocument || document;
+        this.ownerWindow = (this.ownerDocument.defaultView || this.ownerWindow || window) as Window & typeof globalThis;
+        if (!relocateTerminalPaneRoot(this.termEl, container)) {
+            return false;
+        }
+        this.afterAttachToHost();
+        return true;
+    }
+
     getContent(): string | undefined {
         return undefined;
     }
@@ -591,41 +675,7 @@ class TerminalPaneInstance implements PaneInstance {
         } catch {
             /* expected: resize frame may already be cancelled during teardown. */
         }
-        try {
-            if (this.themeChangeListener) {
-                window.removeEventListener('piclaw-theme-change', this.themeChangeListener);
-            }
-        } catch {
-            /* expected: window listeners may already be detached during teardown. */
-        }
-        try {
-            if (this.mediaQuery && this.mediaQueryListener) {
-                if (this.mediaQuery.removeEventListener) this.mediaQuery.removeEventListener('change', this.mediaQueryListener);
-                else if (this.mediaQuery.removeListener) this.mediaQuery.removeListener(this.mediaQueryListener);
-            }
-        } catch {
-            /* expected: media-query listeners differ across browser implementations. */
-        }
-        try {
-            if (this.dockResizeListener) {
-                window.removeEventListener('dock-resize', this.dockResizeListener);
-            }
-            if (this.windowResizeListener) {
-                window.removeEventListener('resize', this.windowResizeListener);
-            }
-        } catch {
-            /* expected: resize listeners may already be detached during teardown. */
-        }
-        try {
-            this.themeObserver?.disconnect?.();
-        } catch {
-            /* expected: mutation observer may already be disconnected. */
-        }
-        try {
-            this.resizeObserver?.disconnect?.();
-        } catch {
-            /* expected: resize observer may already be disconnected. */
-        }
+        this.detachHostListeners();
         try {
             this.socket?.close?.();
         } catch {

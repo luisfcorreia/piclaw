@@ -4,6 +4,8 @@
 
 import { describe, expect, test, beforeEach } from "bun:test";
 
+import { relocateTerminalPaneRoot } from '../../web/src/panes/terminal-pane.js';
+
 // --- Inline types (same as pane-types.ts, for Bun test runner) ---
 
 type PanePlacement = "tabs" | "dock";
@@ -153,6 +155,20 @@ const terminalExt: WebPaneExtension = {
 };
 
 // --- Tests ---
+
+test('relocateTerminalPaneRoot moves the existing terminal shell into a new host container', () => {
+    const root = { id: 'terminal-root' } as any;
+    const children: any[] = [];
+    const host: any = {
+        innerHTML: 'occupied',
+        appendChild: (node: any) => children.push(node),
+    };
+
+    expect(relocateTerminalPaneRoot(root, host)).toBe(true);
+    expect(host.innerHTML).toBe('');
+    expect(children).toEqual([root]);
+    expect(relocateTerminalPaneRoot(root, null as any)).toBe(false);
+});
 
 describe('Terminal pane extension', () => {
     test('has dock placement', () => {
