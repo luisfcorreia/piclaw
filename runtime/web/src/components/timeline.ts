@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { html, useCallback, useEffect, useRef, useState } from '../vendor/preact-htm.js';
 import { Post } from './post.js';
+import { AttachmentPreviewModal } from './attachment-preview-modal.js';
 import { getAgentAvatarUrl, getAgentName } from '../ui/agent-utils.js';
 
 /**
@@ -8,6 +9,7 @@ import { getAgentAvatarUrl, getAgentName } from '../ui/agent-utils.js';
  */
 export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagClick, onMessageRef, onScrollToMessage, onFileRef, onOpenWidget, emptyMessage, timelineRef, agents, user, onDeletePost, reverse = true, removingPostIds, searchQuery }) {
     const [loadingMore, setLoadingMore] = useState(false);
+    const [attachmentPreview, setAttachmentPreview] = useState(null);
     const sentinelRef = useRef(null);
     const hasIntersectionObserver = typeof IntersectionObserver !== 'undefined';
 
@@ -182,10 +184,18 @@ export function Timeline({ posts, hasMore, onLoadMore, onPostClick, onHashtagCli
                         onFileRef=${onFileRef}
                         onOpenWidget=${onOpenWidget}
                         onDelete=${onDeletePost}
+                        onOpenAttachmentPreview=${setAttachmentPreview}
                     />
                 `})}
                 ${reverse ? null : sentinel}
             </div>
         </div>
+        ${attachmentPreview && html`
+            <${AttachmentPreviewModal}
+                mediaId=${attachmentPreview.mediaId}
+                info=${attachmentPreview.info}
+                onClose=${() => setAttachmentPreview(null)}
+            />
+        `}
     `;
 }

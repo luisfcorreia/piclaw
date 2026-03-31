@@ -8,7 +8,6 @@ import { getAttachmentPreviewKind } from '../ui/attachment-preview.js';
 import { extractCardBlocks, renderAdaptiveCard } from '../ui/adaptive-card-renderer.js';
 import { buildAdaptiveCardSubmissionFallbackText, describeAdaptiveCardSubmission, extractAdaptiveCardSubmissionBlocks } from '../ui/adaptive-card-submission.js';
 import { buildGeneratedWidgetPayload, canRenderGeneratedWidget } from '../ui/generated-widget.js';
-import { AttachmentPreviewModal } from './attachment-preview-modal.js';
 import { ImageModal } from './image-modal.js';
 import { FilePill } from './file-pill.js';
 
@@ -610,7 +609,7 @@ function highlightHtml(html, query) {
 /**
  * Single post component
  */
-export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget }) {
+export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMessage, agentName, agentAvatarUrl, userName, userAvatarUrl, userAvatarBackground, onDelete, isThreadReply, isThreadPrev, isThreadNext, isRemoving, highlightQuery, onFileRef, onOpenWidget, onOpenAttachmentPreview }) {
     const [zoomedImage, setZoomedImage] = useState(null);
     const contentRef = useRef(null);
 
@@ -681,10 +680,8 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
         setZoomedImage(getMediaUrl(mediaId));
     };
 
-    const [attachmentPreview, setAttachmentPreview] = useState(null);
-
     const handleAttachmentPreview = (attachment) => {
-        setAttachmentPreview(attachment);
+        onOpenAttachmentPreview?.(attachment);
     };
 
     const handleDeleteClick = (e) => {
@@ -1078,12 +1075,6 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
             </div>
         </div>
         ${zoomedImage && html`<${ImageModal} src=${zoomedImage} onClose=${() => setZoomedImage(null)} />`}
-        ${attachmentPreview && html`
-            <${AttachmentPreviewModal}
-                mediaId=${attachmentPreview.mediaId}
-                info=${attachmentPreview.info}
-                onClose=${() => setAttachmentPreview(null)}
-            />
-        `}
+
     `;
 }
