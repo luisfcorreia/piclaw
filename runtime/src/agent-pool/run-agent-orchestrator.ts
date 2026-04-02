@@ -2,7 +2,7 @@
  * agent-pool/run-agent-orchestrator.ts – Main runAgent prompt lifecycle orchestration.
  */
 
-import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import { shouldCompact, type AgentSession } from "@mariozechner/pi-coding-agent";
 
 import type { AttachmentInfo } from "./attachments.js";
 
@@ -66,6 +66,91 @@ async function maybeAutoRotateSession(
   });
 }
 
+function estimateMessageTokens(message: any): number {
+  if (!message || typeof message !== "object") return 0;
+
+  const countText = (value: unknown): number => {
+    if (typeof value === "string") return value.length;
+    if (!Array.isArray(value)) return 0;
+    let chars = 0;
+    for (const block of value) {
+      if (!block || typeof block !== "object") continue;
+      if (block.type === "text" && typeof block.text === "string") chars += block.text.length;
+      if (block.type === "thinking" && typeof block.thinking === "string") chars += block.thinking.length;
+      if (block.type === "toolCall") {
+        chars += typeof block.name === "string" ? block.name.length : 0;
+        if (block.arguments !== undefined) chars += JSON.stringify(block.arguments).length;
+      }
+      if (block.type === "image") chars += 4800;
+    }
+    return chars;
+  };
+
+  switch (message.role) {
+    case "assistant":
+    case "custom":
+    case "toolResult":
+      return Math.ceil(countText(message.content) / 4);
+    case "user":
+      return Math.ceil(countText(message.content) / 4);
+    case "bashExecution": {
+      const chars = (typeof message.command === "string" ? message.command.length : 0)
+        + (typeof message.output === "string" ? message.output.length : 0);
+      return Math.ceil(chars / 4);
+    }
+    case "branchSummary":
+    case "compactionSummary":
+      return Math.ceil(((typeof message.summary === "string" ? message.summary.length : 0)) / 4);
+    default:
+      return 0;
+  }
+}
+
+function estimateContextTokensFromSession(session: AgentSession): number {
+  const usage = session.getContextUsage?.();
+  if (typeof usage?.tokens === "number") return usage.tokens;
+
+  const context = session.sessionManager.buildSessionContext();
+  return context.messages.reduce((total: number, message: any) => total + estimateMessageTokens(message), 0);
+}
+
+async function maybeAutoCompactSessionBeforePrompt(
+  session: AgentSession,
+  chatJid: string,
+  options: Pick<RunAgentOrchestratorOptions, "onInfo" | "onWarn">,
+): Promise<void> {
+  if (session.isStreaming || session.isCompacting || session.isRetrying) return;
+  if (!session.model?.contextLength) return;
+
+  const settingsManager = (session as AgentSession & {
+    settingsManager?: { getCompactionSettings?: () => { enabled?: boolean; reserveTokens?: number } };
+  }).settingsManager;
+  const settings = typeof settingsManager?.getCompactionSettings === "function"
+    ? settingsManager.getCompactionSettings()
+    : null;
+  if (!settings?.enabled) return;
+
+  try {
+    const contextTokens = estimateContextTokensFromSession(session);
+    if (!shouldCompact(contextTokens, session.model.contextLength, settings)) return;
+
+    options.onInfo?.("Auto-compacting session before prompt", {
+      operation: "maybe_auto_compact_session_before_prompt",
+      chatJid,
+      contextTokens,
+      contextWindow: session.model.contextLength,
+      reserveTokens: settings.reserveTokens ?? null,
+    });
+    await session.compact();
+  } catch (error) {
+    options.onWarn?.("Pre-prompt auto-compaction skipped", {
+      operation: "maybe_auto_compact_session_before_prompt",
+      chatJid,
+      error,
+    });
+  }
+}
+
 /** Run a prompt against the persistent session for one chat. */
 export async function runAgentPrompt(
   prompt: string,
@@ -79,6 +164,7 @@ export async function runAgentPrompt(
   try {
     const session = await options.getOrCreate(chatJid);
     await maybeAutoRotateSession(session, chatJid, options);
+    await maybeAutoCompactSessionBeforePrompt(session, chatJid, options);
     pruneOrphanToolResults(session, chatJid);
     const forkBaseLeafId = typeof session.sessionManager?.getLeafId === "function"
       ? session.sessionManager.getLeafId()

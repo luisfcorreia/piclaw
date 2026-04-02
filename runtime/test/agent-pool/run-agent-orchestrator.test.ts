@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { DEFAULT_COMPACTION_SETTINGS } from "@mariozechner/pi-coding-agent";
+
 import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
 import { AgentTurnCoordinator } from "../../src/agent-pool/turn-coordinator.js";
 import { runAgentPrompt } from "../../src/agent-pool/run-agent-orchestrator.js";
@@ -63,4 +65,130 @@ test("runAgentPrompt aggregates deltas and returns pending attachments", async (
   expect(result.result).toBe("hello world");
   expect(result.attachments).toHaveLength(1);
   expect(forkStates).toEqual(["leaf-1", null]);
+});
+
+test("runAgentPrompt auto-compacts before prompting when estimated context exceeds the threshold", async () => {
+  const calls: string[] = [];
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = {
+      getLeafId: () => "leaf-1",
+      buildSessionContext: () => ({
+        messages: [
+          { role: "user", content: "x".repeat(200) },
+        ],
+      }),
+    };
+    settingsManager = {
+      getCompactionSettings: () => ({
+        ...DEFAULT_COMPACTION_SETTINGS,
+        enabled: true,
+        reserveTokens: 10,
+      }),
+    };
+    model = { contextLength: 20, provider: "test", id: "model" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async compact() {
+      calls.push("compact");
+    }
+    async prompt() {
+      calls.push("prompt");
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "done" } });
+      }
+    }
+    async abort() {}
+  }
+
+  const session = new StubSession();
+  const turnCoordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const result = await runAgentPrompt("test", "web:default", { timeoutMs: 0 }, {
+    getOrCreate: async () => session as any,
+    turnCoordinator,
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+  });
+
+  expect(result.status).toBe("success");
+  expect(calls).toEqual(["compact", "prompt"]);
+});
+
+test("runAgentPrompt skips pre-prompt auto-compaction when it is disabled", async () => {
+  const calls: string[] = [];
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = {
+      getLeafId: () => "leaf-1",
+      buildSessionContext: () => ({
+        messages: [
+          { role: "user", content: "x".repeat(200) },
+        ],
+      }),
+    };
+    settingsManager = {
+      getCompactionSettings: () => ({
+        ...DEFAULT_COMPACTION_SETTINGS,
+        enabled: false,
+        reserveTokens: 10,
+      }),
+    };
+    model = { contextLength: 20, provider: "test", id: "model" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async compact() {
+      calls.push("compact");
+    }
+    async prompt() {
+      calls.push("prompt");
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "done" } });
+      }
+    }
+    async abort() {}
+  }
+
+  const session = new StubSession();
+  const turnCoordinator = new AgentTurnCoordinator({
+    takeAttachments: () => [],
+    touchSession: () => {},
+    recordMessageUsage: () => {},
+  });
+
+  const result = await runAgentPrompt("test", "web:default", { timeoutMs: 0 }, {
+    getOrCreate: async () => session as any,
+    turnCoordinator,
+    clearAttachments: () => {},
+    takeAttachments: () => [],
+    logsDir: process.env.PICLAW_WORKSPACE || "/workspace",
+    setActiveForkBaseLeaf: () => {},
+    clearActiveForkBaseLeaf: () => {},
+  });
+
+  expect(result.status).toBe("success");
+  expect(calls).toEqual(["prompt"]);
 });
