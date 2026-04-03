@@ -15,7 +15,7 @@ import type { FSWatcher } from "fs";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { createLogger } from "../../../utils/logger.js";
 import { buildTree, compressPaths } from "./tree.js";
-import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
+import { resolveWorkspacePath, shouldIgnoreWatchPath, toRelativePath } from "./paths.js";
 
 const log = createLogger("web.workspace-watcher");
 
@@ -98,8 +98,7 @@ export function startWorkspaceWatcher(
   const maxDepth = 8;
 
   const queuePath = (absPath: string) => {
-    if (shouldIgnorePath(absPath)) return;
-    if (!includeHidden() && isHiddenPath(absPath)) return;
+    if (shouldIgnoreWatchPath(absPath, includeHidden())) return;
     const rel = toRelativePath(absPath);
     const target = rel === "." ? "." : toRelativePath(path.dirname(absPath));
     const changedPaths = pending.get(target) ?? new Set<string>();
@@ -151,7 +150,7 @@ export function startWorkspaceWatcher(
 
   const addWatcher = (dir: string, depth: number) => {
     if (depth < 0) return;
-    if (shouldIgnorePath(dir)) return;
+    if (shouldIgnoreWatchPath(dir, includeHidden())) return;
     if (watchers.has(dir)) return;
 
     try {

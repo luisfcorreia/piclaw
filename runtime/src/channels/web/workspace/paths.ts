@@ -13,6 +13,7 @@ import { WORKSPACE_DIR } from "../../../core/config.js";
 import { EXCLUDE_DIRS } from "./constants.js";
 
 const WATCH_IGNORE_DIRS = new Set(["logs"]);
+const WATCH_INTERNAL_EXCLUDE_DIRS = new Set([".piclaw", ".pi", "artifacts", "exports", "tmp", ".tmp", "rescue"]);
 
 /** Resolve a relative path against the workspace root, rejecting traversal. */
 export function resolveWorkspacePath(input: string | null): string | null {
@@ -44,6 +45,20 @@ export function shouldIgnorePath(absPath: string): boolean {
   for (const part of parts) {
     if (!part || part === ".") continue;
     if (EXCLUDE_DIRS.has(part) || WATCH_IGNORE_DIRS.has(part)) return true;
+  }
+  return false;
+}
+
+/** Check whether a path should be ignored specifically by the live workspace watcher. */
+export function shouldIgnoreWatchPath(absPath: string, includeHidden = false): boolean {
+  const rel = path.relative(WORKSPACE_DIR, absPath);
+  if (!rel || rel === ".") return false;
+  if (rel.startsWith("..") || path.isAbsolute(rel)) return true;
+  const parts = rel.split(path.sep);
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (EXCLUDE_DIRS.has(part) || WATCH_IGNORE_DIRS.has(part) || WATCH_INTERNAL_EXCLUDE_DIRS.has(part)) return true;
+    if (!includeHidden && part.startsWith(".") && part !== "." && part !== "..") return true;
   }
   return false;
 }

@@ -12,7 +12,7 @@ import { readdirSync, statSync, watch } from "fs";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { createLogger } from "../../../utils/logger.js";
 import { buildTree, compressPaths } from "./tree.js";
-import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
+import { resolveWorkspacePath, shouldIgnoreWatchPath, toRelativePath } from "./paths.js";
 const log = createLogger("web.workspace-watcher");
 /** Create a throttled callback for workspace change events. */
 export function createWorkspaceUpdateThrottle(onUpdate, throttleMs = 1000) {
@@ -75,9 +75,7 @@ export function startWorkspaceWatcher(onUpdate, includeHidden) {
     const watchers = new Map();
     const maxDepth = 8;
     const queuePath = (absPath) => {
-        if (shouldIgnorePath(absPath))
-            return;
-        if (!includeHidden() && isHiddenPath(absPath))
+        if (shouldIgnoreWatchPath(absPath, includeHidden()))
             return;
         const rel = toRelativePath(absPath);
         const target = rel === "." ? "." : toRelativePath(path.dirname(absPath));
@@ -137,7 +135,7 @@ export function startWorkspaceWatcher(onUpdate, includeHidden) {
     const addWatcher = (dir, depth) => {
         if (depth < 0)
             return;
-        if (shouldIgnorePath(dir))
+        if (shouldIgnoreWatchPath(dir, includeHidden()))
             return;
         if (watchers.has(dir))
             return;
