@@ -11,10 +11,11 @@ It is built for people who want a practical, stateful agent they can run locally
 ![Demo Animation](docs/demo.gif)
 
 - **Streaming web UI** — real-time chat with Markdown, KaTeX, Mermaid, and Adaptive Cards
-- **Persistent agent state** — SQLite-backed messages, media, tasks, token usage, encrypted keychain, and per-chat SSH profiles
-- **Workspace-native workflow** — browse files, preview documents, upload attachments, edit code, reference files in prompts, and optionally flip core tools to a remote SSH host per chat
-- **Built-in tools** — Ghostty-based terminal, code editor, Office/PDF/CSV/image/video viewers, draw.io, kanban board and mindmap editors, VNC client, and browser automation
+- **Persistent agent state** — SQLite-backed messages, media, tasks, token usage, encrypted keychain, and session-scoped SSH / Proxmox / Portainer profiles
+- **Workspace-native workflow** — browse files, preview documents, upload attachments, edit code, reference files in prompts, and optionally flip core tools to a remote SSH host for the current session
+- **Built-in tools** — Ghostty-based terminal, code editor, Office/PDF/CSV/image/video viewers, draw.io, kanban board and mindmap editors, VNC client, browser automation, and agent-only infrastructure tools for SSH, Proxmox, and Portainer
 - **Agent control features** — steering, queued follow-ups, threading, side prompts, autoresearch experiment loops, and scheduled tasks
+- **Context conservation by default** — small always-active tool baseline, lazy tool activation, compact capability introspection, and opt-in examples for higher-detail workflow help
 - **Optional auth and channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration
 
 ## Quick start
@@ -108,7 +109,7 @@ Key environment variables:
 | `PICLAW_KEYCHAIN_KEY` | _(empty)_ | Master key for encrypted secret storage |
 | `PICLAW_TRUST_PROXY` | `0` | Enable when behind a reverse proxy or tunnel |
 
-For the full list, auth setup (TOTP/passkeys), per-chat SSH-backed remote tools, reverse proxy configuration, and SSHFS/FUSE support, see [docs/configuration.md](docs/configuration.md).
+For the full list, auth setup (TOTP/passkeys), session-scoped SSH-backed remote tools, reverse proxy configuration, and SSHFS/FUSE support, see [docs/configuration.md](docs/configuration.md).
 
 ## Other install methods
 
@@ -139,7 +140,7 @@ See [docs/development.md](docs/development.md).
 - [Extension UI contract](docs/extension-ui-contract.md)
 
 **Reference**
-- [Tools and skills](docs/tools-and-skills.md)
+- [Tools and skills](docs/tools-and-skills.md) — includes the uniform `ssh` / `proxmox` / `portainer` control surface (`discover`, `capabilities`, `recommend`, `request`, `workflow`) and the context-conserving discovery flow
 - [Keychain](docs/keychain.md)
 - [WhatsApp](docs/whatsapp.md)
 - [Cross-instance interop](docs/cross-instance-ipc.md)

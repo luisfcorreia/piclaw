@@ -260,6 +260,22 @@ Transport semantics match the packaged SSH extension model:
 - persistent remote shell state
 - configured remote cwd/home mapping
 
+## Context conservation and tool discoverability
+
+Several runtime choices are intentionally optimized for low-context turns and progressive discovery:
+
+- small always-active tool baseline, with explicit same-turn tool activation for everything else
+- session-scoped infra profiles so SSH / Proxmox / Portainer state can be reused without restating connection details every turn
+- compact `capabilities` output and short `recommend` results before full workflow details
+- opt-in examples in `workflow_help` instead of returning bulky example payloads by default
+- warm session reuse so model state and scoped tool state stay available without repeated setup
+
+For infrastructure work, the preferred discovery path is:
+
+`discover` → `capabilities` or `recommend` → `workflow_help` → `workflow`
+
+Only fall back to raw `request` when the curated workflow surface is not the right fit.
+
 ## Session lifecycle (summary)
 
 - Messages for a chat JID share a warm `AgentSession`.

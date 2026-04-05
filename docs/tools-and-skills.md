@@ -11,7 +11,7 @@ Core tools (from `pi`):
 - `edit` — replace exact text
 - `write` — write files
 
-Piclaw keeps a small always-active baseline and lazily enables other tools on demand.
+Piclaw keeps a small always-active baseline and lazily enables other tools on demand. This is one of the main context-conservation strategies: keep default tool exposure small, promote only what the current turn needs, and prefer compact discovery surfaces before expanding into detailed schemas or examples.
 Default always-active set:
 
 - `read`
@@ -73,6 +73,18 @@ You can extend that baseline with `.piclaw/config.json`:
 `messages` `add` accepts `content`, optional `chat_jid`, `type` (`user` or `agent`), and `media_ids`.
 `messages` `delete` accepts `row_ids` and optional `chat_jid`, `force`, and `dry_run`.
 
+Infrastructure tools follow one shared pattern:
+- session-scoped profile actions: `get` / `set` / `clear`
+- low-context discovery: `discover`
+- compact introspection: `capabilities` / `workflow_help`
+- intent routing: `recommend`
+- raw escape hatch: `request`
+- curated orchestration: `workflow`
+
+That shared shape improves tool discoverability and keeps prompt usage down: the agent can ask what exists, narrow by family or intent, inspect just one workflow, and only then expand into concrete execution parameters.
+
+`ssh` uses the profile half of that model for remote-backed core tools. `proxmox` and `portainer` implement the full pattern.
+
 `ssh` accepts:
 - `action` — `get`, `set`, or `clear`
 - `chat_jid` — optional override; defaults to the current chat
@@ -82,7 +94,7 @@ You can extend that baseline with `.piclaw/config.json`:
 - `known_hosts_keychain` — optional keychain entry containing `known_hosts`; empty string clears it
 - `strict_host_key_checking` — `yes`, `accept-new`, or `no`
 
-When a live session already exists for the chat, `ssh set` and `ssh clear` apply immediately to subsequent tool/model steps in the same turn.
+When a live session already exists, `ssh set` and `ssh clear` apply immediately to subsequent tool/model steps in the same turn.
 
 `proxmox` accepts:
 - `action` — `get`, `set`, `clear`, `discover`, `capabilities`, `workflow_help`, `recommend`, `request`, or `workflow`
@@ -190,7 +202,7 @@ Supported workflows today:
 - `metrics.vm`
 - `metrics.storage`
 
-The `proxmox` tool deliberately keeps both a raw `request` path and a higher-level `workflow` path. `action=capabilities` is compact by default: it returns workflow-family summaries unless you set `category` and/or `include_workflows`. `action=recommend` gives a short intent-based workflow shortlist. `action=workflow_help` returns required/optional fields plus `recommended_for`, `see_also`, and `guidance`; set `include_examples=true` only when you want generated example payloads. The native workflow surface now also covers bounded provisioning/media tasks such as VM/LXC creation, storage creation, URL-to-storage downloads for ISO/template/import content, ISO attach/detach, and VM disk resize/remove flows, while keeping raw `request` available for Proxmox API surfaces that are still too broad or specialized to model directly.
+The `proxmox` tool deliberately keeps both a raw `request` path and a higher-level `workflow` path. `action=capabilities` is compact by default: it returns workflow-family summaries unless you set `category` and/or `include_workflows`. `action=recommend` gives a short intent-based workflow shortlist. `action=workflow_help` returns required/optional fields plus `recommended_for`, `see_also`, and `guidance`; set `include_examples=true` only when you want generated example payloads. This makes the tool both discoverable and context-efficient. A good default operator flow is: `discover` (optional) → `capabilities` or `recommend` → `workflow_help` → `workflow`, falling back to raw `request` only when the native workflow surface is too specialized or not yet modeled.
 
 `portainer` accepts:
 - `action` — `get`, `set`, `clear`, `discover`, `capabilities`, `workflow_help`, `recommend`, `request`, or `workflow`
@@ -228,6 +240,8 @@ The `proxmox` tool deliberately keeps both a raw `request` path and a higher-lev
 - `command` / `command_args` — bounded exec inputs for `container.exec`
 - `driver` / `internal` / `attachable` / `enable_ipv6` / `labels` / `options` — network/volume creation inputs
 - `names` — container names for bulk workflows like `container.upgrade_many`
+
+Portainer follows the same discovery pattern as Proxmox: `discover` (optional) → `capabilities` or `recommend` → `workflow_help` → `workflow`, with raw `request` reserved for API areas that are still too broad or niche to model directly. The result is the same balance: high discoverability without forcing full workflow enumeration into every turn.
 
 Supported Portainer workflows today:
 - `endpoint.list`

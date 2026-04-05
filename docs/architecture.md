@@ -131,10 +131,10 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 | `integrations/azure-openai.ts` | `AOAI_BASE_URL` must be set | Azure OpenAI + Foundry provider with managed-identity or API-key auth |
 | `integrations/context-mode.ts` | Always loaded | Tool-output storage, search handles, and `exec_batch` tool |
 | `integrations/keychain/` | Always loaded | `keychain` tool for list/get/set/delete of secure entries |
-| `integrations/ssh/` | Always loaded | `ssh` agent-only tool for per-chat SSH profile get/set/clear |
-| `integrations/proxmox/` | Always loaded | `proxmox` agent-only tool for per-chat Proxmox profile `get`/`set`/`clear`, raw `request`, and named `workflow` actions (VM/task/metrics) |
-| `integrations/portainer/` | Always loaded | `portainer` agent-only tool for per-chat Portainer profile `get`/`set`/`clear`, raw `request`, and named `workflow` actions (endpoint/stack/container) |
-| per-chat `ssh-core` session extension | Created per session by `AgentPool` | Wraps `read`/`write`/`edit`/`bash` with chat-scoped local-or-remote SSH execution |
+| `integrations/ssh/` | Always loaded | `ssh` agent-only tool for session-scoped SSH profile `get`/`set`/`clear` |
+| `integrations/proxmox/` | Always loaded | `proxmox` agent-only tool for session-scoped Proxmox profile actions plus `discover`, `capabilities`, `workflow_help`, `recommend`, raw `request`, and named `workflow` actions |
+| `integrations/portainer/` | Always loaded | `portainer` agent-only tool for session-scoped Portainer profile actions plus `discover`, `capabilities`, `workflow_help`, `recommend`, raw `request`, and named `workflow` actions |
+| per-session `ssh-core` session extension | Created per session by `AgentPool` | Wraps `read`/`write`/`edit`/`bash` with session-scoped local-or-remote SSH execution |
 | `browser/cdp-browser/` | Always loaded | Cross-platform Chromium CDP browser control tool (`cdp_browser`) |
 | `platform/windows/win-ui/` | Always loaded (runtime no-op off Windows) | Windows desktop automation via bun:ffi + IAccessible (`win_*` tools) |
 | `viewers/drawio-editor/` | Always loaded | Self-hosted draw.io editor with extension route, save endpoint, and workspace export |
@@ -143,11 +143,16 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 These packaged runtime extensions use relative imports into `runtime/src/...` where needed and require a `node_modules` symlink next to the `extensions/` directory (created automatically at startup) so jiti can resolve deep package imports. `runtime/src/extensions/` remains a separate built-in factory surface and should not be confused with the filesystem-backed packaged extension tree.
 
 For infrastructure integrations, the intended uniform contract is:
-- chat-scoped profile actions: `get` / `set` / `clear`
+- session-scoped profile actions: `get` / `set` / `clear`
+- instance discovery: `discover`
+- compact introspection: `capabilities` / `workflow_help`
+- intent routing: `recommend`
 - raw transport surface: `request`
 - reusable higher-level orchestration: `workflow`
 
 `proxmox` and `portainer` now both follow that model directly, and future infrastructure integrations should mirror the same contract rather than introducing separate control shapes.
+
+This contract is also a context-conservation strategy: compact family summaries come first, recommendations stay short, workflow examples are opt-in, and raw `request` is reserved for the cases where curated workflows are not enough.
 
 ### Web pane extensions
 
@@ -222,7 +227,8 @@ Page load
 - Web and WhatsApp share the same storage and agent pool.
 - Core utilities (config/env/chat context) live in `src/core`; shared helpers live in `src/utils`.
 - Chat context (chat JID + channel) is tracked in AsyncLocalStorage; tools/extensions read from the scoped context (defaults to `web:default` / `web`) rather than env variables.
-- SSH-backed core-tool state is chat-scoped and persisted in SQLite (`ssh_configs`). `AgentPool` injects a per-session `ssh-core` extension and can hot-swap the live SSH backend for an existing warm chat session.
+- SSH-backed core-tool state is session-scoped and persisted in SQLite (`ssh_configs`). `AgentPool` injects a per-session `ssh-core` extension and can hot-swap the live SSH backend for an existing warm session.
+- Proxmox and Portainer API profiles are also session-scoped and persisted in SQLite (`proxmox_configs`, `portainer_configs`). Their native tools share the same low-context discovery pattern: `discover` → `capabilities` / `recommend` → `workflow_help` → `workflow` or `request`.
 - Workspace tree responses are cached briefly (1s) and rate-limited to prevent bursty UI reloads (HTTP 429 when exceeded).
 - The **workspace explorer** is a responsive sidebar (visible on desktop/tablet ≥1024px landscape) that shows a file tree of `/workspace`, supports file previews, drag-and-drop upload, inline file creation, inline rename, drag-and-drop move, and file reference pills for prompts.
 - The **code editor** is a standalone pane extension (`extensions/viewers/editor/`) using CodeMirror 6 directly (no Preact wrapper). It opens in the tabbed content area when a file is clicked in the explorer. Supports syntax highlighting for 12 languages, search/replace, line wrapping, dirty tracking, Cmd+S save, vim mode, whitespace toggle, and accent-aware theming. The editor bundle is lazy-loaded on first file open. Backend endpoints: `GET /workspace/file?mode=edit` (full content up to 256 KB) and `PUT /workspace/file` (save).
