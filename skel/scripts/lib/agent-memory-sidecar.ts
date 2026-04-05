@@ -548,6 +548,11 @@ function buildReferenceMemoryMarkdown(): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+function resolveMemoryIndexDayLink(date: string): string {
+  const sparseDayPath = resolve(AGENT_MEMORY_DIR, "days", `${date}.md`);
+  return existsSync(sparseDayPath) ? `days/${date}.md` : `../daily/${date}.md`;
+}
+
 function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
   const lines: string[] = [];
   lines.push("# MEMORY.md", "");
@@ -584,7 +589,7 @@ function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
     for (const day of currentState.complete_days.slice(0, currentState.recent_days)) {
       const hook = compactText(day.summary) || "(no summary)";
       const truncatedHook = hook.length > 110 ? `${hook.slice(0, 109)}…` : hook;
-      lines.push(`- [${day.date}](days/${day.date}.md) — ${truncatedHook}`);
+      lines.push(`- [${day.date}](${resolveMemoryIndexDayLink(day.date)}) — ${truncatedHook}`);
     }
     lines.push("");
   }
@@ -593,6 +598,7 @@ function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
   lines.push(`- [current-state.json](current-state.json)`);
   lines.push(`- [recent-context.md](recent-context.md)`);
   lines.push(`- Daily notes directory: ${DAILY_NOTES_DIR}`);
+  lines.push(`- Sparse day-memory directory (model-owned, optional): ${resolve(AGENT_MEMORY_DIR, "days")}`);
 
   while (lines.length > MEMORY_LINE_LIMIT || Buffer.byteLength(`${lines.join("\n").trimEnd()}\n`, "utf8") > MEMORY_MAX_BYTES) {
     const dailyHeaderIndex = lines.indexOf("## Recent daily memories");
@@ -729,15 +735,9 @@ export function refreshAgentMemoryFromDailyNotes(options?: { recentDays?: number
 
   writeFileSync(recentContextPath, `${summaryLines.join("\n").trimEnd()}\n`, "utf8");
 
-  const wantedDayFiles = new Set(currentState.complete_days.map((day) => `${day.date}.md`));
-  for (const existing of readdirSync(AGENT_MEMORY_DAYS_DIR).filter((file) => file.endsWith(".md"))) {
-    if (!wantedDayFiles.has(existing)) {
-      rmSync(resolve(AGENT_MEMORY_DAYS_DIR, existing), { force: true });
-    }
-  }
-  for (const day of currentState.complete_days) {
-    writeFileSync(resolve(AGENT_MEMORY_DAYS_DIR, `${day.date}.md`), buildDayMemoryMarkdown(day), "utf8");
-  }
+  // Runtime no longer materializes `notes/memory/days/` from `notes/daily/`.
+  // That subtree is model-owned and should remain sparse/optional rather than
+  // acting as a mirrored shadow tree of every complete daily note.
 
   writeFileSync(AGENT_MEMORY_USER_PATH, buildUserMemoryMarkdown(currentState), "utf8");
   writeFileSync(AGENT_MEMORY_FEEDBACK_PATH, buildFeedbackMemoryMarkdown(currentState), "utf8");

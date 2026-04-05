@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 import { WORKSPACE_DIR } from "../core/config.js";
@@ -6,7 +6,6 @@ import { getDb } from "../db.js";
 
 export const DAILY_NOTES_DIR = resolve(WORKSPACE_DIR, "notes/daily");
 export const AGENT_MEMORY_DIR = resolve(WORKSPACE_DIR, "notes/memory");
-export const AGENT_MEMORY_DAYS_DIR = resolve(AGENT_MEMORY_DIR, "days");
 export const AGENT_MEMORY_USER_PATH = resolve(AGENT_MEMORY_DIR, "user.md");
 export const AGENT_MEMORY_FEEDBACK_PATH = resolve(AGENT_MEMORY_DIR, "feedback.md");
 export const AGENT_MEMORY_PROJECT_PATH = resolve(AGENT_MEMORY_DIR, "project.md");
@@ -431,45 +430,6 @@ function formatCompactDay(sidecar: DailyAgentSidecar): string[] {
   return lines;
 }
 
-function buildDayMemoryMarkdown(day: AgentMemoryCurrentStateDay): string {
-  const lines: string[] = [];
-  lines.push(`# ${day.date}`, "");
-  lines.push(`- Source note: ${day.source_note}`);
-  lines.push(`- Sidecar: ${day.sidecar_path}`);
-  if (day.summarised_until) lines.push(`- Summarised until: ${day.summarised_until}`);
-  if (day.messages_total !== null) lines.push(`- Messages: ${day.messages_total}`);
-  if (day.session_trees !== null) lines.push(`- Session trees: ${day.session_trees}`);
-  if (day.session_chats !== null) lines.push(`- Session chats: ${day.session_chats}`);
-  lines.push("");
-  lines.push("## Summary", "");
-  lines.push(day.summary || "(no summary)", "");
-  if (day.summary_updates.length > 0) {
-    lines.push("## Updates", "");
-    for (const update of day.summary_updates) {
-      lines.push(`- ${compactText(update) || update}`);
-    }
-    lines.push("");
-  }
-  if (day.transcript_signals.user_directives.length > 0 || day.transcript_signals.assistant_outcomes.length > 0) {
-    lines.push("## Transcript signals", "");
-    if (day.transcript_signals.user_directives.length > 0) {
-      lines.push("### User directives", "");
-      for (const snippet of day.transcript_signals.user_directives) {
-        lines.push(`- ${snippet}`);
-      }
-      lines.push("");
-    }
-    if (day.transcript_signals.assistant_outcomes.length > 0) {
-      lines.push("### Assistant outcomes", "");
-      for (const snippet of day.transcript_signals.assistant_outcomes) {
-        lines.push(`- ${snippet}`);
-      }
-      lines.push("");
-    }
-  }
-  return `${lines.join("\n").trimEnd()}\n`;
-}
-
 function uniqueSnippets(values: Iterable<string>, limit = 24): string[] {
   const seen = new Set<string>();
   const output: string[] = [];
@@ -540,6 +500,11 @@ function buildReferenceMemoryMarkdown(): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+function resolveMemoryIndexDayLink(date: string): string {
+  const sparseDayPath = resolve(AGENT_MEMORY_DIR, "days", `${date}.md`);
+  return existsSync(sparseDayPath) ? `days/${date}.md` : `../daily/${date}.md`;
+}
+
 function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
   const lines: string[] = [];
   lines.push("# MEMORY.md", "");
@@ -576,7 +541,7 @@ function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
     for (const day of currentState.complete_days.slice(0, currentState.recent_days)) {
       const hook = compactText(day.summary) || "(no summary)";
       const truncatedHook = hook.length > 110 ? `${hook.slice(0, 109)}…` : hook;
-      lines.push(`- [${day.date}](days/${day.date}.md) — ${truncatedHook}`);
+      lines.push(`- [${day.date}](${resolveMemoryIndexDayLink(day.date)}) — ${truncatedHook}`);
     }
     lines.push("");
   }
@@ -585,6 +550,7 @@ function buildMemoryMarkdown(currentState: AgentMemoryCurrentState): string {
   lines.push(`- [current-state.json](current-state.json)`);
   lines.push(`- [recent-context.md](recent-context.md)`);
   lines.push(`- Daily notes directory: ${DAILY_NOTES_DIR}`);
+  lines.push(`- Sparse day-memory directory (model-owned, optional): ${resolve(AGENT_MEMORY_DIR, "days")}`);
 
   while (lines.length > MEMORY_LINE_LIMIT || Buffer.byteLength(`${lines.join("\n").trimEnd()}\n`, "utf8") > MEMORY_MAX_BYTES) {
     const dailyHeaderIndex = lines.indexOf("## Recent daily memories");
@@ -618,7 +584,6 @@ export function refreshAgentMemoryFromDailyNotes(options?: { recentDays?: number
   const currentStatePath = `${AGENT_MEMORY_DIR}/current-state.json`;
   const recentContextPath = `${AGENT_MEMORY_DIR}/recent-context.md`;
   const memoryPath = `${AGENT_MEMORY_DIR}/MEMORY.md`;
-  mkdirSync(AGENT_MEMORY_DAYS_DIR, { recursive: true });
 
   if (!existsSync(DAILY_NOTES_DIR)) {
     const currentState = buildEmptyCurrentState(recentDays);
@@ -721,15 +686,9 @@ export function refreshAgentMemoryFromDailyNotes(options?: { recentDays?: number
 
   writeFileSync(recentContextPath, `${summaryLines.join("\n").trimEnd()}\n`, "utf8");
 
-  const wantedDayFiles = new Set(currentState.complete_days.map((day) => `${day.date}.md`));
-  for (const existing of readdirSync(AGENT_MEMORY_DAYS_DIR).filter((file) => file.endsWith(".md"))) {
-    if (!wantedDayFiles.has(existing)) {
-      rmSync(resolve(AGENT_MEMORY_DAYS_DIR, existing), { force: true });
-    }
-  }
-  for (const day of currentState.complete_days) {
-    writeFileSync(resolve(AGENT_MEMORY_DAYS_DIR, `${day.date}.md`), buildDayMemoryMarkdown(day), "utf8");
-  }
+  // Runtime no longer materializes `notes/memory/days/` from `notes/daily/`.
+  // That subtree is model-owned and should remain sparse/optional rather than
+  // acting as a mirrored shadow tree of every complete daily note.
 
   writeFileSync(AGENT_MEMORY_USER_PATH, buildUserMemoryMarkdown(currentState), "utf8");
   writeFileSync(AGENT_MEMORY_FEEDBACK_PATH, buildFeedbackMemoryMarkdown(currentState), "utf8");

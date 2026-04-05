@@ -10,6 +10,11 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("runtime.wiring");
 
+/** Queue-lane key for out-of-band Dream work; separate from the interactive chat lane. */
+export function getDreamQueueLane(chatJid: string): string {
+  return `dream:${chatJid || "web:default"}`;
+}
+
 /** Minimal sender contract exposed to runtime worker wiring. */
 export type RuntimeSenders = Pick<IpcDeps, "sendMessage" | "sendNudge">;
 
@@ -115,7 +120,7 @@ export function startRuntimeWorkers(
         if (mode !== "auto") {
           await senders.sendMessage(chatJid, result.result, { forceRoot: true, source: "dream" });
         }
-      }, `chat:${chatJid}`);
+      }, getDreamQueueLane(chatJid));
     },
   });
 

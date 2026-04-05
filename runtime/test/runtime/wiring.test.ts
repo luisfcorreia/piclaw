@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { createRuntimeSenders } from "../../src/runtime/wiring.js";
+import { createRuntimeSenders, getDreamQueueLane } from "../../src/runtime/wiring.js";
 
 describe("runtime wiring", () => {
+  test("getDreamQueueLane isolates Dream work from the interactive chat lane", () => {
+    expect(getDreamQueueLane("web:default")).toBe("dream:web:default");
+    expect(getDreamQueueLane("web:default")).not.toBe("chat:web:default");
+  });
+
   test("createRuntimeSenders routes web chat messages to web channel", async () => {
     const webCalls: Array<{ jid: string; text: string; source?: string }> = [];
     const whatsappCalls: Array<{ jid: string; text: string }> = [];

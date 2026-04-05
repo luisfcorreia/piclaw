@@ -9,7 +9,6 @@ let restoreEnv: (() => void) | null = null;
 let db: typeof import("../src/db.js") | null = null;
 let scheduler: typeof import("../src/task-scheduler.js") | null = null;
 let dream: typeof import("../src/dream.js") | null = null;
-let workspacePath: string | null = null;
 let workspaceSearch: typeof import("../src/workspace-search.js") | null = null;
 
 function writeDailyNote(workspace: string, date: string, summary: string) {
@@ -29,9 +28,8 @@ afterEach(() => {
   workspaceSearch = null;
 });
 
-test("ensureDreamTask seeds the midnight maintenance task and runScheduledTask executes it silently", async () => {
+test("internal Dream flows keep notes/memory/days model-owned and AutoDream stays out of band", async () => {
   const ws = createTempWorkspace("piclaw-dream-scheduler-");
-  workspacePath = ws.workspace;
   restoreEnv = setEnv({
     PICLAW_WORKSPACE: ws.workspace,
     PICLAW_STORE: ws.store,
@@ -90,8 +88,8 @@ test("ensureDreamTask seeds the midnight maintenance task and runScheduledTask e
     created_at: new Date().toISOString(),
   });
 
-  const task = db.getTaskById(manualTaskId);
-  await scheduler.runScheduledTask(task!, {
+  const manualTask = db.getTaskById(manualTaskId);
+  await scheduler.runScheduledTask(manualTask!, {
     queue: {} as any,
     agentPool: {} as any,
     sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
@@ -100,41 +98,30 @@ test("ensureDreamTask seeds the midnight maintenance task and runScheduledTask e
   expect(sentMessages.length).toBe(0);
   expect(db.getTaskById(manualTaskId)?.last_result).toContain("Dream updated");
   expect(existsSync(join(ws.workspace, "notes/memory/MEMORY.md"))).toBe(true);
-  expect(existsSync(join(ws.workspace, "notes/memory/days/2026-04-05.md"))).toBe(true);
-  const dayMemory = Bun.file(join(ws.workspace, "notes/memory/days/2026-04-05.md"));
-  expect(await dayMemory.text()).toContain("## Transcript signals");
-  expect(await dayMemory.text()).toContain("database, not just daily-note summaries");
+  expect(existsSync(join(ws.workspace, "notes/memory/days/2026-04-05.md"))).toBe(false);
+
+  const memoryIndexText = readFileSync(join(ws.workspace, "notes/memory/MEMORY.md"), "utf8");
+  expect(memoryIndexText).toContain("[2026-04-05](../daily/2026-04-05.md)");
+
+  const currentStateText = readFileSync(join(ws.workspace, "notes/memory/current-state.json"), "utf8");
+  expect(currentStateText).toContain("database, not just daily-note summaries");
+
+  const recentContextText = readFileSync(join(ws.workspace, "notes/memory/recent-context.md"), "utf8");
+  expect(recentContextText).toContain("Infra tooling and memory maintenance landed.");
 
   const indexed = await workspaceSearch!.searchWorkspace({
-    query: "Transcript signals",
+    query: "Infra tooling and memory maintenance landed",
     scope: "notes",
-    refresh: false,
+    refresh: true,
     limit: 20,
   });
-  expect(indexed.rows.some((row) => row.path === "notes/memory/days/2026-04-05.md")).toBe(true);
+  expect(indexed.rows.some((row) => row.path === "notes/daily/2026-04-05.md")).toBe(true);
 
-  ws.cleanup();
-});
-
-test("built-in autodream runs out of band and cleans up the temporary dream channel", async () => {
-  const ws = createTempWorkspace("piclaw-autodream-skip-");
-  restoreEnv = setEnv({
-    PICLAW_WORKSPACE: ws.workspace,
-    PICLAW_STORE: ws.store,
-    PICLAW_DATA: ws.data,
-  });
-
-  mkdirSync(join(ws.workspace, "notes", "memory"), { recursive: true });
   writeFileSync(
     join(ws.workspace, "notes", "memory", "current-state.json"),
     `${JSON.stringify({ generated_at: new Date(Date.now() - 48 * 3_600_000).toISOString() }, null, 2)}\n`,
     "utf8",
   );
-
-  db = await importFresh("../src/db.js");
-  scheduler = await importFresh("../src/task-scheduler.js");
-  dream = await importFresh("../src/dream.js");
-  db.initDatabase();
 
   for (const chat of ["web:default", "web:a", "web:b", "web:c", "web:d", "web:e"]) {
     db.storeMessage({
@@ -148,7 +135,6 @@ test("built-in autodream runs out of band and cleans up the temporary dream chan
     });
   }
 
-  const seeded = dream.ensureDreamTask("web:default");
   await scheduler.runScheduledTask(seeded!, {
     queue: {} as any,
     agentPool: {

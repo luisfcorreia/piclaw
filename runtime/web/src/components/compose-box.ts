@@ -57,6 +57,9 @@ const SLASH_COMMANDS = [
   { name: "/totp", description: "Show a TOTP enrolment QR code" },
   { name: "/qr", description: "Generate a QR code for text or URL" },
   { name: "/search", description: "Search notes and skills in the workspace" },
+  { name: "/dream", description: "Run Dream memory maintenance over recent days (default 7)" },
+  { name: "/tasks", description: "List scheduled tasks" },
+  { name: "/scheduled", description: "List scheduled tasks" },
   { name: "/restart", description: "Restart the agent and stop subprocesses" },
   { name: "/commands", description: "List available commands" },
 ];

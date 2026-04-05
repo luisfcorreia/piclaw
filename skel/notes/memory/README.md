@@ -19,6 +19,7 @@ Files created and refreshed here include:
 - `feedback.md` — corrections and steering cues
 - `project.md` — ongoing work and recent outcomes
 - `reference.md` — note index and external pointers
-- `days/YYYY-MM-DD.md` — detailed per-day memory derived from daily notes and message history
+- `days/YYYY-MM-DD.md` — optional sparse per-day memory when a day carries durable agent-facing signal beyond the daily note
 
-Human-readable overview stays in `notes/daily/`.
+Human-readable overview stays in `notes/daily/`. `notes/memory/days/` should not be a required mirror of `notes/daily/`.
+`MEMORY.md` should link to a sparse day-memory file only when it actually exists; otherwise it should point back to the daily note.
