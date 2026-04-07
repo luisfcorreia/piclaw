@@ -1506,6 +1506,20 @@ export function ComposeBox({
     }, [showSessionPopup, sessionPopupIndex, sessionPopupEntries.length]);
 
     useEffect(() => {
+        if (!showMention || !mentionRef.current) return;
+        const popup = mentionRef.current;
+        const active = popup.querySelector?.('.slash-item.active');
+        active?.scrollIntoView?.({ block: 'nearest' });
+    }, [showMention, mentionIndex, mentionMatches.length]);
+
+    useEffect(() => {
+        if (!showSlash || !slashRef.current) return;
+        const popup = slashRef.current;
+        const active = popup.querySelector?.('.slash-item.active');
+        active?.scrollIntoView?.({ block: 'nearest' });
+    }, [showSlash, slashIndex, slashMatches.length]);
+
+    useEffect(() => {
         const updateFooterWidth = () => {
             const width = footerRef.current?.clientWidth || 0;
             setFooterWidth((current) => (current === width ? current : width));
