@@ -187,6 +187,17 @@ Path A — native shell panel with provider-driven state.
 - Locked the first slice to a native web onboarding panel rather than timeline tutorial messages.
 - Locked `/login` terminology to **AI provider setup/auth**, not app sign-in.
 - Locked v1 persistence to local web state rather than DB-backed onboarding progress.
+- Implemented the first panel slice in the main shell with two rendered states:
+  - provider missing → `/login` provider setup guidance
+  - provider ready → compact “what next?” guidance
+- Added local persistence keys for provider-missing dismissal and provider-ready completion state.
+- Added compose prefill wiring so the panel can inject `/login` and `/model` into the compose box without creating timeline messages.
+- Added regression coverage for OOBE state resolution, panel rendering, compose prefill semantics, and deterministic audit grouping updates for the new tests.
+- Validation:
+  - `bun run build:web` ✅
+  - targeted web/OOBE tests ✅
+  - `bun run test:optional:browser-isolation` ✅
+  - `bun run test` still shows an unrelated existing `runtime wiring > workspaceNeedsDreamBootstrap...` suite failure when run in the full repo sweep, although the wiring test passes when rerun directly.
 
 ## Notes
 
