@@ -90,10 +90,19 @@ function appendSummaryUpdate(body, lastTs) {
     return `${body.trimEnd()}\n\n${heading}\n\n${SUMMARY_UPDATE_MARKER}\n`;
 }
 function resolveScope(chatJid) {
-    if (chatJid.startsWith("web:")) {
-        return { clause: "m.chat_jid LIKE 'web:%'", params: [], mode: "all-web-session-trees" };
+    const normalized = String(chatJid || '').trim();
+    if (normalized === '*' || normalized.toLowerCase() === 'all') {
+        return {
+            clause: "m.chat_jid NOT LIKE 'dream:%'",
+            params: [],
+            mode: 'all-chats',
+            anchor: '*',
+        };
     }
-    return { clause: "m.chat_jid = ?", params: [chatJid], mode: "chat-only" };
+    if (normalized.startsWith("web:")) {
+        return { clause: "m.chat_jid LIKE 'web:%'", params: [], mode: "all-web-session-trees", anchor: normalized };
+    }
+    return { clause: "m.chat_jid = ?", params: [normalized], mode: "chat-only", anchor: normalized };
 }
 export function refreshDailyNotesFromMessages(options) {
     const days = Math.max(1, Math.floor(Number(options?.days) || 7));
@@ -167,7 +176,7 @@ export function refreshDailyNotesFromMessages(options) {
                 first_message: firstTimestamp,
                 last_message: lastTimestamp,
                 scope_mode: scope.mode,
-                scope_anchor: chatJid,
+                scope_anchor: scope.anchor,
             };
             writeFileSync(filePath, `${formatFrontMatter(nextFields)}\n${body.trimStart()}`, "utf8");
             updated += 1;
@@ -195,14 +204,14 @@ export function refreshDailyNotesFromMessages(options) {
             first_message: firstTimestamp,
             last_message: lastTimestamp,
             scope_mode: scope.mode,
-            scope_anchor: chatJid,
+            scope_anchor: scope.anchor,
         };
         writeFileSync(filePath, `${formatFrontMatter(fmFields)}\n${lines.join("\n")}`, "utf8");
         created += 1;
     }
     return {
         scope_mode: scope.mode,
-        scope_anchor: chatJid,
+        scope_anchor: scope.anchor,
         created,
         updated,
         skipped,

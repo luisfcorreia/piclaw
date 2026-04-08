@@ -20,7 +20,7 @@ export function buildDreamPrompt(options?: { mode?: "manual" | "auto"; days?: nu
     "",
     "Follow the original 4-phase Dream flow:",
     "1. Orient:",
-    "- Runtime has already created a pre-Dream backup and refreshed/seeded daily note files for this window before you start editing.",
+    "- Runtime has already created a pre-Dream backup and refreshed/seeded daily note files from all chats in scope before you start editing (excluding temporary `dream:` chats).",
     "- Load startup memory from `notes/memory/MEMORY.md` and `notes/index.md`.",
     "- Inspect relevant `notes/daily/*.md` and existing `notes/memory/*` files before deciding what matters.",
     "- Open deeper files only when they are needed to resolve uncertainty.",

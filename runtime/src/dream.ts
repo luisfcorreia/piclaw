@@ -46,6 +46,7 @@ const DREAM_DAILY_DIR = resolve(WORKSPACE_DIR, "notes/daily");
 const DREAM_MEMORY_DIR = resolve(WORKSPACE_DIR, "notes/memory");
 const DREAM_BACKUPS_DIR = resolve(DATA_DIR, "dream-backups");
 const DREAM_LOCK_PATH = resolve(DREAM_MEMORY_DIR, ".dream.lock");
+const DREAM_ALL_CHATS_SCOPE_ANCHOR = "*";
 const DREAM_CURRENT_STATE_PATH = resolve(DREAM_MEMORY_DIR, "current-state.md");
 const DREAM_RECENT_CONTEXT_PATH = resolve(DREAM_MEMORY_DIR, "recent-context.md");
 const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
@@ -57,8 +58,8 @@ export interface DreamAgentTurnResult {
   result: string;
 }
 
-function refreshDailyNotes(chatJid: string, days: number): boolean {
-  refreshDailyNotesFromMessages({ chatJid, days });
+function refreshDailyNotes(_chatJid: string, days: number): boolean {
+  refreshDailyNotesFromMessages({ chatJid: DREAM_ALL_CHATS_SCOPE_ANCHOR, days });
   return true;
 }
 
@@ -77,6 +78,17 @@ function countSessionsSince(chatJid: string, sinceIso: string | null): number | 
   if (!sinceIso) return null;
   try {
     const db = getDb();
+    if (chatJid === DREAM_ALL_CHATS_SCOPE_ANCHOR || String(chatJid || '').trim().toLowerCase() === 'all') {
+      const row = db.query<{ count: number }, any[]>(
+        `SELECT COUNT(DISTINCT COALESCE(cb.root_chat_jid, m.chat_jid)) AS count
+         FROM messages m
+         LEFT JOIN chat_branches cb ON cb.chat_jid = m.chat_jid
+         WHERE m.chat_jid NOT LIKE 'dream:%'
+           AND m.timestamp > ?`
+      ).get(sinceIso);
+      return row?.count ?? 0;
+    }
+
     if (chatJid.startsWith("web:")) {
       const row = db.query<{ count: number }, any[]>(
         `SELECT COUNT(DISTINCT COALESCE(cb.root_chat_jid, m.chat_jid)) AS count
@@ -251,7 +263,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
     ? Math.floor(Number(options.days))
     : (mode === "auto" ? AUTO_DREAM_DEFAULT_DAYS : MANUAL_DREAM_DEFAULT_DAYS);
   const lastConsolidatedAt = readLastConsolidatedAt();
-  const sessionsSinceLast = countSessionsSince(chatJid, lastConsolidatedAt);
+  const sessionsSinceLast = countSessionsSince(DREAM_ALL_CHATS_SCOPE_ANCHOR, lastConsolidatedAt);
 
   if (mode === "auto") {
     const gate = shouldRunAutoDream(lastConsolidatedAt, sessionsSinceLast);
@@ -325,7 +337,7 @@ export async function runDreamMaintenance(options?: { chatJid?: string; days?: n
     ? Math.floor(Number(options?.days))
     : (mode === "auto" ? AUTO_DREAM_DEFAULT_DAYS : MANUAL_DREAM_DEFAULT_DAYS);
   const lastConsolidatedAt = readLastConsolidatedAt();
-  const sessionsSinceLast = countSessionsSince(chatJid, lastConsolidatedAt);
+  const sessionsSinceLast = countSessionsSince(DREAM_ALL_CHATS_SCOPE_ANCHOR, lastConsolidatedAt);
 
   if (mode === "auto") {
     const gate = shouldRunAutoDream(lastConsolidatedAt, sessionsSinceLast);
