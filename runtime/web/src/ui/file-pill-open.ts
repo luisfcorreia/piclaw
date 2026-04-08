@@ -12,6 +12,7 @@ export function resolveFilePillOpenAction(
   rawPath: unknown,
   options: {
     editorOpen: boolean;
+    autoOpenEditor?: boolean;
     resolvePane: (context: FilePillOpenContext) => unknown;
   }
 ): FilePillOpenResult {
@@ -27,7 +28,7 @@ export function resolveFilePillOpenAction(
     };
   }
 
-  if (!options.editorOpen) {
+  if (!options.editorOpen && !options.autoOpenEditor) {
     return {
       kind: "toast",
       title: "Editor pane is not open",

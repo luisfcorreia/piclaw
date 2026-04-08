@@ -628,19 +628,20 @@ export const markdownPreviewTheme = EditorView.theme({
         backgroundColor: 'var(--bg-secondary, #2a2a2a)',
         borderLeft: '1px solid var(--border-color, #333)',
         borderRight: '1px solid var(--border-color, #333)',
-        padding: '4px 12px !important',
-        fontSize: '0.85em',
-        lineHeight: '1.7',
+        padding: '1px 10px !important',
+        fontSize: '0.84em',
+        lineHeight: '1.35',
+        minHeight: '1.35em',
     },
     '.cm-md-frontmatter-line-first': {
         borderTop: '1px solid var(--border-color, #333)',
         borderRadius: '8px 8px 0 0',
-        paddingTop: '8px !important',
+        paddingTop: '4px !important',
     },
     '.cm-md-frontmatter-line-last': {
         borderBottom: '1px solid var(--border-color, #333)',
         borderRadius: '0 0 8px 8px',
-        paddingBottom: '8px !important',
+        paddingBottom: '4px !important',
     },
     '.cm-md-frontmatter-fence': {
         height: '0 !important',
@@ -654,9 +655,9 @@ export const markdownPreviewTheme = EditorView.theme({
     },
     '.cm-md-frontmatter-row': {
         display: 'grid',
-        gridTemplateColumns: '140px minmax(0, 1fr)',
+        gridTemplateColumns: 'max-content minmax(0, 1fr)',
         alignItems: 'center',
-        columnGap: '10px',
+        columnGap: '8px',
         width: '100%',
     },
     '.cm-md-frontmatter-field-cell': {
@@ -670,9 +671,9 @@ export const markdownPreviewTheme = EditorView.theme({
     '.cm-md-frontmatter-pill': {
         display: 'inline-block',
         borderRadius: '999px',
-        padding: '2px 8px',
-        fontSize: '0.92em',
-        lineHeight: '1.4',
+        padding: '1px 7px',
+        fontSize: '0.9em',
+        lineHeight: '1.2',
         border: '1px solid var(--border-color, #3a3a3a)',
     },
     '.cm-md-frontmatter-field-pill': {
@@ -684,12 +685,13 @@ export const markdownPreviewTheme = EditorView.theme({
     '.cm-md-frontmatter-value': {
         color: 'var(--text-primary, #d6d6d6)',
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        fontSize: '0.98em',
+        fontSize: '0.96em',
+        lineHeight: '1.3',
     },
     '.cm-md-frontmatter-tags': {
         display: 'inline-flex',
         alignItems: 'center',
-        gap: '6px',
+        gap: '4px',
         flexWrap: 'wrap',
     },
     '.cm-md-frontmatter-tag-pill': {

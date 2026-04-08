@@ -12,9 +12,10 @@ describe("resolveFilePillOpenAction", () => {
     expect(result).toEqual({ kind: "open", path: "notes/todo.md" });
   });
 
-  test("returns a warning toast when the editor pane is hidden", () => {
+  test("returns a warning toast when the editor pane is hidden and auto-open is disabled", () => {
     const result = resolveFilePillOpenAction("notes/todo.md", {
       editorOpen: false,
+      autoOpenEditor: false,
       resolvePane: () => ({ id: "editor" }),
     });
 
@@ -24,6 +25,16 @@ describe("resolveFilePillOpenAction", () => {
       detail: "Open the editor pane to open files from pills.",
       level: "warning",
     });
+  });
+
+  test("opens a workspace path when the editor pane is hidden but auto-open is enabled", () => {
+    const result = resolveFilePillOpenAction("notes/todo.md", {
+      editorOpen: false,
+      autoOpenEditor: true,
+      resolvePane: ({ path, mode }) => ({ id: `${mode}:${path}` }),
+    });
+
+    expect(result).toEqual({ kind: "open", path: "notes/todo.md" });
   });
 
   test("returns a warning toast for protocol/external paths", () => {

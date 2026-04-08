@@ -227,6 +227,37 @@ export function decodeEntitiesDeep(text, maxDepth = 2) {
     return current;
 }
 
+function extractLeadingYamlFrontmatter(text) {
+    if (!text) return { text: '', frontmatter: null };
+    const normalized = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (!normalized.startsWith('---\n')) {
+        return { text: normalized, frontmatter: null };
+    }
+
+    const lines = normalized.split('\n');
+    let closingIndex = -1;
+    for (let i = 1; i < lines.length; i += 1) {
+        if (/^(---|\.\.\.)\s*$/.test(lines[i])) {
+            closingIndex = i;
+            break;
+        }
+    }
+
+    if (closingIndex <= 0) {
+        return { text: normalized, frontmatter: null };
+    }
+
+    const frontmatter = lines.slice(1, closingIndex).join('\n');
+    const body = lines.slice(closingIndex + 1).join('\n').replace(/^\n+/, '');
+    return { text: body, frontmatter };
+}
+
+function normalizeLeadingFrontmatter(text) {
+    const { text: body, frontmatter } = extractLeadingYamlFrontmatter(text);
+    if (frontmatter === null) return body;
+    return [`\`\`\`yaml`, frontmatter, '\`\`\`', body].filter(Boolean).join('\n\n');
+}
+
 function extractMermaidBlocks(text) {
     if (!text) return { text: '', blocks: [] };
     const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
@@ -530,7 +561,8 @@ function normalizeMathFences(text) {
 }
 
 export function prepareMarkdownSource(text) {
-    const normalizedMath = normalizeMathFences(text || '');
+    const normalizedFrontmatter = normalizeLeadingFrontmatter(text || '');
+    const normalizedMath = normalizeMathFences(normalizedFrontmatter);
     const { text: stripped, blocks: mermaidBlocks } = extractMermaidBlocks(normalizedMath);
 
     // Decode HTML entities first (in case content has encoded entities)

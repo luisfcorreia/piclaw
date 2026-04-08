@@ -52,6 +52,23 @@ test('prepareMarkdownSource restores allowed ruby, br, and span tags', async () 
   expect(safeHtml).not.toContain('&lt;span');
 });
 
+test('prepareMarkdownSource rewrites leading YAML frontmatter into a fenced yaml block', async () => {
+  globalThis.DOMParser = class {
+    parseFromString(input: string) {
+      return { documentElement: { textContent: decodeEntities(input) } } as any;
+    }
+  } as any;
+
+  const { prepareMarkdownSource } = await import('../../web/src/markdown.ts');
+  const { safeHtml } = prepareMarkdownSource('---\ntitle: Test\ntags:\n  - demo\n---\n\n# Hello');
+
+  expect(safeHtml).toContain('```yaml');
+  expect(safeHtml).toContain('title: Test');
+  expect(safeHtml).toContain('tags:');
+  expect(safeHtml).toContain('- demo');
+  expect(safeHtml).toContain('# Hello');
+});
+
 test('applySyntaxHighlighting adds token spans for supported fenced languages', async () => {
   globalThis.DOMParser = class {
     parseFromString(input: string) {

@@ -87,9 +87,10 @@ export function useComposeReferenceOrchestration(options: UseComposeReferenceOrc
     }, durationMs);
   }, [clearIntentToast, intentToastTimerRef, setIntentToast]);
 
-  const openFileFromPill = useCallback((rawPath: unknown) => {
+  const openFileFromPillWithMode = useCallback((rawPath: unknown, { autoOpenEditor = false } = {}) => {
     const result = resolveFilePillOpenAction(rawPath, {
       editorOpen,
+      autoOpenEditor,
       resolvePane,
     });
 
@@ -102,6 +103,14 @@ export function useComposeReferenceOrchestration(options: UseComposeReferenceOrc
       showIntentToast(result.title, result.detail, result.level);
     }
   }, [editorOpen, openEditor, resolvePane, showIntentToast]);
+
+  const openFileFromPill = useCallback((rawPath: unknown) => {
+    openFileFromPillWithMode(rawPath, { autoOpenEditor: false });
+  }, [openFileFromPillWithMode]);
+
+  const openTimelineFileFromPill = useCallback((rawPath: unknown) => {
+    openFileFromPillWithMode(rawPath, { autoOpenEditor: true });
+  }, [openFileFromPillWithMode]);
 
   const attachActiveEditorFile = useCallback(() => {
     const activeId = tabStripActiveId;
@@ -146,6 +155,7 @@ export function useComposeReferenceOrchestration(options: UseComposeReferenceOrc
     setFileRefsFromCompose,
     showIntentToast,
     openFileFromPill,
+    openTimelineFileFromPill,
     attachActiveEditorFile,
     addMessageRef,
     scrollToMessage,
