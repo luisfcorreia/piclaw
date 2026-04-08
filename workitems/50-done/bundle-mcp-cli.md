@@ -1,10 +1,11 @@
 ---
 id: bundle-mcp-cli
 title: Bundle mcp-cli for local MCP server management
-status: next
+status: done
 priority: medium
 created: 2026-03-11
-updated: 2026-04-06
+updated: 2026-04-08
+completed: 2026-04-08
 target_release: next
 estimate: M
 risk: medium
@@ -246,6 +247,19 @@ The helper skill should cover only the practical first workflows:
 
 ## Updates
 
+### 2026-04-08
+- Lane change: `10-next` → `50-done` by user direction.
+- Closed as **superseded / not-done**.
+- Rationale:
+  - PiClaw now ships `pi-mcp-adapter` instead of bundling raw `mcp-cli`.
+  - The adapter provides the user-facing MCP workflow we actually want: bundled runtime integration, `mcp` tool access, slash commands, project-local config, and docs/skill guidance.
+  - Keeping this ticket open would now be misleading because the product need was satisfied through a different implementation path.
+- Practical outcome:
+  - supported MCP path: `pi-mcp-adapter`
+  - preferred config: `.pi/mcp.json`
+  - starter example: `.pi/mcp.json.example`
+  - raw `mcp-cli` is not required by the shipped MCP integration.
+
 ### 2026-04-06
 - Follow-up clarification from board review: the install strategy is now locked to **Bun-first** rather than keeping a binary-first fallback path open as a co-equal option.
 - Updated the ticket to treat raw release binaries as validation evidence only, not the preferred shipping contract.
@@ -289,8 +303,22 @@ The helper skill should cover only the practical first workflows:
 ## Notes
 
 - This ticket is specifically about bundling and managing `mcp-cli`, not building a deeper MCP runtime bridge inside piclaw.
+- That scope is now superseded in practice by bundling `pi-mcp-adapter` instead of the raw `mcp-cli` executable.
 - The stronger long-term design question around MCP-style discovery ergonomics for internal tools is tracked separately.
 - The current upstream project already aligns well with piclaw's Bun-oriented environment, which makes it a good fit technically even if config/location conventions need adaptation.
+
+## Implementation Paths Considered (historical)
+
+- This ticket was closed as superseded rather than implemented directly.
+- PiClaw now ships `pi-mcp-adapter` as the supported MCP integration surface, including:
+  - bundled package dependency
+  - automatic session extension loading
+  - the `mcp` proxy tool
+  - `/mcp` and `/mcp-auth` slash commands
+  - project-local starter config at `.pi/mcp.json.example`
+  - MCP guidance in the seeded workspace skills/docs
+- `mcp-cli` is therefore no longer the preferred product path for MCP access in PiClaw.
+- If raw standalone CLI management is still wanted later, it should come back as a smaller follow-up ticket with a clearly separate justification from the shipped adapter path.
 
 ## Links
 
