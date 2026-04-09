@@ -1,20 +1,17 @@
 // @ts-nocheck
 
-import { isMobileBrowserMode } from './chat-window.js';
+import { isMobileBrowserMode, isStandaloneWebAppMode } from './chat-window.js';
 
 export function shouldUseStandaloneMobileViewportFix(runtime = {}) {
-  return isMobileBrowserMode(runtime);
+  return isStandaloneWebAppMode(runtime) && isMobileBrowserMode(runtime);
 }
 
 export function readViewportHeight(runtime = {}) {
   const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
   const viewportHeight = Number(win?.visualViewport?.height || 0);
-  const viewportOffsetTop = Number(win?.visualViewport?.offsetTop || 0);
-  const viewportBottom = viewportHeight + Math.max(0, viewportOffsetTop);
-  if (Number.isFinite(viewportBottom) && viewportBottom > 0) {
-    return Math.round(viewportBottom);
+  if (Number.isFinite(viewportHeight) && viewportHeight > 0) {
+    return Math.round(viewportHeight);
   }
-
   const innerHeight = Number(win?.innerHeight || 0);
   if (Number.isFinite(innerHeight) && innerHeight > 0) {
     return Math.round(innerHeight);
@@ -33,14 +30,9 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
     return null;
   }
 
-  const root = doc.documentElement;
-  if (root?.dataset) {
-    root.dataset.mobileViewport = 'dynamic';
-  }
-
   const height = readViewportHeight({ window: win });
   if (height && height > 0) {
-    root.style.setProperty('--app-height', `${height}px`);
+    doc.documentElement.style.setProperty('--app-height', `${height}px`);
   }
 
   // Do not force the page back to the top during normal viewport sync.
@@ -54,7 +46,7 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
         win.scrollTo(0, 0);
       }
     } catch {
-      /* expected: mobile browsers can reject forced scroll resets. */
+      /* expected: standalone mobile shells can reject forced scroll resets. */
     }
 
     try {
