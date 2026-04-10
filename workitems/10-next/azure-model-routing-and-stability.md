@@ -1,10 +1,10 @@
 ---
 id: azure-model-routing-and-stability
 title: Harden Azure / Foundry model routing and stability
-status: next
+status: review
 priority: high
 created: 2026-03-10
-updated: 2026-04-06
+updated: 2026-04-10
 target_release: next
 estimate: M
 risk: medium
@@ -301,3 +301,18 @@ Payload captures for failing runs:
 - `runtime/src/extensions/azure-openai-api.ts`
 - `runtime/test/extensions/azure-openai-streaming.test.ts`
 - `runtime/test/extensions/azure-openai-tool-call-limit.test.ts`
+
+### 2026-04-10
+- All three slices implemented and shipped in commit `82f15fe6`.
+- **Slice 1:** `RESPONSES_ONLY_MODELS` set + explicit guard for `gpt-5-4-pro` when ARM caps report `responses=false`.
+- **Slice 2:** `capToolFlowReasoning()` exported and tested; caps `gpt-5-mini` to `medium` when tools are present.
+  - Harness validation: `high` → 0/4 pass (unchanged model behavior); `medium` → 4/4 pass.
+  - The live extension will cap `high` to `medium` for tool-heavy flows automatically.
+- **Slice 3:** Foundry `compat` object added to model registration:
+  - `supportsStore: false`, `maxTokensField: "max_tokens"`, `supportsReasoningEffort: false`, `requiresAssistantAfterToolResult: true`
+  - Harness validation: `mistral-large-3` passes 4/4 with 10s cooldown.
+- Also fixed `resolvePiAiResponsesSharedModulePath` fallback for bundled harness contexts.
+- New test file: `runtime/test/extensions/azure-openai-routing.test.ts` (13 tests).
+- Full quality gate green: 1824 pass, 0 fail.
+- Quality: ★★★★☆ 9/10 (problem: 2, scope: 2, test: 2, deps: 2, risk: 1)
+- Remaining gap: broader compat-matrix/config refactor deferred to a future ticket.
