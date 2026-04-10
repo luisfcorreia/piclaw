@@ -10,6 +10,7 @@ This note documents the piclaw extension that registers Azure OpenAI and Azure A
 
 - Provide an Azure OpenAI provider (`azure-openai`) using managed identity (no Azure CLI dependency).
 - Provide an Azure AI Foundry provider (`azure-foundry`) for text and image endpoints.
+- Expose workspace-backed `/image` and `/flux` commands for image generation; `/image` supports `--transparent` and writes transparent PNG output when Azure OpenAI accepts it.
 - Stream Responses API output with tool-call ID normalization and text output forcing.
 - **Avoid global handler overrides** by using custom API names.
 
@@ -26,6 +27,8 @@ This note documents the piclaw extension that registers Azure OpenAI and Azure A
 - **Phase capture + replay** for GPT‑5.3 Codex output metadata (`AOAI_LOG_PHASES` for debug).
 - **Stream failure logging** for `response.failed` / `error` events with request summaries.
 - **Tool-call trimming + summarisation** to stay under Azure’s 128 tool-call limit (default cap 96, with optional dedupe of `tool_output_search`). Summary messages use `msg_`-prefixed IDs to satisfy Responses API validation.
+- **Helper resolution that walks up to parent `node_modules/` trees** so local source runs and packaged installs both find the shared pi-ai Responses helper cleanly.
+- **Workspace-backed image output formatting** so generated images render as inline workspace images plus file listings instead of raw download-link spam.
 - **Text output forcing** via `text: { format: { type: "text" }, verbosity: "medium" }`.
 
 ## Pitfalls / guardrails
@@ -175,7 +178,21 @@ include: ["reasoning.encrypted_content"]
 ## Files and paths
 
 - **Extension source**: `runtime/extensions/integrations/azure-openai.ts` (bundled inside the package)
+- **Shared helper resolution**: `runtime/src/extensions/azure-openai-api.ts`
 - **Token cache**: `${AOAI_TOKEN_CACHE_DIR}/aoai-token.json`
+
+## Image generation commands
+
+User-facing slash commands exposed by the extension:
+
+- `/image <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high] [--style natural|vivid] [--transparent]`
+- `/flux <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high]`
+
+Notes:
+- `/image --transparent` sets `background: "transparent"` and forces `output_format: "png"` in the Azure OpenAI image request payload.
+- Requested sizes are snapped to the provider-supported raster sizes before dispatch.
+- `/flux` still rejects transparent background requests for now.
+- Successful image runs save files into the workspace and render inline workspace-backed previews in the timeline.
 
 ## Model-switch regression test (web)
 
@@ -237,6 +254,8 @@ send_msg "ping after opus"; wait_idle
 
 - If model output is missing: verify the `text` format block is being injected.
 - If tool call errors appear: ensure `TOOL_CALL_PROVIDERS` includes `azure-openai`/`azure-foundry` and that ID sanitization remains.
+- If helper imports fail in one environment but not another: verify `runtime/src/extensions/azure-openai-api.ts` can walk up to the packaged or repo-local `@mariozechner/pi-ai` install.
+- If `/image --transparent` is ignored or rejected: confirm you are using the Azure OpenAI image path rather than `/flux`, and check whether the deployed image model supports transparent PNG output.
 - If tokens fail: check IMDS connectivity (`curl -H Metadata:true http://169.254.169.254/...`).
 - If other providers break: verify you did **not** register `openai-responses` / `openai-completions` in this extension.
 - Stream failures now log `response.failed` / `error` events plus a request summary (model, message counts, tool counts):

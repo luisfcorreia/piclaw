@@ -159,6 +159,8 @@ const ALLOWED_UNUSED_EXPORTS = new Set([
   "src/extensions/request-batch.ts:27 - RequestBatchControls",
   "src/extensions/ssh-core.ts:1055 - createSshCoreExtension",
   "src/extensions/ssh-core.ts:913 - setSshConnectionResolverForTests",
+  "src/extensions/ssh-core.ts:76 - setPersistentSshSpawnForTests",
+  "src/extensions/ssh-core.ts:82 - setPersistentSshInterruptGraceMsForTests",
   "src/extensions/ssh.ts:69 - sshTool",
   "src/portainer/client.ts:159 - setPortainerRequestExecutorForTests",
   "src/proxmox/client.ts:247 - setProxmoxCurlExecutorForTests",

@@ -64,7 +64,7 @@ function setTenantIdFromToken(token: string): void {
 			_tenantId = payload.tid;
 			_isConsumer = payload.tid === CONSUMER_TENANT_ID;
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 }
 
 // Chatsvc region: auto-discovered from Teams token or environment.
@@ -92,7 +92,7 @@ function setChatsvcFromToken(token: string): void {
 			const regionMatch = _chatsvcBaseUrl.match(/chatsvc\/([a-z]+)\//);
 			if (regionMatch) _chatsvcRegion = regionMatch[1];
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 }
 
 // ── Edge-compatible HTTP headers ────────────────────────────────────────
@@ -156,7 +156,7 @@ export function getEdgeVersion(): string {
 			timeout: 3000,
 		}).trim();
 		return parseBrowserVersion(out) ?? DEFAULT_EDGE_VERSION;
-	} catch {}
+	} catch { /* best-effort fallback / }
 	return DEFAULT_EDGE_VERSION;
 }
 
@@ -345,11 +345,11 @@ function killProcessTree(pid: number | undefined | null) {
 		try {
 			process.kill(-pid, "SIGKILL");
 			return;
-		} catch {}
+		} catch { /* best-effort fallback / }
 		try {
 			process.kill(pid, "SIGKILL");
-		} catch {}
-	} catch {}
+		} catch { /* best-effort fallback / }
+	} catch { /* best-effort fallback / }
 }
 
 function killMatchingUnixBrowserProcesses(predicate: (command: string) => boolean) {
@@ -371,7 +371,7 @@ export function killStaleEdge() {
 			return;
 		}
 		killMatchingUnixBrowserProcesses((command) => command.includes(PROFILE_DIR) || command.includes("m365tools-edge-profile"));
-	} catch {}
+	} catch { /* best-effort fallback / }
 }
 
 function killEdgeCdpProcesses() {
@@ -386,7 +386,7 @@ function killEdgeCdpProcesses() {
 			return;
 		}
 		killMatchingUnixBrowserProcesses((command) => commandHasManagedCdpPort(command));
-	} catch {}
+	} catch { /* best-effort fallback / }
 }
 
 async function inspectCdpPort(port: number): Promise<"absent" | "healthy" | "unhealthy"> {
@@ -406,7 +406,7 @@ async function inspectCdpPort(port: number): Promise<"absent" | "healthy" | "unh
 		return "unhealthy";
 	} finally {
 		if (probeTargetId) {
-			try { await httpPut(`http://localhost:${port}/json/close/${probeTargetId}`, 3000); } catch {}
+			try { await httpPut(`http://localhost:${port}/json/close/${probeTargetId}`, 3000); } catch { /* best-effort fallback / }
 		}
 	}
 }
@@ -587,7 +587,7 @@ async function extractTeamsRefreshToken(): Promise<string | null> {
 		})()`, false, 5000);
 		return typeof refreshToken === "string" && refreshToken.length > 100 ? refreshToken : null;
 	} finally {
-		try { ws.close(); } catch {}
+		try { ws.close(); } catch { /* best-effort fallback / }
 	}
 }
 
@@ -647,7 +647,7 @@ export function cdpCollect(ws: WebSocket, timeoutMs: number): Promise<any[]> {
 		const handler = (event: any) => {
 			try {
 				messages.push(JSON.parse(typeof event.data === "string" ? event.data : event.data.toString()));
-			} catch {}
+			} catch { /* best-effort fallback / }
 		};
 		ws.addEventListener("message", handler);
 		setTimeout(() => {
@@ -667,7 +667,7 @@ export function cdpEval(ws: WebSocket, expression: string, awaitPromise = false,
 			try {
 				const msg = JSON.parse(typeof event.data === "string" ? event.data : event.data.toString());
 				if (msg.id === id) { ws.removeEventListener("message", handler); clearTimeout(timer); resolve(msg.result?.result?.value ?? null); }
-			} catch {}
+			} catch { /* best-effort fallback / }
 		};
 		ws.addEventListener("message", handler);
 	});
@@ -717,8 +717,8 @@ function buildM365ConsentHtml(purpose: string, buttonText = "I understand — co
   <title>M365 experimental consent</title>
   <script>
     window.__m365ConsentGo = function () {
-      try { window.name = "__m365_consent_approved__"; } catch {}
-      try { document.body.setAttribute("data-m365-approved", "1"); } catch {}
+      try { window.name = "__m365_consent_approved__"; } catch { /* best-effort fallback / }
+      try { document.body.setAttribute("data-m365-approved", "1"); } catch { /* best-effort fallback / }
       try {
         var btn = document.getElementById("m365-consent-continue");
         if (btn) {
@@ -729,12 +729,12 @@ function buildM365ConsentHtml(purpose: string, buttonText = "I understand — co
         }
         var status = document.getElementById("m365-consent-status");
         if (status) status.textContent = "Consent received. Opening sign-in...";
-      } catch {}
+      } catch { /* best-effort fallback / }
       try {
         if (typeof window.__m365ConsentApproved === "function") {
           window.__m365ConsentApproved(JSON.stringify({ approved: true, at: Date.now() }));
         }
-      } catch {}
+      } catch { /* best-effort fallback / }
     };
   </script>
 </head>
@@ -858,7 +858,7 @@ async function prepareFreshAuthBrowserSession(
 	const bindingMsgs = await cdpCollect(ws, 300);
 	const bindingError = bindingMsgs.find((m) => m.id === addBindingId && m.error);
 	if (bindingError) {
-		try { ws.close(); } catch {}
+		try { ws.close(); } catch { /* best-effort fallback / }
 		throw new Error(`Could not register consent binding: ${bindingError.error?.message ?? "unknown error"}`);
 	}
 	await cdpEval(ws, `document.open();document.write(${JSON.stringify(buildM365ConsentHtml(purpose, options.buttonText))});document.close();true`, false, 5000);
@@ -876,13 +876,13 @@ async function prepareFreshAuthBrowserSession(
 		if (target.id) {
 			const page = await findPageTargetById(launched.port, target.id).catch(() => null);
 			if (!page) {
-				try { ws.close(); } catch {}
+				try { ws.close(); } catch { /* best-effort fallback / }
 				throw new Error("User closed the consent tab before approval");
 			}
 		}
 	}
 
-	try { ws.close(); } catch {}
+	try { ws.close(); } catch { /* best-effort fallback / }
 	if (launched.proc && launched.proc.pid && USE_TEMP_EDGE_PROFILE) killProc(launched.proc);
 	throw new Error("User consent timed out waiting for approval");
 }
@@ -1209,18 +1209,18 @@ export async function acquireGraphToken(): Promise<string> {
 							if (payload.aud === 'https://graph.microsoft.com' && payload.exp > Date.now()/1000 + 300) {
 								return val.secret;
 							}
-						} catch {}
+						} catch { /* best-effort fallback / }
 					}
 					return null;
 				})()`, false, 5000);
-				try { ws.close(); } catch {}
+				try { ws.close(); } catch { /* best-effort fallback / }
 				if (extractResult && typeof extractResult === "string" && extractResult.length > 100) {
 					saveToken("graph", extractResult);
 					return extractResult;
 				}
 			}
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 
 	// ── Method 1: Redeem Teams refresh token for Graph access ──
 	try {
@@ -1229,7 +1229,7 @@ export async function acquireGraphToken(): Promise<string> {
 			saveToken("graph", refreshed);
 			return refreshed;
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 
 	// ── Method 1+: OAuth implicit flow redirect (fallback) ──
 	const nonce = Math.random().toString(36).substring(2);
@@ -1266,7 +1266,7 @@ export async function acquireGraphToken(): Promise<string> {
 					if (match) {
 						const token = decodeURIComponent(match[1]);
 						saveToken("graph", token);
-						try { ws.close(); } catch {}
+						try { ws.close(); } catch { /* best-effort fallback / }
 						return token;
 					}
 					if (page.url.match(/error=/) && page.url.match(/login\.microsoftonline/)) {
@@ -1280,17 +1280,17 @@ export async function acquireGraphToken(): Promise<string> {
 					try {
 						const pageWs = await cdpConnect(port, page.url?.includes("teams.microsoft.com") ? "teams.microsoft.com" : page.url?.includes("teams.cloud.microsoft") ? "teams.cloud.microsoft" : undefined);
 						const href = await cdpEval(pageWs, "location.href", false, 3000);
-						try { pageWs.close(); } catch {}
+						try { pageWs.close(); } catch { /* best-effort fallback / }
 						if (typeof href === "string") {
 							const hrefMatch = href.match(/access_token=([^&]+)/);
 							if (hrefMatch) {
 								const token = decodeURIComponent(hrefMatch[1]);
 								saveToken("graph", token);
-								try { ws.close(); } catch {}
+								try { ws.close(); } catch { /* best-effort fallback / }
 								return token;
 							}
 						}
-					} catch {}
+					} catch { /* best-effort fallback / }
 				}
 
 				// Method 3: Check if any page captured the token via addScriptToEvaluateOnNewDocument
@@ -1298,7 +1298,7 @@ export async function acquireGraphToken(): Promise<string> {
 				if (captured && typeof captured === "string" && captured.length > 50) {
 					const token = decodeURIComponent(captured);
 					saveToken("graph", token);
-					try { ws.close(); } catch {}
+					try { ws.close(); } catch { /* best-effort fallback / }
 					return token;
 				}
 
@@ -1330,24 +1330,24 @@ export async function acquireGraphToken(): Promise<string> {
 							}
 							return null;
 						})()`, false, 3000);
-						try { pageWs.close(); } catch {}
+						try { pageWs.close(); } catch { /* best-effort fallback / }
 						if (clickResult) {
 							await sleep(2000);
 						}
-					} catch {}
+					} catch { /* best-effort fallback / }
 				}
 
 				const refreshed = await redeemTeamsRefreshToken("https://graph.microsoft.com");
 				if (refreshed) {
 					saveToken("graph", refreshed);
-					try { ws.close(); } catch {}
+					try { ws.close(); } catch { /* best-effort fallback / }
 					return refreshed;
 				}
 			} catch (e: any) {
 				if (e.message.startsWith("OAuth")) throw e;
 			}
 		}
-		try { ws.close(); } catch {}
+		try { ws.close(); } catch { /* best-effort fallback / }
 		throw new Error("Graph token acquisition timed out");
 	} finally {
 		if (proc && proc.pid && USE_TEMP_EDGE_PROFILE) killProc(proc);
@@ -1407,11 +1407,11 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 									best = val.secret;
 								}
 							}
-						} catch {}
+						} catch { /* best-effort fallback / }
 					}
 					return best;
 				})()`, false, 5000);
-				try { ws.close(); } catch {}
+				try { ws.close(); } catch { /* best-effort fallback / }
 				if (extractResult && typeof extractResult === "string" && extractResult.length > 100) {
 					setChatsvcFromToken(extractResult);
 					const baseUrl = getChatsvcBaseUrl();
@@ -1420,7 +1420,7 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 				}
 			}
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 
 	// ── Method 1: Redeem Teams refresh token for fresh Teams access ──
 	try {
@@ -1431,7 +1431,7 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 			saveToken("teams_chatsvc", refreshed, baseUrl);
 			return { token: refreshed, baseUrl };
 		}
-	} catch {}
+	} catch { /* best-effort fallback / }
 
 	// ── Method 1+: OAuth implicit flow for Teams.AccessAsUser.All ──
 	// When Teams is open but its cached localStorage tokens are expired, ask AAD for a
@@ -1471,7 +1471,7 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 							setChatsvcFromToken(token);
 							const baseUrl = getChatsvcBaseUrl();
 							saveToken("teams_chatsvc", token, baseUrl);
-							try { ws.close(); } catch {}
+							try { ws.close(); } catch { /* best-effort fallback / }
 							return { token, baseUrl };
 						}
 					}
@@ -1489,7 +1489,7 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 						setChatsvcFromToken(token);
 						const baseUrl = getChatsvcBaseUrl();
 						saveToken("teams_chatsvc", token, baseUrl);
-						try { ws.close(); } catch {}
+						try { ws.close(); } catch { /* best-effort fallback / }
 						return { token, baseUrl };
 					}
 				}
@@ -1506,9 +1506,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 							if (msButton && visible(msButton)) { msButton.click(); return 'clicked-ms-button: ' + (msButton.textContent || msButton.value || msButton.id).trim(); }
 							return null;
 						})()`, false, 3000);
-						try { pageWs.close(); } catch {}
+						try { pageWs.close(); } catch { /* best-effort fallback / }
 						if (clickResult) await sleep(2000);
-					} catch {}
+					} catch { /* best-effort fallback / }
 				}
 
 				const refreshed = await redeemTeamsRefreshToken("https://ic3.teams.office.com");
@@ -1516,14 +1516,14 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 					setChatsvcFromToken(refreshed);
 					const baseUrl = getChatsvcBaseUrl();
 					saveToken("teams_chatsvc", refreshed, baseUrl);
-					try { ws.close(); } catch {}
+					try { ws.close(); } catch { /* best-effort fallback / }
 					return { token: refreshed, baseUrl };
 				}
 			} catch (e: any) {
 				if (e.message.startsWith("Teams OAuth")) throw e;
 			}
 		}
-		try { ws.close(); } catch {}
+		try { ws.close(); } catch { /* best-effort fallback / }
 		// fall through to network interception fallback if OAuth never yielded a token
 	} finally {
 		if (oauth.proc && oauth.proc.pid && USE_TEMP_EDGE_PROFILE) killProc(oauth.proc);
@@ -1621,16 +1621,16 @@ export async function acquireSPOCookies(siteUrl: string): Promise<CookieData[]> 
 		saveCookies(host, cookies);
 		return cookies;
 	} finally {
-		try { ws?.close(); } catch {}
+		try { ws?.close(); } catch { /* best-effort fallback / }
 		// Close the SPO tab we opened (prevent tab accumulation)
 		if (tabId) {
-			try { await httpPut(`http://localhost:${port}/json/close/${tabId}`, 3000); } catch {}
+			try { await httpPut(`http://localhost:${port}/json/close/${tabId}`, 3000); } catch { /* best-effort fallback / }
 		} else if (reusedExistingPort) {
 			try {
 				const tabs: any[] = await httpGet(`http://localhost:${port}/json`, 3000);
 				const spoTab = tabs.find((t: any) => t.type === "page" && t.url?.includes(host));
 				if (spoTab) await httpPut(`http://localhost:${port}/json/close/${spoTab.id}`, 3000);
-			} catch {}
+			} catch { /* best-effort fallback / }
 		}
 		if (proc && proc.pid && USE_TEMP_EDGE_PROFILE) killProc(proc);
 	}

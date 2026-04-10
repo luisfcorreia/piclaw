@@ -64,6 +64,32 @@ Focused regression test:
 PICLAW_DB_IN_MEMORY=1 bun test runtime/test/agent-pool/mcp-adapter-bundled.test.ts
 ```
 
+### Azure OpenAI image commands
+
+Recent Azure OpenAI work hardened the shared helper resolution path, improved image-output formatting, and added transparent PNG support to `/image`.
+
+Relevant files:
+
+- `runtime/extensions/integrations/azure-openai.ts`
+- `runtime/src/extensions/azure-openai-api.ts`
+- `runtime/test/extensions/azure-openai-api.test.ts`
+- `runtime/test/extensions/azure-openai-image-output.test.ts`
+- `docs/azure/azure-openai-extension.md`
+
+Focused regression tests:
+
+```bash
+bun test \
+  runtime/test/extensions/azure-openai-api.test.ts \
+  runtime/test/extensions/azure-openai-image-output.test.ts
+```
+
+Notes:
+
+- `/image --transparent` requests transparent PNG output on the Azure OpenAI image path.
+- `/flux` still rejects transparent background requests.
+- Successful image runs now format results as workspace-backed inline images plus file listings rather than raw download links.
+
 ### Workspace search / reindex UI
 
 Recent workspace explorer changes added an index-status surface and manual reindex control on top of the existing FTS search/indexing pipeline.
@@ -103,6 +129,7 @@ What it does:
 - builds a local image (`piclaw-oobe-test:local`) unless skipped
 - starts a temporary local Piclaw container on a random localhost port
 - runs Playwright against the live web UI
+- writes screenshots, DOM dumps, state captures, and container logs under `artifacts/oobe-local-container/`
 - validates:
   - provider-missing OOBE panel copy
   - `/login` compose prefill
@@ -122,6 +149,11 @@ PICLAW_OOBE_TEST_HEADLESS=0 bun run test:oobe:local-container
 Implementation surface:
 
 - `runtime/scripts/playwright/oobe-local-container.ts`
+
+Notes:
+
+- The generated `artifacts/oobe-local-container/` files are local smoke-test artefacts, not release payloads.
+- Clean them up before tagging if you do not intend to keep the latest repro bundle around.
 
 ## Layout
 

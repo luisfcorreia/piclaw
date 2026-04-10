@@ -401,6 +401,8 @@ Direct commands (no LLM round-trip):
 | `/totp` / `/totp reset <code>` | Open the single-card TOTP setup/secondary/reset flow; commit only after confirmation |
 | `/qr <text>` | Generate a QR code for text or a URL |
 | `/search <query>` | Search notes and skills in the workspace |
+| `/image <prompt> [--size ...] [--count ...] [--quality ...] [--style ...] [--transparent]` | Generate an Azure OpenAI image into workspace-backed files; `--transparent` requests transparent PNG output |
+| `/flux <prompt> [--size ...] [--count ...] [--quality ...]` | Generate an Azure Foundry image into workspace-backed files |
 | `/restart` | Restart the agent and stop subprocesses |
 | `/commands` | List available commands |
 | `/btw <question>` | Open a side-conversation panel in the web UI and stream an answer without interrupting the main chat |
@@ -415,6 +417,8 @@ Direct commands (no LLM round-trip):
 > The card-based `/login` flow supports GitHub Copilot, Codex, and standard OpenAI providers. Anthropic is untested. The terminal remains the reliable fallback.
 
 The bundled `pi-mcp-adapter` reads project-local MCP config from `.pi/mcp.json` (starter example: `.pi/mcp.json.example`) and also understands the Pi home config under `~/.pi/agent/mcp.json` (inside the container image this typically maps to `/config/.pi/agent/mcp.json`). Prefer the project-local config when an MCP server belongs to the current workspace.
+
+`/image` writes generated images back into the workspace and renders them as workspace-backed timeline images plus file-path listings. `/flux` follows the same output pattern, but transparent background requests are currently supported only on `/image`.
 
 `/search` performs a workspace full‑text search (notes + skills) without calling the LLM:
 

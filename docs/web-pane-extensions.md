@@ -110,6 +110,7 @@ create TCP socket]
 - VNC targets are resolved from:
   1. `PICLAW_WEB_VNC_TARGETS` / `PICLAW_VNC_TARGETS` allow-list (JSON array or map)
   2. Optional direct-connect when `PICLAW_WEB_VNC_ALLOW_DIRECT` / `PICLAW_VNC_ALLOW_DIRECT` is enabled
+- When neither saved targets nor direct-connect are available, the pane renders explicit empty-state copy that tells the user direct connect is disabled instead of pretending the manual entry flow still exists.
 - `WebSocketTcpBridge` is protocol-agnostic:
   - forwards binary traffic between websocket clients and TCP sockets
   - keeps per-connection byte counters for UI metrics

@@ -675,7 +675,7 @@ export default function (pi: ExtensionAPI) {
 					try {
 						const attResult: any = await graphFetch(`me/messages/${params.messageId}/attachments?$select=id,name,contentType,size`);
 						attachments = (attResult?.value ?? []).map((a: any) => ({ name: a.name, type: a.contentType, size: a.size }));
-					} catch {}
+					} catch { /* best-effort fallback / }
 				}
 				const result = {
 					id: msg.id, subject: msg.subject,
@@ -820,7 +820,7 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed("Batch deleting mail messages", params);
 				let deleted = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "DELETE" }); deleted++; } catch {} }
+				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "DELETE" }); deleted++; } catch { /* best-effort fallback / } }
 				return {
 					content: [{ type: "text", text: `Deleted ${deleted}/${msgs.length} messages matching "${params.query}"` }],
 					details: { action: "batch_delete", deleted, total: msgs.length, query: params.query },
@@ -841,7 +841,7 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`Batch moving mail messages to ${destFolder}`, params);
 				let moved = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}/move`, { method: "POST", body: { destinationId } }); moved++; } catch {} }
+				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}/move`, { method: "POST", body: { destinationId } }); moved++; } catch { /* best-effort fallback / } }
 				return {
 					content: [{ type: "text", text: `Moved ${moved}/${msgs.length} messages to ${destFolder}` }],
 					details: { action, moved, total: msgs.length, folder: destFolder, query: params.query },
@@ -861,7 +861,7 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`${flagStatus === "flagged" ? "Batch flagging" : "Batch unflagging"} mail messages`, params);
 				let updated = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { flag: { flagStatus } } }); updated++; } catch {} }
+				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { flag: { flagStatus } } }); updated++; } catch { /* best-effort fallback / } }
 				return {
 					content: [{ type: "text", text: `${flagStatus === "flagged" ? "Flagged" : "Unflagged"} ${updated}/${msgs.length} messages` }],
 					details: { action: "batch_flag", updated, total: msgs.length, flagStatus, query: params.query },
@@ -896,7 +896,7 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`Batch marking mail messages ${isRead ? "read" : "unread"}`, params);
 				let updated = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { isRead } }); updated++; } catch {} }
+				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { isRead } }); updated++; } catch { /* best-effort fallback / } }
 				return {
 					content: [{ type: "text", text: `Marked ${isRead ? "read" : "unread"}: ${updated}/${msgs.length} messages` }],
 					details: { action, updated, total: msgs.length, query: params.query },
@@ -940,7 +940,7 @@ export default function (pi: ExtensionAPI) {
 					company: p.companyName || "",
 					type: p.personType?.subclass || p.personType?.class || "",
 				}));
-			} catch {}
+			} catch { /* best-effort fallback / }
 
 			// Fallback: Directory users search
 			if (people.length === 0) {
@@ -956,7 +956,7 @@ export default function (pi: ExtensionAPI) {
 						company: u.companyName || "",
 						type: "directory",
 					}));
-				} catch {}
+				} catch { /* best-effort fallback / }
 			}
 
 			return {
@@ -1620,7 +1620,7 @@ export default function (pi: ExtensionAPI) {
 					}));
 				}
 				if (params.recurrence) {
-					try { event.recurrence = JSON.parse(params.recurrence); } catch {}
+					try { event.recurrence = JSON.parse(params.recurrence); } catch { /* best-effort fallback / }
 				}
 
 				if (dryRun) {
@@ -1667,7 +1667,7 @@ export default function (pi: ExtensionAPI) {
 					}));
 				}
 				if (params.recurrence) {
-					try { patch.recurrence = JSON.parse(params.recurrence); } catch {}
+					try { patch.recurrence = JSON.parse(params.recurrence); } catch { /* best-effort fallback / }
 				}
 
 				if (dryRun) {
@@ -1835,7 +1835,7 @@ export default function (pi: ExtensionAPI) {
 				for (const c of (catData?.value ?? [])) {
 					if (c?.displayName && c?.color && presetHex[c.color]) catColors.set(c.displayName, presetHex[c.color]);
 				}
-			} catch {}
+			} catch { /* best-effort fallback / }
 
 			// ── Parse events into rows ──
 			type ShowAs = "oof"|"busy"|"tentative"|"free"|"workingElsewhere"|"unknown";
@@ -1969,7 +1969,7 @@ export default function (pi: ExtensionAPI) {
 			try {
 				const item: any = await graphFetch(`drives/${driveId}/items/${itemId}?$select=id,name,parentReference`);
 				currentName = item?.name ?? null;
-			} catch {}
+			} catch { /* best-effort fallback / }
 		}
 		return { driveId, itemId, drivePath: drivePath || `drives/${driveId}`, sourceRef, currentName };
 	}
