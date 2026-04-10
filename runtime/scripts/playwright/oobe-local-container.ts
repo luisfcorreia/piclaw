@@ -167,7 +167,9 @@ async function captureFailureArtifacts(page, options: {
 
   try {
     await page.screenshot({ path: screenshotPath, fullPage: true });
-  } catch {}
+  } catch (error) {
+    log(`Failed to capture screenshot artifact: ${screenshotPath}`, error);
+  }
 
   let html = '';
   let state: Record<string, unknown> = {};
@@ -225,10 +227,14 @@ async function main() {
         }
       }
       runCommand(['docker', 'rm', '-f', args.containerName], { allowFailure: true, quiet: true });
-    } catch {}
+    } catch (error) {
+      log(`Cleanup failed while removing container ${args.containerName}`, error);
+    }
     try {
       await browser?.close();
-    } catch {}
+    } catch (error) {
+      log('Cleanup failed while closing browser', error);
+    }
     rmSync(harness.base, { recursive: true, force: true });
   };
 
@@ -287,7 +293,9 @@ async function main() {
         let body = '';
         try {
           body = await response.text();
-        } catch {}
+        } catch (error) {
+          log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+        }
         modelResponses.push({ url: response.url(), status: response.status(), body });
       });
 
@@ -365,7 +373,9 @@ async function main() {
         let body = '';
         try {
           body = await response.text();
-        } catch {}
+        } catch (error) {
+          log(`Failed to read intercepted /agent/models response body for ${response.url()}`, error);
+        }
         modelResponses.push({ url: response.url(), status: response.status(), body });
       });
 

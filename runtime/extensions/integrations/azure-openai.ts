@@ -102,7 +102,8 @@ const ARM_API_VERSION = process.env.AOAI_ARM_API_VERSION || "2023-05-01";
 const AOAI_ACCOUNT_NAME = process.env.AOAI_ACCOUNT_NAME || (() => {
   try {
     return new URL(BASE_URL).hostname.split(".")[0];
-  } catch {
+  } catch (error) {
+    console.error("[azure-openai] Failed to derive AOAI account name from base URL:", error);
     return "";
   }
 })();
@@ -267,7 +268,10 @@ async function detectAzureEnvironment(): Promise<boolean> {
       if (!res.ok) return false;
       const text = (await res.text()).trim();
       return Boolean(text);
-    } catch {
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error("[azure-openai] Azure environment detection failed:", error);
+      }
       return false;
     } finally {
       clearTimeout(timeoutId);
@@ -287,7 +291,8 @@ async function resolveArmContext(): Promise<ArmContext | null> {
   if (!subscriptionId) {
     try {
       subscriptionId = await fetchImdsText("subscriptionId");
-    } catch {
+    } catch (error) {
+      console.error("[azure-openai] Failed to resolve Azure subscriptionId from IMDS:", error);
       subscriptionId = "";
     }
   }
@@ -295,7 +300,8 @@ async function resolveArmContext(): Promise<ArmContext | null> {
   if (!resourceGroup) {
     try {
       resourceGroup = await fetchImdsText("resourceGroupName");
-    } catch {
+    } catch (error) {
+      console.error("[azure-openai] Failed to resolve Azure resourceGroupName from IMDS:", error);
       resourceGroup = "";
     }
   }
@@ -633,7 +639,11 @@ function readCache(): TokenCache {
   try {
     const raw = readFileSync(CACHE_FILE, "utf-8");
     return JSON.parse(raw) as TokenCache;
-  } catch {
+  } catch (error) {
+    const code = (error as { code?: string } | null)?.code;
+    if (code !== "ENOENT") {
+      console.error("[azure-openai] Failed to read token cache:", error);
+    }
     return {};
   }
 }
@@ -862,7 +872,8 @@ function getFoundryImageEndpoint(): string {
         u.pathname = "/bfl";
       }
       return u.toString().replace(/\/+$/, "");
-    } catch {
+    } catch (error) {
+      console.error("[azure-openai] Failed to rewrite proxy Foundry base URL to /bfl:", error);
       // Fall through to hostname-based rewrite
     }
   }
@@ -881,7 +892,8 @@ function getFoundryImageEndpoint(): string {
       return url.toString().replace(/\/+$/, "");
     }
     return url.toString().replace(/\/+$/, "");
-  } catch {
+  } catch (error) {
+    console.error("[azure-openai] Failed to derive Foundry services endpoint:", error);
     return base;
   }
 }
@@ -993,7 +1005,9 @@ export function formatImageGenerationError(providerLabel: string, error: unknown
         const code = err.code || err.statusCode || "";
         const msg = err.message || err.error || raw;
         return `${prefix}: ${code ? `[${code}] ` : ""}${msg}`;
-      } catch { /* fall through */ }
+      } catch (error) {
+        console.error("[azure-openai] Failed to parse structured image error payload:", error);
+      }
     }
     // Extract HTTP status prefix like "400 ..." or "500 ..."
     const httpMatch = raw.match(/^(\d{3})\s+(.+)/s);
@@ -1006,7 +1020,9 @@ export function formatImageGenerationError(providerLabel: string, error: unknown
         const code = err.code || status;
         const msg = err.message || body;
         return `${prefix}: [${code}] ${msg}`;
-      } catch { /* fall through */ }
+      } catch (error) {
+        console.error("[azure-openai] Failed to parse HTTP image error body as JSON:", error);
+      }
       return `${prefix}: HTTP ${status} — ${body.slice(0, 300)}`;
     }
     // ZlibError or other named errors
@@ -1040,7 +1056,8 @@ async function postPlaceholder(content: string, threadId?: number): Promise<numb
     if (!res.ok) return null;
     const data = (await res.json()) as { id?: number | string };
     return data.id ?? null;
-  } catch {
+  } catch (error) {
+    console.error("[azure-openai] Failed to post placeholder message:", error);
     return null;
   }
 }
@@ -1057,7 +1074,8 @@ async function updatePost(id: number, content: string, threadId?: number): Promi
       body: JSON.stringify(body),
     });
     return res.ok;
-  } catch {
+  } catch (error) {
+    console.error(`[azure-openai] Failed to update placeholder post ${id}:`, error);
     return false;
   }
 }
