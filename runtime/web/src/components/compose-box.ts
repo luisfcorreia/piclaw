@@ -4,7 +4,6 @@ import { findPopupTypeaheadMatch, isPopupTypeaheadKey, resolvePopupTypeaheadMatc
 import { getAgentModels, sendAgentMessage, uploadMedia } from '../api.js';
 import { getLocalStorageItem, setLocalStorageItem } from '../utils/storage.js';
 import { buildMentionValue, filterMentionAgents, parseMentionAutocompleteQuery } from '../ui/agent-mentions.js';
-import { isIOSDevice } from '../ui/app-helpers.js';
 import { shouldOpenSessionSwitcherFromBlankCompose } from '../ui/compose-session-switcher.js';
 import { formatBranchPickerLabel, formatCurrentBranchLabel } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
@@ -630,20 +629,6 @@ export function ComposeBox({
         textarea.style.height = `${textarea.scrollHeight}px`;
         textarea.style.overflowY = 'hidden';
     };
-
-    const focusTextareaWithoutScroll = useCallback((event) => {
-        if (!isIOSDevice()) return;
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-        if (document.activeElement === textarea) return;
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        try {
-            textarea.focus({ preventScroll: true });
-        } catch {
-            textarea.focus();
-        }
-    }, []);
 
     /** Update slash autocomplete matches based on current input. */
     const updateSlashAutocomplete = (value) => {
@@ -1755,8 +1740,7 @@ export function ComposeBox({
                         onKeyDown=${handleKeyDown}
                         onPaste=${handlePaste}
                         onFocus=${onFocus}
-                        onMouseDown=${focusTextareaWithoutScroll}
-                        onTouchStart=${focusTextareaWithoutScroll}
+                        onClick=${onFocus}
                         rows="1"
                     />
                     ${showMention && mentionMatches.length > 0 && html`
