@@ -97,6 +97,7 @@ PiClaw is single-user, mobile-friendly, and streams updates over SSE.
 - **`/image` and `/flux`** — workspace-backed image generation commands for Azure OpenAI / Foundry; `/image` now supports `--transparent` for transparent PNG output when the Azure OpenAI model supports it
 - **`cdp_browser`** — Chromium/Edge/Chrome automation via CDP for navigation, JS evaluation, DOM clicking, and screenshots
 - **`mcp` via `pi-mcp-adapter`** — token-efficient access to external MCP servers configured through `.pi/mcp.json`
+- **Experimental `m365` extension** — opt-in Microsoft 365 automation bundle for Teams, Graph, OneDrive, SharePoint, and calendar flows; enable with `PICLAW_ENABLE_M365_EXPERIMENTAL=1` (primarily validated on Windows with YOLO mode, with Edge → Chrome → Chromium browser lookup across Windows/macOS/Linux)
 - **`win_*` tools** — Windows-only desktop automation via Win32 FFI for window enumeration, screenshots, element inspection, clicking, typing, and process management. No-ops on non-Windows platforms.
 
 ## Configuration
@@ -110,6 +111,7 @@ Key environment variables:
 | `PICLAW_WEB_TOTP_SECRET` | _(empty)_ | Base32 TOTP secret; enables login gate (or initialize with `/totp`) |
 | `PICLAW_WEB_PASSKEY_MODE` | `totp-fallback` | `totp-fallback`, `passkey-only`, or `totp-only` |
 | `PICLAW_ASSISTANT_NAME` | `PiClaw` | Display name in the UI |
+| `PICLAW_ENABLE_M365_EXPERIMENTAL` | `0` | Enable the experimental Microsoft 365 extension bundle |
 | `PICLAW_KEYCHAIN_KEY` | _(empty)_ | Master key for encrypted secret storage |
 | `PICLAW_TRUST_PROXY` | `0` | Enable when behind a reverse proxy or tunnel |
 
