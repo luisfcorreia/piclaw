@@ -160,35 +160,40 @@ function esc(s) {
   return d.innerHTML;
 }
 
+function buildTreeFromFlat(flatNodes) {
+  var byId = {};
+  var roots = [];
+  for (var i = 0; i < flatNodes.length; i++) {
+    var n = flatNodes[i];
+    byId[n.id] = { id: n.id, parentId: n.parentId, type: n.type, timestamp: n.timestamp, label: n.label, active: n.active, preview: n.preview, children: [] };
+  }
+  for (var i = 0; i < flatNodes.length; i++) {
+    var n = flatNodes[i];
+    var node = byId[n.id];
+    if (n.parentId && byId[n.parentId]) {
+      byId[n.parentId].children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  return roots;
+}
+
 function loadTree() {
   var root = document.getElementById('tree-root');
   if (treeData && treeData.nodes && treeData.nodes.length > 0) {
     root.innerHTML = '';
-    renderNodes(root, treeData.nodes, []);
+    var nodes = treeData.flat ? buildTreeFromFlat(treeData.nodes) : treeData.nodes;
+    if (treeData.capped) {
+      var note = document.createElement('div');
+      note.className = 'loading';
+      note.textContent = 'Showing last ' + treeData.nodes.length + ' of ' + treeData.total + ' entries.';
+      root.appendChild(note);
+    }
+    renderNodes(root, nodes, []);
     return;
   }
-  // Fallback: try fetching from the API (works when opened as a standalone page)
-  root.innerHTML = '<div class="loading">Loading session tree\u2026</div>';
-  var chatJid = '';
-  try {
-    var params = new URLSearchParams(window.location.search);
-    chatJid = chatJid || params.get('chat_jid') || '';
-  } catch(e) {}
-  var url = '/agent/session-tree' + (chatJid ? '?chat_jid=' + encodeURIComponent(chatJid) : '');
-  fetch(url, { credentials: 'same-origin' })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      treeData = data;
-      if (!data.nodes || data.nodes.length === 0) {
-        root.innerHTML = '<div class="empty">Session tree is empty.</div>';
-        return;
-      }
-      root.innerHTML = '';
-      renderNodes(root, data.nodes, []);
-    })
-    .catch(function(err) {
-      root.innerHTML = '<div class="error">Failed to load tree: ' + esc(err.message || String(err)) + '</div>';
-    });
+  root.innerHTML = '<div class="empty">Session tree is empty.</div>';
 }
 
 function renderNodes(container, nodes, parentTrail) {

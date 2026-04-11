@@ -170,19 +170,27 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
 
     lines.push("Use /tree <entryId> to navigate. Add --summarize or --summary \"...\" for branch summaries.");
 
-    // Serialize full tree for the interactive widget
-    const serialise = (node: SessionTreeNode): unknown => ({
-      id: node.entry.id,
-      parentId: node.entry.parentId ?? null,
-      type: node.entry.type,
-      timestamp: node.entry.timestamp,
-      label: node.label ?? null,
-      active: node.entry.id === leafId,
-      preview: describeEntry(node.entry),
-      children: (node.children || []).map(serialise),
-    });
-    const treeData = { leafId, nodes: roots.map(serialise) };
-    const widgetBlock = buildTreeWidgetBlock(treeData);
+    // Serialize tree as a flat array to avoid deep nesting (sessions can be thousands deep)
+    const flatNodes: unknown[] = [];
+    const walkFlat = (node: SessionTreeNode) => {
+      flatNodes.push({
+        id: node.entry.id,
+        parentId: node.entry.parentId ?? null,
+        type: node.entry.type,
+        timestamp: node.entry.timestamp,
+        label: node.label ?? null,
+        active: node.entry.id === leafId,
+        preview: describeEntry(node.entry),
+        childCount: (node.children || []).length,
+      });
+      for (const child of node.children || []) walkFlat(child);
+    };
+    for (const root of roots) walkFlat(root);
+
+    // Cap at 500 most recent entries for the widget
+    const cappedNodes = flatNodes.length > 500 ? flatNodes.slice(-500) : flatNodes;
+    const treePayload = { leafId, nodes: cappedNodes, flat: true, total: flatNodes.length, capped: flatNodes.length > 500 };
+    const widgetBlock = buildTreeWidgetBlock(treePayload);
     const contentBlocks = widgetBlock ? [widgetBlock] : undefined;
     return { status: "success", message: lines.join("\n"), contentBlocks };
   }
