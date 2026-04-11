@@ -72,21 +72,26 @@ function describeEntry(entry: SessionTreeEntry): string {
   return "[entry]";
 }
 
+let cachedWidgetHtml: string | null | undefined;
+
 function loadTreeWidgetHtml(): string | null {
+  if (cachedWidgetHtml !== undefined) return cachedWidgetHtml;
   try {
     const thisDir = dirname(fileURLToPath(import.meta.url));
-    // Walk up from agent-control/handlers/ to runtime root, then into web/static/
     const candidates = [
       resolve(thisDir, "..", "..", "..", "web", "static", "session-tree.html"),
       resolve(thisDir, "..", "..", "..", "..", "web", "static", "session-tree.html"),
     ];
     for (const p of candidates) {
       try {
-        return readFileSync(p, "utf8");
+        cachedWidgetHtml = readFileSync(p, "utf8");
+        return cachedWidgetHtml;
       } catch { /* try next */ }
     }
+    cachedWidgetHtml = null;
     return null;
   } catch {
+    cachedWidgetHtml = null;
     return null;
   }
 }
@@ -128,18 +133,17 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
     const lines: string[] = ["Session tree:"];
     const flatLines: string[] = [];
 
-    const walk = (node: SessionTreeNode, depth: number) => {
+    // Iterative DFS to avoid stack overflow on deep linear chains
+    const textStack: Array<{ node: SessionTreeNode; depth: number }> = [];
+    for (let i = roots.length - 1; i >= 0; i--) textStack.push({ node: roots[i], depth: 0 });
+    while (textStack.length > 0) {
+      const { node, depth } = textStack.pop()!;
       const indent = "  ".repeat(depth);
       const label = node.label ? ` [${node.label}]` : "";
       const active = node.entry.id === leafId ? " ← active" : "";
       flatLines.push(`${indent}• ${node.entry.id} ${describeEntry(node.entry)}${label}${active}`);
-      for (const child of node.children || []) {
-        walk(child, depth + 1);
-      }
-    };
-
-    for (const root of roots) {
-      walk(root, 0);
+      const children = node.children || [];
+      for (let i = children.length - 1; i >= 0; i--) textStack.push({ node: children[i], depth: depth + 1 });
     }
 
     const totalEntries = flatLines.length;
@@ -170,9 +174,12 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
 
     lines.push("Use /tree <entryId> to navigate. Add --summarize or --summary \"...\" for branch summaries.");
 
-    // Serialize tree as a flat array to avoid deep nesting (sessions can be thousands deep)
+    // Iterative flat serialization for widget data
     const flatNodes: unknown[] = [];
-    const walkFlat = (node: SessionTreeNode) => {
+    const flatStack: SessionTreeNode[] = [];
+    for (let i = roots.length - 1; i >= 0; i--) flatStack.push(roots[i]);
+    while (flatStack.length > 0) {
+      const node = flatStack.pop()!;
       flatNodes.push({
         id: node.entry.id,
         parentId: node.entry.parentId ?? null,
@@ -183,9 +190,9 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
         preview: describeEntry(node.entry),
         childCount: (node.children || []).length,
       });
-      for (const child of node.children || []) walkFlat(child);
-    };
-    for (const root of roots) walkFlat(root);
+      const children = node.children || [];
+      for (let i = children.length - 1; i >= 0; i--) flatStack.push(children[i]);
+    }
 
     // Cap at 500 most recent entries for the widget
     const cappedNodes = flatNodes.length > 500 ? flatNodes.slice(-500) : flatNodes;
