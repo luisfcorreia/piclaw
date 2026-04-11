@@ -178,6 +178,8 @@ export function useMainAppOrchestrationComposition(options: UseMainAppOrchestrat
     setActiveThinkingLevel: setters.setActiveThinkingLevel,
     setSupportsThinking: setters.setSupportsThinking,
     setActiveModelUsage: setters.setActiveModelUsage,
+    setAgentModelsPayload: setters.setAgentModelsPayload,
+    setHasLoadedAgentModels: setters.setHasLoadedAgentModels,
     agentsRef: refs.agentsRef,
     currentHashtag: searchState.currentHashtag,
     searchQuery: searchState.searchQuery,
