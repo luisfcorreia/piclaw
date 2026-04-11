@@ -1382,7 +1382,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
       // Only include OpenAI-specific params for models that support them
       if (reasoningEnabled) {
         params.prompt_cache_key = options?.sessionId;
-        params.text = { format: { type: "text" }, verbosity: "medium" };
+        params.text = { format: { type: "text" } };
       }
 
       if (options?.maxTokens) {
@@ -1424,16 +1424,6 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
           effort = capToolFlowReasoning(model.id, effort, toolsEnabled && context.tools?.length > 0);
 
           params.reasoning = { effort };
-        } else if (String(model.name).toLowerCase().startsWith("gpt-5")) {
-          messages.push({
-            role: "developer",
-            content: [
-              {
-                type: "input_text",
-                text: "# Juice: 0 !important",
-              },
-            ],
-          });
         }
       }
       // Delay client creation until attempt time so refreshed tokens and any
