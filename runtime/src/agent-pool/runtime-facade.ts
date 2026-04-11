@@ -46,23 +46,31 @@ function getToolCallInput(content: unknown): string | null {
   for (const block of content) {
     if (!block || typeof block !== "object") continue;
     const b = block as Record<string, unknown>;
-    if (b.type === "toolCall" && b.input && typeof b.input === "object") {
-      const input = b.input as Record<string, unknown>;
-      // bash: show command
-      if (typeof input.command === "string") return input.command.slice(0, 500);
-      // read/write: show path
-      if (typeof input.path === "string") {
-        let s = input.path;
-        if (typeof input.offset === "number") s += `:${input.offset}`;
-        if (typeof input.limit === "number") s += `-${input.offset ? (input.offset as number) + (input.limit as number) : input.limit}`;
-        return s;
-      }
-      // edit: show path + short old/new
-      if (typeof input.file === "string") return input.file;
-      // generic: JSON summary
-      const keys = Object.keys(input);
-      if (keys.length > 0) return keys.map(k => `${k}: ${String(input[k]).slice(0, 80)}`).join(', ').slice(0, 500);
+    if (b.type !== "toolCall") continue;
+    // The tool args may be stored as `input`, `args`, or nested in `toolCall`
+    const raw = b.input || b.args || (b as any).toolCall?.args || null;
+    if (!raw || typeof raw !== "object") {
+      // Fallback: dump all non-standard keys on the block itself
+      const skip = new Set(["type", "name", "toolCallId", "id"]);
+      const extra = Object.keys(b).filter(k => !skip.has(k));
+      if (extra.length > 0) return extra.map(k => `${k}: ${JSON.stringify(b[k]).slice(0, 100)}`).join(', ').slice(0, 500);
+      continue;
     }
+    const input = raw as Record<string, unknown>;
+    // bash: show command
+    if (typeof input.command === "string") return input.command.slice(0, 500);
+    // read/write: show path
+    if (typeof input.path === "string") {
+      let s = input.path as string;
+      if (typeof input.offset === "number") s += `:${input.offset}`;
+      if (typeof input.limit === "number") s += `-${(input.offset as number || 0) + (input.limit as number)}`;
+      return s;
+    }
+    // edit: show path + short old/new
+    if (typeof input.file === "string") return input.file as string;
+    // generic: JSON summary of keys
+    const keys = Object.keys(input);
+    if (keys.length > 0) return keys.map(k => `${k}: ${String(input[k]).slice(0, 80)}`).join(', ').slice(0, 500);
   }
   return null;
 }
