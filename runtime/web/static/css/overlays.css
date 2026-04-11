@@ -546,12 +546,13 @@
     background: transparent;
     color: inherit;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0;
     padding: 4px 14px 4px 0;
-    min-height: 30px;
+    min-height: 28px;
     text-align: left;
     cursor: pointer;
+    font: inherit;
 }
 
 .session-tree-row:hover {
@@ -576,7 +577,7 @@
     height: 8px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--text-secondary) 70%, transparent 30%);
-    margin: 0 8px 0 4px;
+    margin: 5px 8px 0 4px;
     flex: 0 0 auto;
 }
 
@@ -594,7 +595,7 @@
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre;
     font-size: var(--font-size-sm);
     line-height: 1.35;
 }

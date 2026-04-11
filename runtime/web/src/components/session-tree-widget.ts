@@ -18,12 +18,39 @@ function buildTreeFromFlat(flatNodes) {
         if (parent) parent.children.push(current);
         else roots.push(current);
     }
+
+    // Fold toolResult into its parent tool-call node:
+    // When a toolResult is the sole child of an assistant tool-call with
+    // the same toolName, merge the result data into the parent and
+    // re-parent the result's children to the call node.
+    const folded = new Set();
+    for (const [, node] of byId) {
+        if (node.role !== 'assistant' || !node.toolName) continue;
+        if (node.children.length !== 1) continue;
+        const child = node.children[0];
+        if (child.role !== 'toolResult') continue;
+        // Merge result into call
+        node.resultDetail = child.detail || null;
+        node.resultLength = child.contentLength || 0;
+        node.resultId = child.id;
+        // Preview becomes "tool → result summary"
+        const cmdPart = node.toolInput || node.toolName;
+        const outPart = child.detail ? child.detail.slice(0, 120) : (child.preview || '');
+        node.preview = `${node.toolName}: ${cmdPart ? cmdPart.slice(0, 200) : ''}\n→ ${outPart}`;
+        node.merged = true;
+        // Re-parent result's children to the call node
+        node.children = child.children;
+        for (const gc of node.children) gc.parentId = node.id;
+        folded.add(child.id);
+    }
+    // Remove folded nodes from roots (shouldn't happen, but safety)
+    const filteredRoots = roots.filter(r => !folded.has(r.id));
+
     // Compute depths iteratively — only increase depth after a branch point
-    // (a node with more than one child). Linear chains stay at the same depth.
     const stack = [];
-    for (let i = roots.length - 1; i >= 0; i--) {
-        roots[i].depth = 0;
-        stack.push(roots[i]);
+    for (let i = filteredRoots.length - 1; i >= 0; i--) {
+        filteredRoots[i].depth = 0;
+        stack.push(filteredRoots[i]);
     }
     while (stack.length > 0) {
         const node = stack.pop();
@@ -33,7 +60,7 @@ function buildTreeFromFlat(flatNodes) {
             stack.push(node.children[i]);
         }
     }
-    return roots;
+    return filteredRoots;
 }
 
 function flattenTree(roots) {
@@ -178,6 +205,12 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
                             <div class="session-tree-sidebar-section">
                                 <div class="session-tree-sidebar-label">${selectedNode.toolName === 'bash' ? 'Command' : 'Input'}</div>
                                 <pre class="session-tree-sidebar-code">${selectedNode.toolInput}</pre>
+                            </div>
+                        `}
+                        ${selectedNode.resultDetail && html`
+                            <div class="session-tree-sidebar-section">
+                                <div class="session-tree-sidebar-label">Result${selectedNode.resultLength ? ` (${formatSize(selectedNode.resultLength)})` : ''}</div>
+                                <pre class="session-tree-sidebar-code">${selectedNode.resultDetail}</pre>
                             </div>
                         `}
                         ${selectedNode.timestamp && html`
