@@ -147,6 +147,49 @@ function buildDreamChatJid(chatJid: string, mode: "manual" | "auto"): string {
   return `dream:${mode}:${sanitiseJid(chatJid)}:${Date.now()}`;
 }
 
+/**
+ * Reap stale dream artifacts from prior crashed or incomplete dream runs.
+ * Cleans up dream chat rows, messages, media, branches, and session directories
+ * that were not properly removed by cleanupDreamChat.
+ * Optionally excludes a single dream chat JID (the current active one).
+ */
+function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
+  const excluded = new Set<string>();
+  if (excludeDreamChatJid) {
+    const base = sanitiseJid(excludeDreamChatJid);
+    excluded.add(base);
+    excluded.add(`${base}__btw-side`);
+  }
+
+  try {
+    const db = getDb();
+    if (excludeDreamChatJid) {
+      db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?)").run(excludeDreamChatJid);
+      db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
+      db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
+      db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%' AND jid != ?").run(excludeDreamChatJid);
+    } else {
+      db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%')").run();
+      db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%'").run();
+      db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%'").run();
+      db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%'").run();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    for (const name of readdirSync(SESSIONS_DIR, { withFileTypes: true })) {
+      if (!name.isDirectory()) continue;
+      if (!/^dream_(auto|manual)_/.test(name.name)) continue;
+      if (excluded.has(name.name)) continue;
+      rmSync(join(SESSIONS_DIR, name.name), { recursive: true, force: true });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string): Promise<void> {
   try {
     await agentPool.disposeChatSession(dreamChatJid);
@@ -166,6 +209,7 @@ async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string): Pro
 
   rmSync(join(SESSIONS_DIR, sanitiseJid(dreamChatJid)), { recursive: true, force: true });
   rmSync(join(SESSIONS_DIR, `${sanitiseJid(dreamChatJid)}__btw-side`), { recursive: true, force: true });
+  reapDreamArtifacts(null);
 }
 
 function canReapDreamLock(): boolean {
@@ -311,6 +355,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
   const dreamChatJid = buildDreamChatJid(chatJid, mode);
   try {
     lockFd = acquireDreamLock();
+    reapDreamArtifacts(null);
     const backupPath = createDreamBackup(chatJid, mode, days);
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
     const out = await options.agentPool.runAgent(buildDreamPrompt({ mode, days }), dreamChatJid);
