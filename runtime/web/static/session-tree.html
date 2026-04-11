@@ -6,15 +6,14 @@
 <title>Session Tree</title>
 <style>
 :root {
-  /* Dark theme (default) */
-  --bg: #1a1a2e;
-  --bg-hover: #252540;
+  --bg: #0f1117;
+  --bg-hover: #1a1d28;
   --bg-active: rgba(29,155,240,0.12);
-  --text: #e0e0e0;
-  --text-dim: #999;
+  --text: #d4d4d8;
+  --text-dim: #8b8b9a;
   --accent: #1d9bf0;
-  --border: #333;
-  --branch: #555;
+  --border: #2a2d38;
+  --branch: #444;
   --label-bg: rgba(29,155,240,0.15);
   --label-text: #1d9bf0;
   --radius: 6px;
@@ -111,31 +110,27 @@ body {
   </div>
 </div>
 <script>
-// Sync theme from parent document's computed CSS variables
+// Try to inherit parent CSS variables; silently ignore failures
 (function() {
   try {
-    var parentDoc = window.parent && window.parent.document;
-    if (!parentDoc) return;
-    var cs = window.parent.getComputedStyle(parentDoc.documentElement);
-    var vars = ['--bg-primary','--bg-secondary','--bg-hover','--text-primary','--text-secondary',
-                '--accent-color','--border-color','--font-family','--font-family-mono','--danger-color'];
-    var map = {};
-    for (var i = 0; i < vars.length; i++) {
-      var v = cs.getPropertyValue(vars[i]).trim();
-      if (v) map[vars[i]] = v;
-    }
-    if (map['--bg-primary']) {
+    var p = window.parent;
+    if (!p || !p.document || !p.getComputedStyle) return;
+    var cs = p.getComputedStyle(p.document.documentElement);
+    function get(name) { return (cs.getPropertyValue(name) || '').trim(); }
+    var bg = get('--bg-primary');
+    var text = get('--text-primary');
+    // Only apply if we got real values (not empty)
+    if (bg && text) {
       var s = document.documentElement.style;
-      s.setProperty('--bg', map['--bg-primary']);
-      s.setProperty('--bg-hover', map['--bg-hover'] || map['--bg-secondary'] || '');
-      s.setProperty('--text', map['--text-primary']);
-      s.setProperty('--text-dim', map['--text-secondary'] || '');
-      s.setProperty('--accent', map['--accent-color'] || '');
-      s.setProperty('--border', map['--border-color'] || '');
-      if (map['--font-family']) s.setProperty('--font', map['--font-family']);
-      if (map['--font-family-mono']) s.setProperty('--mono', map['--font-family-mono']);
+      s.setProperty('--bg', bg);
+      s.setProperty('--text', text);
+      var v;
+      if ((v = get('--text-secondary'))) s.setProperty('--text-dim', v);
+      if ((v = get('--bg-hover'))) s.setProperty('--bg-hover', v);
+      if ((v = get('--accent-color'))) s.setProperty('--accent', v);
+      if ((v = get('--border-color'))) s.setProperty('--border', v);
     }
-  } catch(e) { /* cross-origin or unavailable */ }
+  } catch(e) { /* expected in cross-origin or sandboxed contexts */ }
 })();
 
 var treeData = null;
