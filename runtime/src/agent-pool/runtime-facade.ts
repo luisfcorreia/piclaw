@@ -15,6 +15,65 @@ import { resolveModelLabel } from "../utils/model-utils.js";
 import { withChatContext } from "../core/chat-context.js";
 import type { PoolEntry } from "./session-manager.js";
 
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1) + "\u2026";
+}
+
+function extractTextPreview(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === "text" && typeof b.text === "string") return b.text;
+  }
+  return "";
+}
+
+function getToolCallName(content: unknown): string | null {
+  if (!Array.isArray(content)) return null;
+  for (const block of content) {
+    if (!block || typeof block !== "object") continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === "toolCall" && typeof b.name === "string") return b.name;
+  }
+  return null;
+}
+
+function describeTreeEntry(entry: Record<string, unknown>): string {
+  switch (entry.type) {
+    case "message": {
+      const msg = (entry.message && typeof entry.message === "object")
+        ? (entry.message as Record<string, unknown>)
+        : {};
+      const role = typeof msg.role === "string" ? msg.role : "message";
+      if (role === "toolResult") {
+        const toolName = typeof msg.toolName === "string" ? msg.toolName : "tool";
+        return `toolResult: ${toolName}`;
+      }
+      const text = extractTextPreview(msg.content);
+      if (text) return `${role}: \"${truncateText(text, 80)}\"`;
+      const toolCallName = getToolCallName(msg.content);
+      if (toolCallName) return `${role}: [tool ${toolCallName}]`;
+      return role;
+    }
+    case "compaction":
+      return `[compaction]`;
+    case "branch_summary":
+      return `[branch summary]`;
+    case "thinking_level_change":
+      return `[thinking ${entry.thinkingLevel}]`;
+    case "model_change":
+      return `[model ${entry.provider}/${entry.modelId}]`;
+    case "label":
+      return `[label ${entry.label || "clear"}]`;
+    case "session_info":
+      return `[session ${entry.name || "(unnamed)"}]`;
+  }
+  return "[entry]";
+}
+
 /** Structured model option returned to the web model picker. */
 export interface AvailableModelOption {
   label: string;
@@ -115,6 +174,25 @@ export class AgentRuntimeFacade {
     const entry = this.options.pool.get(chatJid);
     if (!entry) return null;
     return entry.runtime.session.getContextUsage() ?? null;
+  }
+
+  getSessionTreeForChat(chatJid: string): { leafId: string | null; nodes: unknown[] } | null {
+    const entry = this.options.pool.get(chatJid);
+    if (!entry) return null;
+    const sm = entry.runtime.session.sessionManager;
+    const leafId = sm.getLeafId();
+    const roots = sm.getTree();
+    const serialise = (node: any): unknown => ({
+      id: node.entry.id,
+      parentId: node.entry.parentId ?? null,
+      type: node.entry.type,
+      timestamp: node.entry.timestamp,
+      label: node.label ?? null,
+      active: node.entry.id === leafId,
+      preview: describeTreeEntry(node.entry),
+      children: (node.children || []).map(serialise),
+    });
+    return { leafId, nodes: roots.map(serialise) };
   }
 
   async saveSessionPosition(chatJid: string): Promise<string | null> {

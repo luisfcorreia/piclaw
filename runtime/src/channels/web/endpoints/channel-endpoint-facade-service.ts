@@ -8,6 +8,9 @@ import {
   handleAgentStatusRequest,
 } from "../agent/agent-status.js";
 import {
+  handleSessionTreeRequest,
+} from "../agent/session-tree.js";
+import {
   handleHashtagRequest,
   handleSearchRequest,
   handleThoughtRequest,
@@ -39,6 +42,7 @@ export interface WebChannelEndpointFacadeOptions {
   handlePostRequest(req: Request, isReply: boolean, chatJid: string): Promise<Response>;
   listActiveChats(): unknown[];
   listKnownChats?(rootChatJid?: string | null, options?: { includeArchived?: boolean }): unknown[];
+  getSessionTreeForChat?(chatJid: string): { leafId: string | null; nodes: unknown[] } | null;
 }
 
 /**
@@ -142,6 +146,15 @@ export class WebChannelEndpointFacadeService {
 
   async handleAgentModels(req: Request): Promise<Response> {
     return await handleAgentModelsRequest(req, this.options.endpointContexts.agentStatus());
+  }
+
+  handleSessionTree(req: Request): Response {
+    const defaultChatJid = this.options.defaultChatJid;
+    return handleSessionTreeRequest(req, {
+      defaultChatJid,
+      json: (payload, status = 200) => this.options.json(payload, status),
+      getSessionTreeForChat: (chatJid) => this.options.getSessionTreeForChat?.(chatJid) ?? null,
+    });
   }
 
   handleAgentActiveChats(): Response {

@@ -124,6 +124,8 @@ export async function handleTree(session: AgentSession, command: TreeCommand): P
     }
 
     lines.push("Use /tree <entryId> to navigate. Add --summarize or --summary \"...\" for branch summaries.");
+    lines.push("");
+    lines.push("Interactive tree viewer: /static/session-tree.html");
     return { status: "success", message: lines.join("\n") };
   }
 

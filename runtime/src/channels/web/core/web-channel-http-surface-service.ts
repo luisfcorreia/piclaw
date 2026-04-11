@@ -26,6 +26,7 @@ type WebChannelHttpSurfaceEndpointFacade = Pick<
   | "handleAgentStatus"
   | "handleAgentContext"
   | "handleAgentModels"
+  | "handleSessionTree"
   | "handleAgentActiveChats"
   | "handleAgentBranches"
   | "handleAgentRespond"
@@ -200,6 +201,10 @@ export class WebChannelHttpSurfaceService {
 
   async handleAgentModels(req: Request): Promise<Response> {
     return await this.channel.endpointFacade.handleAgentModels(req);
+  }
+
+  handleSessionTree(req: Request): Response {
+    return this.channel.endpointFacade.handleSessionTree(req);
   }
 
   async handleAgentActiveChats(_req: Request): Promise<Response> {
