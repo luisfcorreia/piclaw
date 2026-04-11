@@ -72,80 +72,14 @@ const envConfig = readEnvFile([
   "LOG_LEVEL",
 ]);
 
-// ---------------------------------------------------------------------------
-// Helpers for extracting typed values from a config object.
-// ---------------------------------------------------------------------------
-
-/** Return the first non-empty string value found under the given keys. */
-function pickString(config: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = config[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return undefined;
-}
-
-/** Return the first finite numeric value found under the given keys (strings are parsed). */
-function pickNumber(config: Record<string, unknown>, keys: string[]): number | undefined {
-  for (const key of keys) {
-    const value = config[key];
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string" && value.trim()) {
-      const parsed = parseInt(value, 10);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-  }
-  return undefined;
-}
-
-/** Return the first boolean-like value found under the given keys. */
-function pickBoolean(config: Record<string, unknown>, keys: string[]): boolean | undefined {
-  for (const key of keys) {
-    const value = config[key];
-    if (typeof value === "boolean") return value;
-    if (typeof value === "number") return value !== 0;
-    if (typeof value === "string" && value.trim()) {
-      const raw = value.trim().toLowerCase();
-      if (["1", "true", "yes", "on"].includes(raw)) return true;
-      if (["0", "false", "no", "off"].includes(raw)) return false;
-    }
-  }
-  return undefined;
-}
-
-/** Return the first string-list value found under the given keys. */
-function pickStringArray(config: Record<string, unknown>, keys: string[]): string[] | undefined {
-  for (const key of keys) {
-    const value = config[key];
-    if (Array.isArray(value)) {
-      const items = value
-        .map((item) => (typeof item === "string" ? item.trim() : ""))
-        .filter(Boolean);
-      if (items.length > 0) return items;
-      continue;
-    }
-    if (typeof value === "string" && value.trim()) {
-      const items = value
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean);
-      if (items.length > 0) return items;
-    }
-  }
-  return undefined;
-}
+import { pickString, pickNumber, pickBoolean, pickStringArray } from "./config-helpers.js";
+import type { RuntimeTimingConfig } from "./config-helpers.js";
+export { pickString, pickNumber, pickBoolean, pickStringArray };
+export type { RuntimeTimingConfig };
 
 // ---------------------------------------------------------------------------
 // Timing constants used by the runtime message loop and scheduler.
 // ---------------------------------------------------------------------------
-
-/** Typed runtime timing settings grouped for bootstrap, IPC, and scheduler wiring. */
-export interface RuntimeTimingConfig {
-  pollIntervalMs: number;
-  schedulerPollIntervalMs: number;
-  ipcPollIntervalMs: number;
-  timezone: string;
-}
 
 /** Grouped runtime timing settings. */
 export const RUNTIME_TIMING_CONFIG = Object.freeze<RuntimeTimingConfig>({
