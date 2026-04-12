@@ -324,7 +324,7 @@ const groupDefinitions: GroupDefinition[] = [
       "tools/",
       "utils/",
     ].some((prefix) => relativePath.startsWith(prefix))
-      || (relativePath.startsWith("channels/") && basenameIsOneOf(relativePath, ["whatsapp-presence.test.ts"])),
+      || (relativePath.startsWith("channels/") && basenameIsOneOf(relativePath, ["formatting.test.ts", "whatsapp-presence.test.ts"])),
   },
   {
     id: "extensions",
