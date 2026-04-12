@@ -43,8 +43,11 @@ export async function handleManifestRequest(req: Request, ctx: ManifestRequestCo
           purpose: "any maskable",
         });
       }
-    } catch (err) {
-      log.warn("Failed to prepare agent avatar for manifest", { err });
+    } catch (error) {
+      log.warn("Failed to prepare agent avatar for manifest", {
+        operation: "web_manifest.prepare_agent_avatar",
+        err: error,
+      });
     }
   }
 

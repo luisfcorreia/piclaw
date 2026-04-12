@@ -144,10 +144,10 @@ export function recoverInflightRuns(
         store.rollbackInflightRun(inflight.chatJid, inflight.prevTs);
       }
     });
-  } catch (err) {
+  } catch (error) {
     log.error("Failed to roll back inflight runs; will retry on next startup", {
       operation: "recover_inflight_runs",
-      err,
+      err: error,
     });
     return;
   }

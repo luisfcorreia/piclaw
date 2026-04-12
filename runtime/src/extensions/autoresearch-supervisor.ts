@@ -317,8 +317,9 @@ function createReportRef(reportPath: string | null): AutoresearchReportRef | nul
     };
   } catch (error) {
     log.warn("Failed to create autoresearch report attachment", {
+      operation: "autoresearch_supervisor.create_report_ref",
       reportPath,
-      error,
+      err: error,
     });
     return {
       path: reportPath,
@@ -626,8 +627,9 @@ function writeSessionMetadata(workDir: string, metadata: AutoresearchSessionMeta
     writeFileSync(sessionMetadataPath(workDir), JSON.stringify(metadata, null, 2) + "\n", "utf-8");
   } catch (error) {
     log.warn("Failed to write autoresearch session metadata", {
+      operation: "autoresearch_supervisor.write_session_metadata",
       workDir,
-      error,
+      err: error,
     });
   }
 }
@@ -1286,11 +1288,12 @@ export const autoresearchSupervisor: ExtensionFactory = (pi: ExtensionAPI) => {
         experimentId,
         tmuxSession,
       });
-    } catch (err) {
+    } catch (error) {
       log.warn("Failed to re-attach to existing autoresearch session", {
+        operation: "autoresearch_supervisor.reattach_existing",
         experimentId,
         tmuxSession,
-        err,
+        err: error,
       });
     }
   };

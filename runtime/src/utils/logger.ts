@@ -19,13 +19,26 @@ export interface StructuredLogger {
   error(message: string, fields?: LogFields): void;
 }
 
+interface InternalStructuredLogger {
+  __internalEmit?: (level: LogLevel, message: string, fields?: LogFields) => void;
+}
+
 export function debugSuppressedError(
   log: Pick<StructuredLogger, "debug">,
   message: string,
   error: unknown,
   fields: Record<string, unknown> = {},
 ): void {
-  log.debug(message, { ...fields, err: error, suppressed: true });
+  const internalEmit = (log as Pick<StructuredLogger, "debug"> & InternalStructuredLogger).__internalEmit;
+  if (typeof internalEmit === "function") {
+    internalEmit("debug", message, { ...fields, err: error, suppressed: true });
+    return;
+  }
+
+  const fallbackDebug = (log as Record<string, unknown>).debug;
+  if (typeof fallbackDebug === "function") {
+    fallbackDebug.call(log, message, { ...fields, err: error, suppressed: true });
+  }
 }
 
 function serializeError(error: Error): Record<string, unknown> {
@@ -119,7 +132,7 @@ export function createLogger(moduleName: string, bindings: Record<string, unknow
     writeRecord(level, moduleName, bindings, message, fields);
   };
 
-  return {
+  const logger: StructuredLogger & InternalStructuredLogger = {
     child(extraBindings) {
       return createLogger(moduleName, { ...bindings, ...extraBindings });
     },
@@ -135,5 +148,8 @@ export function createLogger(moduleName: string, bindings: Record<string, unknow
     error(message, fields) {
       emit("error", message, fields);
     },
+    __internalEmit: emit,
   };
+
+  return logger;
 }

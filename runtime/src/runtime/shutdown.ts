@@ -32,8 +32,8 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
       return (result as { value: T }).value;
     }
     return null;
-  } catch (err) {
-    log.error("Shutdown step failed", { operation: "with_timeout", label, timeoutMs: ms, err });
+  } catch (error) {
+    log.error("Shutdown step failed", { operation: "with_timeout", label, timeoutMs: ms, err: error });
     return null;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);

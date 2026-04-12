@@ -84,11 +84,12 @@ export async function handleExtensionRoutes(
         const result = route.handler(req, pathname);
         const response = result instanceof Promise ? await result : result;
         if (response) return response;
-      } catch (err) {
+      } catch (error) {
         log.error("Extension route handler failed", {
+          operation: "web_extension_routes.handle_registered_route",
           prefix: route.prefix,
           extensionPath: route.extensionPath,
-          err,
+          err: error,
         });
         return new Response("Internal Server Error", { status: 500 });
       }

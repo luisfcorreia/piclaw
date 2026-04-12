@@ -196,6 +196,7 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
   if (!loaded) {
     if (existing && existsSync(existing.file)) {
       log.warn("Failed to refresh avatar; keeping cached copy", {
+        operation: "web_avatar.ensure_avatar_cache.keep_cached_copy",
         kind,
         source: sanitized,
         existingSource: existing.source,
@@ -208,6 +209,7 @@ export async function ensureAvatarCache(kind: AvatarKind, source: string): Promi
   const normalizedType = normalizeContentType(loaded.contentType);
   if (kind === "agent" && !isManifestIconType(normalizedType)) {
     log.warn("Agent avatar content type is not valid for PWA manifest icons", {
+      operation: "web_avatar.ensure_avatar_cache.invalid_manifest_icon_type",
       contentType: normalizedType,
       expectedTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
     });

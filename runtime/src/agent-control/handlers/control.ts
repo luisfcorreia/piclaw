@@ -77,7 +77,10 @@ function createCompactReportAttachment(
       }
     );
   } catch (error) {
-    log.warn("Failed to create /compact report attachment", { error });
+    log.warn("Failed to create /compact report attachment", {
+      operation: "agent_control.create_compact_report_attachment",
+      err: error,
+    });
     return null;
   }
 }

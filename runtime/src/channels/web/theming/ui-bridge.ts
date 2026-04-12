@@ -112,6 +112,7 @@ export class UiBridge {
           error.extensionPath ? `in ${error.extensionPath}` : null,
         ].filter(Boolean).join(" ") || String(error);
         log.error("Extension UI error", {
+          operation: "web_theming_ui_bridge.on_error",
           chatJid,
           err: error,
         });

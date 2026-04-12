@@ -435,10 +435,11 @@ async function startOAuthBackground(
       authStorage.reload();
       log.info("OAuth completed", { providerId });
     })
-    .catch((err) => {
+    .catch((error) => {
       log.warn("OAuth failed", {
+        operation: "agent_control_login.start_oauth_login",
         providerId,
-        err,
+        err: error,
       });
     });
 

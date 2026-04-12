@@ -138,13 +138,13 @@ export class AgentQueue {
     try {
       await item.fn();
       this.metrics.succeeded += 1;
-    } catch (err) {
+    } catch (error) {
       this.metrics.failed += 1;
       log.error("Queue item failed", {
         operation: "execute_item",
         laneKey: item.laneKey,
         itemId: item.id ?? null,
-        err,
+        err: error,
       });
       this.scheduleRetry(item);
     } finally {

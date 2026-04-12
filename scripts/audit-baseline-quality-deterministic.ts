@@ -259,6 +259,7 @@ const groupDefinitions: GroupDefinition[] = [
         "http-dispatch-workspace.test.ts",
         "http-rate-limit.test.ts",
         "http-route-classification.test.ts",
+        "request-guards.test.ts",
         "channel-endpoint-facade-service.test.ts",
         "extension-routes.test.ts",
         "manifest.test.ts",

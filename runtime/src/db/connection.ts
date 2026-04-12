@@ -59,12 +59,12 @@ function renameLegacyConfigTable(database: Database, fromName: string, toName: s
   if (!names.has(fromName) || names.has(toName)) return;
   try {
     database.exec(`ALTER TABLE ${fromName} RENAME TO ${toName}`);
-  } catch (err) {
+  } catch (error) {
     log.warn("Failed to rename legacy config table", {
       operation: "rename_legacy_config_table",
       fromName,
       toName,
-      err,
+      err: error,
     });
   }
 }
@@ -655,10 +655,10 @@ function migrateChatCursors(database: Database): void {
         if (typeof ts === "string" && ts) insert.run(jid, ts);
       }
     })();
-  } catch (err) {
+  } catch (error) {
     log.warn("Failed to migrate legacy chat cursors; starting with empty cursors", {
       operation: "migrate_chat_cursors",
-      err,
+      err: error,
     });
   }
 }
@@ -699,10 +699,10 @@ export function initDatabase(): void {
     if (db) {
       try {
         db.close();
-      } catch (err) {
+      } catch (error) {
         log.warn("Failed to close previous database handle before reinitializing", {
           operation: "init_database.close_previous_handle",
-          err,
+          err: error,
         });
       }
     }

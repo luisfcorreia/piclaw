@@ -34,11 +34,11 @@ export class RuntimeState {
     try {
       const data = JSON.parse(readFileSync(chatsFile, "utf-8"));
       this.chatJids = new Set(data.jids || []);
-    } catch (err) {
+    } catch (error) {
       log.warn("Failed to parse persisted chat list; starting with an empty set", {
         operation: "load_chats",
         chatsFile,
-        err,
+        err: error,
       });
       this.chatJids = new Set();
     }
@@ -54,10 +54,10 @@ export class RuntimeState {
     const agentTs = getRouterState("last_agent_timestamp");
     try {
       this.lastAgentTimestamp = agentTs ? JSON.parse(agentTs) : {};
-    } catch (err) {
+    } catch (error) {
       log.warn("Failed to parse persisted agent timestamps; resetting state", {
         operation: "load_timestamps",
-        err,
+        err: error,
       });
       this.lastAgentTimestamp = {};
     }

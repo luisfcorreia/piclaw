@@ -125,7 +125,10 @@ export function broadcastEvent(channel: SseClientContainer, eventType: string, d
     : null;
 
   if (requiresChatScopedDelivery(eventType) && !eventChatJid) {
-    log.warn("Dropping chat-scoped event without chat_jid", { eventType });
+    log.warn("Dropping chat-scoped event without chat_jid", {
+      operation: "web_sse.broadcast_event.missing_chat_jid",
+      eventType,
+    });
     return;
   }
 

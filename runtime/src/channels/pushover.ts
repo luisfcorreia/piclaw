@@ -78,6 +78,7 @@ export class PushoverChannel {
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       log.error("Send failed", {
+        operation: "pushover.send_message",
         status: response.status,
         detail,
       });

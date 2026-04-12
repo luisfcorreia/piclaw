@@ -247,7 +247,11 @@ function warnDeprecatedEnv(oldName: string, newName: string): void {
   const oldValue = process.env[oldName] ?? envConfig[oldName];
   const newValue = process.env[newName] ?? envConfig[newName];
   if (oldValue && !newValue) {
-    log.warn("Deprecated environment variable is set", { oldName, newName });
+    log.warn("Deprecated environment variable is set", {
+      operation: "core_config.warn_deprecated_env",
+      oldName,
+      newName,
+    });
   }
 }
 

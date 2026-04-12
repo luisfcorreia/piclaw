@@ -141,11 +141,12 @@ export async function handleWebauthnLoginFinish(req: Request, ctx: WebauthnAuthC
       credential: credentialRecord,
       requireUserVerification: false,
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Passkey verification failed";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Passkey verification failed";
     log.warn("WebAuthn login verification error", {
+      operation: "webauthn_auth.handle_login_finish.verify_authentication_response",
       clientKey: ctx.getClientKey(req),
-      err,
+      err: error,
     });
     return ctx.json({ error: message }, 401);
   }
@@ -259,11 +260,12 @@ export async function handleWebauthnRegisterFinish(req: Request, ctx: WebauthnAu
       expectedOrigin: origin,
       expectedRPID: pending.rpId,
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Passkey verification failed";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Passkey verification failed";
     log.warn("WebAuthn registration verification error", {
+      operation: "webauthn_auth.handle_register_finish.verify_registration_response",
       clientKey: ctx.getClientKey(req),
-      err,
+      err: error,
     });
     return ctx.json({ error: message }, 401);
   }

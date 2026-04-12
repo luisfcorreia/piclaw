@@ -247,11 +247,11 @@ export class WhatsAppChannel {
     }
     try {
       await this.sock.sendMessage(jid, { text: prefixed });
-    } catch (err) {
+    } catch (error) {
       log.warn("Send failed; re-queued outbound message", {
         operation: "send_message",
         jid,
-        err,
+        err: error,
       });
       this.outgoingQueue.push({ jid, text: prefixed });
     }

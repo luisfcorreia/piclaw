@@ -739,8 +739,11 @@ async function showConsumerConsentAndWait(): Promise<boolean> {
 		const bindingMsgs = await cdpCollect(ws, 300);
 		const bindingError = bindingMsgs.find((m) => m.id === addBindingId && m.error);
 		if (bindingError) {
-			try { ws.close(); } catch (err) {
-				log.warn("Failed to close consumer consent websocket after binding error.", { err });
+			try { ws.close(); } catch (error) {
+				log.warn("Failed to close consumer consent websocket after binding error.", {
+					operation: "m365.show_consumer_consent.close_ws_after_binding_error",
+					err: error,
+				});
 			}
 			return false;
 		}
@@ -759,8 +762,12 @@ async function showConsumerConsentAndWait(): Promise<boolean> {
 				}
 				// Close the consent tab
 				if (target.id) {
-					try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch (err) {
-						log.warn("Failed to close consumer consent tab after approval.", { err, targetId: target.id });
+					try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch (error) {
+						log.warn("Failed to close consumer consent tab after approval.", {
+							operation: "m365.show_consumer_consent.close_tab_after_approval",
+							err: error,
+							targetId: target.id,
+						});
 					}
 				}
 				return true;
@@ -768,27 +775,44 @@ async function showConsumerConsentAndWait(): Promise<boolean> {
 			if (target.id) {
 				const page = await findPageTargetById(existingPort, target.id).catch(() => null);
 				if (!page) {
-					try { ws.close(); } catch (err) {
-						log.warn("Failed to close consumer consent websocket after tab disappeared.", { err, targetId: target.id });
+					try { ws.close(); } catch (error) {
+						log.warn("Failed to close consumer consent websocket after tab disappeared.", {
+							operation: "m365.show_consumer_consent.close_ws_after_tab_disappeared",
+							err: error,
+							targetId: target.id,
+						});
 					}
 					return false;
 				}
 			}
 		}
-		try { ws.close(); } catch (err) {
-			log.warn("Failed to close consumer consent websocket after timeout.", { err });
+		try { ws.close(); } catch (error) {
+			log.warn("Failed to close consumer consent websocket after timeout.", {
+				operation: "m365.show_consumer_consent.close_ws_after_timeout",
+				err: error,
+			});
 		}
 		if (target.id) {
-			try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch (err) {
-				log.warn("Failed to close consumer consent tab after timeout.", { err, targetId: target.id });
+			try { await httpPut(`http://localhost:${existingPort}/json/close/${target.id}`, 3000); } catch (error) {
+				log.warn("Failed to close consumer consent tab after timeout.", {
+					operation: "m365.show_consumer_consent.close_tab_after_timeout",
+					err: error,
+					targetId: target.id,
+				});
 			}
 		}
 		return false;
-	} catch (err) {
-		try { ws.close(); } catch (closeErr) {
-			log.warn("Failed to close consumer consent websocket after fatal error.", { err: closeErr });
+	} catch (error) {
+		try { ws.close(); } catch (closeError) {
+			log.warn("Failed to close consumer consent websocket after fatal error.", {
+				operation: "m365.show_consumer_consent.close_ws_after_fatal_error",
+				err: closeError,
+			});
 		}
-		log.warn("Consumer consent flow failed.", { err });
+		log.warn("Consumer consent flow failed.", {
+			operation: "m365.show_consumer_consent",
+			err: error,
+		});
 		return false;
 	}
 }
@@ -893,8 +917,12 @@ async function acquireConsumerGraphToken(): Promise<string | null> {
 
 		// Cleanup auth tab
 		if (authTabId) {
-			try { await httpPut(`http://localhost:${cdpPort}/json/close/${authTabId}`, 3000); } catch (err) {
-				log.warn("Failed to close consumer auth tab.", { err, authTabId });
+			try { await httpPut(`http://localhost:${cdpPort}/json/close/${authTabId}`, 3000); } catch (error) {
+				log.warn("Failed to close consumer auth tab.", {
+					operation: "m365.acquire_consumer_graph_token.close_auth_tab",
+					err: error,
+					authTabId,
+				});
 			}
 		}
 

@@ -18,7 +18,10 @@ if (handled) {
   process.exit(0);
 }
 
-main().catch((err) => {
-  log.error("Fatal runtime error", { err });
+main().catch((error) => {
+  log.error("Fatal runtime error", {
+    operation: "piclaw.main",
+    err: error,
+  });
   process.exit(1);
 });

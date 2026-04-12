@@ -181,10 +181,10 @@ export async function runMessageLoop(deps: MessageLoopDeps): Promise<void> {
           }, `chat:${chatJid}`, `chat:${chatJid}`);
         }
       }
-    } catch (err) {
+    } catch (error) {
       log.error("Message loop iteration failed", {
         operation: "run_message_loop.iteration",
-        err,
+        err: error,
       });
     }
     await Bun.sleep(deps.pollIntervalMs);

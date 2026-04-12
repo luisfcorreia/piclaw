@@ -182,19 +182,21 @@ export function startWorkspaceWatcher(
         }
       });
 
-      watcher.on("error", (err) => {
+      watcher.on("error", (error) => {
         log.warn("Workspace watcher fs.watch error", {
+          operation: "workspace_watcher.add_watcher.fs_watch_error",
           dir,
-          err,
+          err: error,
         });
         removeWatcher(dir);
       });
 
       watchers.set(dir, watcher);
-    } catch (err) {
+    } catch (error) {
       log.warn("Failed to watch workspace directory", {
+        operation: "workspace_watcher.add_watcher.watch_directory",
         dir,
-        err,
+        err: error,
       });
       return;
     }

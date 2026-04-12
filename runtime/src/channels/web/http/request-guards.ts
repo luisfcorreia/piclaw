@@ -67,6 +67,7 @@ export async function enforceRequestGuards(
   if (flags.isInternalPost || flags.isInternalPatch) {
     if (internalSecretEnabled && !hasInternalAccess) {
       log.warn("Internal secret required", {
+        operation: "web_request_guards.internal_secret_required",
         clientKey: getClientKey(req),
         method: req.method,
         path: pathname,
@@ -82,6 +83,7 @@ export async function enforceRequestGuards(
   if (flags.isAuthVerify) {
     if (isRateLimited(req, "auth/verify", AUTH_RATE_WINDOW_MS, AUTH_RATE_LIMIT)) {
       log.warn("Auth verify rate limit exceeded", {
+        operation: "web_request_guards.auth_verify_rate_limit",
         clientKey: getClientKey(req),
         endpoint: "/auth/verify",
       });
@@ -92,6 +94,7 @@ export async function enforceRequestGuards(
   if (flags.isWebauthnLoginStart || flags.isWebauthnLoginFinish) {
     if (isRateLimited(req, "webauthn/login", AUTH_RATE_WINDOW_MS, AUTH_RATE_LIMIT)) {
       log.warn("WebAuthn login rate limit exceeded", {
+        operation: "web_request_guards.webauthn_login_rate_limit",
         clientKey: getClientKey(req),
         endpoint: "webauthn/login",
       });
@@ -102,6 +105,7 @@ export async function enforceRequestGuards(
   if (flags.isWebauthnEnrollPage || flags.isWebauthnRegisterStart || flags.isWebauthnRegisterFinish) {
     if (isRateLimited(req, "webauthn/enrol", ENROLL_RATE_WINDOW_MS, ENROLL_RATE_LIMIT)) {
       log.warn("WebAuthn enrol rate limit exceeded", {
+        operation: "web_request_guards.webauthn_enrol_rate_limit",
         clientKey: getClientKey(req),
         endpoint: "webauthn/enrol",
       });
@@ -122,6 +126,7 @@ export async function enforceRequestGuards(
 
     if (!skipAuthCheck && !channel.authGateway.isAuthenticated(req)) {
       log.warn("Unauthorized request", {
+        operation: "web_request_guards.unauthorized_request",
         clientKey: getClientKey(req),
         method: req.method,
         path: pathname,
@@ -141,6 +146,7 @@ export async function enforceRequestGuards(
   if (flags.isMutating && !hasInternalAccess && !flags.isAuthEndpoint) {
     if (!checkCsrfOrigin(req)) {
       log.warn("CSRF origin check failed", {
+        operation: "web_request_guards.csrf_origin_check_failed",
         clientKey: getClientKey(req),
         origin: req.headers.get("origin"),
       });

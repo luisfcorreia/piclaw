@@ -356,12 +356,12 @@ export class WebAdaptiveCardSidePromptService {
           chat_jid: pending.chat_jid || chatJid,
         });
         await this.options.sendMessage(chatJid, result, { threadId });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         log.warn("Failed to launch autoresearch experiment from adaptive card", {
           operation: "handle_adaptive_card_action.autoresearch_launch",
           chatJid,
-          err,
+          err: error,
         });
         await this.options.sendMessage(chatJid, `Failed to launch experiment: ${msg}`, { threadId });
       }
@@ -388,12 +388,12 @@ export class WebAdaptiveCardSidePromptService {
         const { stopAutoresearchFromCard } = await import("../handlers/autoresearch-card-action.js");
         const result = await stopAutoresearchFromCard();
         await this.options.sendMessage(chatJid, result, { threadId });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
         log.warn("Failed to stop autoresearch experiment from adaptive card", {
           operation: "handle_adaptive_card_action.autoresearch_stop",
           chatJid,
-          err,
+          err: error,
         });
         await this.options.sendMessage(chatJid, `Failed to stop experiment: ${msg}`, { threadId });
       }

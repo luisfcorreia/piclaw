@@ -392,11 +392,12 @@ export function scheduleLinkPreviews(
       updateMessageLinkPreviews(chatJid, rowId, previews);
       const interaction = getMessageByRowId(chatJid, rowId);
       if (interaction) channel.broadcastEvent("interaction_updated", interaction);
-    } catch (err) {
+    } catch (error) {
       log.warn("Link preview fetch failed", {
+        operation: "web_link_previews.schedule_link_previews",
         chatJid,
         rowId,
-        err,
+        err: error,
       });
     } finally {
       channel.pendingLinkPreviews.delete(rowId);

@@ -205,13 +205,13 @@ export async function executeSlashCommand(
       outputChars: message.length,
     });
     return { status: "success", message, messages: capturedMessages };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     log.error("Slash command failed", {
       operation: "execute_slash_command",
       chatJid,
       errorMessage: message,
-      err,
+      err: error,
     });
     return { status: "error", message };
   }

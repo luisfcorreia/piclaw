@@ -111,6 +111,10 @@ export class WebAuthGateway {
       this.deps.logAuthWarning(`[auth] ${event} (ip=${clientKey})`);
       return;
     }
-    log.warn("Auth event", { event, clientKey });
+    log.warn("Auth event", {
+      operation: "web_auth_gateway.log_auth_event",
+      event,
+      clientKey,
+    });
   }
 }

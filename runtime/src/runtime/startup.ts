@@ -55,11 +55,11 @@ function bootstrapWorkspaceFromSkel(): void {
       } else {
         copyFileSync(source, target);
       }
-    } catch (err) {
+    } catch (error) {
       log.warn("Failed to seed workspace bootstrap entry", {
         operation: "workspace_bootstrap.seed",
         entry,
-        err,
+        err: error,
       });
     }
   }
@@ -123,10 +123,10 @@ export function queueStartupResumePendingIpc(): void {
       operation: "queue_resume_pending_ipc",
       filePath,
     });
-  } catch (err) {
+  } catch (error) {
     log.error("Failed to queue resume_pending IPC", {
       operation: "queue_resume_pending_ipc",
-      err,
+      err: error,
     });
   }
 }
@@ -178,10 +178,10 @@ export function createWhatsAppChannel(state: RuntimeState): WhatsAppChannel {
         };
         const filePath = join(ipcDir, `${createUuid("pairing")}.json`);
         writeFileSync(filePath, JSON.stringify(payload));
-      } catch (err) {
+      } catch (error) {
         log.error("Failed to write pairing code IPC message", {
           operation: "pairing_code_ipc",
-          err,
+          err: error,
         });
       }
     },

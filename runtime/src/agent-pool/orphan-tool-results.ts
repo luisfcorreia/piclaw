@@ -61,9 +61,18 @@ export function pruneOrphanToolResults(session: AgentSession, chatJid: string): 
     const prunedCount = messages.length - pruned.length;
     try {
       internalSession.agent?.replaceMessages?.(pruned);
-      log.warn("Pruned orphan tool results before agent run", { chatJid, prunedCount });
-    } catch (err) {
-      log.warn("Failed to prune orphan tool results before agent run", { chatJid, prunedCount, err });
+      log.warn("Pruned orphan tool results before agent run", {
+        operation: "orphan_tool_results.prune_before_agent_run",
+        chatJid,
+        prunedCount,
+      });
+    } catch (error) {
+      log.warn("Failed to prune orphan tool results before agent run", {
+        operation: "orphan_tool_results.prune_before_agent_run",
+        chatJid,
+        prunedCount,
+        err: error,
+      });
     }
   }
 }
