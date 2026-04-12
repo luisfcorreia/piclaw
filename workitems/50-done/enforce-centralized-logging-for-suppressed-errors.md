@@ -1,7 +1,7 @@
 ---
 id: enforce-centralized-logging-for-suppressed-errors
 title: Enforce centralized logging for suppressed errors
-status: doing
+status: done
 priority: high
 created: 2026-04-12
 updated: 2026-04-12
@@ -73,11 +73,11 @@ Out of scope for this slice:
 
 ## Acceptance Criteria
 
-- [ ] Remaining empty/comment-only catches in active runtime cleanup tranches are replaced with explicit centralized logging or real handling.
-- [ ] `debugSuppressedError(...)` is used as the default for intentional best-effort suppression paths.
-- [ ] New or updated tests cover any helper/API changes needed for standardized logging behavior.
-- [ ] `bun run runtime/scripts/silent-swallow-metrics.ts --check` remains strict and documents the preferred remediation path.
-- [ ] At least one follow-up note/update records where `warn`/`error` is still intentionally preferred over `debugSuppressedError(...)`.
+- [x] Remaining empty/comment-only catches in active runtime cleanup tranches are replaced with explicit centralized logging or real handling.
+- [x] `debugSuppressedError(...)` is used as the default for intentional best-effort suppression paths.
+- [x] New or updated tests cover any helper/API changes needed for standardized logging behavior.
+- [x] `bun run runtime/scripts/silent-swallow-metrics.ts --check` remains strict and documents the preferred remediation path.
+- [x] At least one follow-up note/update records where `warn`/`error` is still intentionally preferred over `debugSuppressedError(...)`.
 
 ## Implementation Notes
 
@@ -105,13 +105,33 @@ Avoid:
 
 ## Definition of Done
 
-- [ ] Acceptance criteria satisfied
-- [ ] Focused tests added/updated and passing
-- [ ] Silent-swallow metrics rechecked
-- [ ] Work item updates recorded with evidence
-- [ ] Follow-up tickets created for deferred areas, if needed
+- [x] Acceptance criteria satisfied
+- [x] Focused tests added/updated and passing
+- [x] Silent-swallow metrics rechecked
+- [x] Work item updates recorded with evidence
+- [x] Follow-up tickets created for deferred areas, if needed
 
 ## Updates
+
+### 2026-04-12
+- Implemented and merged in commit `8aedc640` after the logging-consistency autoresearch salvage.
+- Centralized logging policy is now enforced across the touched runtime helper tranches:
+  - best-effort suppression defaults to `debugSuppressedError(...)`
+  - recoverable degradation keeps `log.warn(...)` with structured `operation` and `err`
+  - invariant/required-action failures keep `log.error(...)` with structured `operation` and `err`
+- Added focused coverage for the new benchmark and request-guard logging paths.
+- Verified locally with:
+  - `bun run runtime/scripts/logging-consistency-metrics.ts`
+  - `bun run runtime/scripts/silent-swallow-metrics.ts --check`
+  - full runtime test suite passing on the clean merge state
+- Final metric evidence:
+  - `inconsistent_logging_sites=0`
+  - `warn_error_without_operation=0`
+  - `caught_warn_error_without_err=0`
+  - `direct_suppressed_debug_sites=0`
+  - `repo_silent_catch_blocks=0`
+  - `repo_silent_promise_catches=0`
+  - `runtime_core_silent_catches=0`
 
 ### 2026-04-12
 - Created from user direction during the current silent-swallow cleanup push.

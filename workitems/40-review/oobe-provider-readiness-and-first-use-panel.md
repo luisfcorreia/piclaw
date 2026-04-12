@@ -1,10 +1,10 @@
 ---
 id: oobe-provider-readiness-and-first-use-panel
 title: Add provider-readiness and first-use OOBE panel in the web app
-status: doing
+status: review
 priority: medium
 created: 2026-04-08
-updated: 2026-04-09
+updated: 2026-04-12
 parent: improve-first-run-oobe-and-new-user-guidance
 estimate: M
 risk: medium

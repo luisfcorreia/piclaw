@@ -1,10 +1,11 @@
 ---
 id: open-workspace-file-web-tool
 title: Add a built-in web tool to open workspace files in the editor
-status: review
+status: done
 priority: medium
 created: 2026-04-11
-updated: 2026-04-11
+updated: 2026-04-12
+completed: 2026-04-12
 tags:
   - work-item
   - kanban
@@ -88,13 +89,20 @@ extension-UI contract question.
 - [x] All acceptance criteria satisfied and verified
 - [x] Tests added or updated — passing locally
 - [x] Type check clean
-- [ ] Docs and notes updated with links to ticket
+- [x] Docs and notes updated with links to ticket
 - [x] Operational impact assessed
-- [ ] Follow-up tickets created for deferred scope
+- [x] Follow-up tickets created for deferred scope
 - [x] Update history complete with evidence
 - [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-12 (closed)
+- Lane change: `40-review` → `50-done`.
+- Closeout review confirmed the shipped implementation already satisfies the ticket scope:
+  - public docs were updated in `docs/tools-and-skills.md`
+  - deferred broader browser/extension UI work remains tracked separately in `workitems/00-inbox/define-first-class-extension-ui-surface-for-piclaw-extensions.md`
+- No additional code changes were required beyond the already validated implementation and recorded smoke evidence.
 
 ### 2026-04-11
 - Implemented `open_workspace_file` as a built-in web-only tool that opens a

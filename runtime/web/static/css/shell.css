@@ -44,7 +44,7 @@
     display: inline-flex;
     flex-direction: column;
     gap: 4px;
-    min-width: 142px;
+    min-width: 150px;
     padding: 7px 9px;
     border-radius: 12px;
     border: 1px solid color-mix(in srgb, var(--border-color) 86%, transparent);
@@ -56,7 +56,7 @@
 
 .system-meters-row {
     display: grid;
-    grid-template-columns: 30px 56px auto;
+    grid-template-columns: 34px 56px auto;
     align-items: center;
     gap: 8px;
     font-size: 11px;
@@ -94,6 +94,10 @@
 
 .system-meters-row.ram .system-meters-spark path {
     stroke: var(--success-color);
+}
+
+.system-meters-row.swap .system-meters-spark path {
+    stroke: var(--warning-color, #f59e0b);
 }
 
 @media (max-width: 900px) {

@@ -80,6 +80,12 @@ test('slash autocomplete includes all canonical control commands', () => {
   expect(missing).toEqual([]);
 });
 
+test('slash autocomplete exposes the local /meters HUD command with a description', () => {
+  const meters = SLASH_COMMANDS.find((item) => item.name === '/meters');
+  expect(meters).toBeTruthy();
+  expect(meters?.description).toContain('CPU/RAM HUD');
+});
+
 test('resolveComposePrefillRequest applies new non-search prefill tokens exactly once', () => {
   expect(resolveComposePrefillRequest({ token: 'tok-1', text: '/login' }, '', false)).toEqual({
     shouldApply: true,

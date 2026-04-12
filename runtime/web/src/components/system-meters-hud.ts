@@ -35,8 +35,12 @@ export function SystemMetersHud() {
     const [metrics, setMetrics] = useState({
         cpu_percent: 0,
         ram_percent: 0,
+        swap_percent: null,
         cpu_series: [],
         ram_series: [],
+        swap_series: [],
+        swap_total_bytes: 0,
+        swap_used_bytes: 0,
         sample_interval_ms: 2000,
     });
     const [loading, setLoading] = useState(false);
@@ -62,8 +66,12 @@ export function SystemMetersHud() {
                 setMetrics({
                     cpu_percent: Number(next?.cpu_percent) || 0,
                     ram_percent: Number(next?.ram_percent) || 0,
+                    swap_percent: Number.isFinite(Number(next?.swap_percent)) ? Number(next?.swap_percent) : null,
                     cpu_series: clampSeries(next?.cpu_series),
                     ram_series: clampSeries(next?.ram_series),
+                    swap_series: clampSeries(next?.swap_series),
+                    swap_total_bytes: Number(next?.swap_total_bytes) || 0,
+                    swap_used_bytes: Number(next?.swap_used_bytes) || 0,
                     sample_interval_ms: Number(next?.sample_interval_ms) || 2000,
                 });
             } catch {
@@ -87,6 +95,8 @@ export function SystemMetersHud() {
 
     const cpuPath = useMemo(() => buildSparklinePath(metrics.cpu_series), [metrics.cpu_series]);
     const ramPath = useMemo(() => buildSparklinePath(metrics.ram_series), [metrics.ram_series]);
+    const swapPath = useMemo(() => buildSparklinePath(metrics.swap_series), [metrics.swap_series]);
+    const showSwap = Number.isFinite(Number(metrics.swap_percent)) && metrics.swap_total_bytes > 0;
 
     if (!enabled) return null;
 
@@ -107,6 +117,15 @@ export function SystemMetersHud() {
                     </svg>
                     <span class="system-meters-value">${formatPercent(metrics.ram_percent)}</span>
                 </div>
+                ${showSwap && html`
+                    <div class="system-meters-row swap">
+                        <span class="system-meters-label">SWP</span>
+                        <svg class="system-meters-spark" viewBox="0 0 56 16" preserveAspectRatio="none" aria-hidden="true">
+                            <path d=${swapPath}></path>
+                        </svg>
+                        <span class="system-meters-value">${formatPercent(metrics.swap_percent)}</span>
+                    </div>
+                `}
             </div>
         </div>
     `;
