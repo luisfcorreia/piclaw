@@ -1,10 +1,10 @@
 ---
 id: improve-first-run-oobe-and-new-user-guidance
 title: Improve first-run OOBE and guidance for new users
-status: next
+status: doing
 priority: medium
 created: 2026-04-04
-updated: 2026-04-08
+updated: 2026-04-12
 estimate: L
 risk: medium
 tags:
@@ -203,6 +203,12 @@ The expected split should look roughly like:
 - [ ] Ticket is either refined into `10-next/` or split into smaller ready tickets.
 
 ## Updates
+
+### 2026-04-12
+- Lane change: `10-next` → `20-doing`.
+- Promoted back into active work because the narrower OOBE child slices are now far enough along that the broader first-run umbrella should be treated as live coordination work instead of passive roadmap planning.
+- Immediate next focus remains to close the remaining browser-validation/evidence gap in the OOBE child work and then reassess what still belongs in the umbrella versus smaller follow-up tickets.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
 
 ### 2026-04-08
 - Ticket refactored after clarifying a core terminology mistake: `/login` is for **AI provider setup/auth**, not for signing into the app itself.

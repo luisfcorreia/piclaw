@@ -1,10 +1,10 @@
 ---
 id: test-oobe-in-local-container-with-playwright
 title: Test OOBE in a local container with Playwright
-status: doing
+status: review
 priority: medium
 created: 2026-04-09
-updated: 2026-04-09
+updated: 2026-04-12
 target_release: later
 estimate: M
 risk: low

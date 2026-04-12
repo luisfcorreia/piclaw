@@ -4,7 +4,7 @@ title: Adopt MCP-style discovery for internal tools
 status: next
 priority: medium
 created: 2026-04-05
-updated: 2026-04-06
+updated: 2026-04-12
 estimate: L
 risk: medium
 tags:
@@ -121,18 +121,18 @@ The first useful slice should be limited to:
 
 ## Acceptance Criteria
 
-- [ ] The current internal-tool discovery flow is inventoried end to end.
-- [ ] Current pain points are documented with concrete examples of context waste or inconsistent progressive disclosure.
-- [ ] A proposed MCP-style discovery model is defined for internal tools.
-- [ ] The proposed model clearly separates:
-  - [ ] compact discovery / recommendation
-  - [ ] capability summaries
-  - [ ] detailed help / schema / examples
-  - [ ] activation / use
-- [ ] The model explains how existing tools such as `list_internal_tools` and `activate_tools` fit, change, or get wrapped.
-- [ ] The model explicitly supports context saving and progressive disclosure as primary goals.
-- [ ] The first implementation slice is selected explicitly.
-- [ ] Follow-up implementation tickets are split if the work spans runtime APIs, prompt guidance, tool metadata, and UI/docs.
+- [x] The current internal-tool discovery flow is inventoried end to end.
+- [x] Current pain points are documented with concrete examples of context waste or inconsistent progressive disclosure.
+- [x] A proposed MCP-style discovery model is defined for internal tools.
+- [x] The proposed model clearly separates:
+  - [x] compact discovery / recommendation
+  - [x] capability summaries
+  - [x] detailed help / schema / examples
+  - [x] activation / use
+- [x] The model explains how existing tools such as `list_internal_tools` and `activate_tools` fit, change, or get wrapped.
+- [x] The model explicitly supports context saving and progressive disclosure as primary goals.
+- [x] The first implementation slice is selected explicitly.
+- [x] Follow-up implementation tickets are split if the work spans runtime APIs, prompt guidance, tool metadata, and UI/docs.
 
 ## Implementation Paths
 
@@ -177,18 +177,18 @@ That means this umbrella should produce:
 - the mapping from today's primitives to that model
 - a narrow first implementation ticket
 
-## Likely follow-up tickets to split out
+## Split follow-up tickets
 
-This umbrella will probably need to split into at least these concrete slices:
+This umbrella is now split into these concrete next-step tickets:
 
-1. **Internal tool metadata / summary contract**
-   - add or normalize metadata needed for recommendation and compact summaries
-2. **Recommendation / compact discovery surface**
-   - intent-fit shortlist or family summary before full schema expansion
-3. **Detail/help surface refinement**
-   - explicit opt-in schema/examples rather than default bulk output
+1. **Compact capability summaries**
+   - `workitems/10-next/add-compact-capability-summaries-to-list-internal-tools.md`
+2. **Intent-based recommendation surface**
+   - `workitems/10-next/add-intent-based-recommendation-for-internal-tools.md`
+3. **On-demand detail/help expansion**
+   - `workitems/10-next/add-on-demand-detail-help-for-internal-tools.md`
 4. **Prompt/docs alignment**
-   - update guidance so the staged flow is actually used consistently
+   - `workitems/10-next/align-prompt-and-doc-guidance-with-staged-tool-discovery.md`
 
 ## Test Plan
 
@@ -209,15 +209,56 @@ This umbrella will probably need to split into at least these concrete slices:
 
 ## Definition of Done
 
-- [ ] Discovery problem statement and target contract are documented clearly.
-- [ ] The staged discovery flow for internal tools is defined.
-- [ ] Existing primitives (`list_internal_tools`, `activate_tools`, related help surfaces) are mapped into the new model.
-- [ ] A first implementation slice is chosen explicitly.
-- [ ] Follow-up implementation tickets are created for runtime/docs/prompt splits.
-- [ ] Update history includes concrete examples and recommended next actions.
-- [ ] Ticket is refined enough to move to `10-next/` or split into smaller ready slices.
+- [x] Discovery problem statement and target contract are documented clearly.
+- [x] The staged discovery flow for internal tools is defined.
+- [x] Existing primitives (`list_internal_tools`, `activate_tools`, related help surfaces) are mapped into the new model.
+- [x] A first implementation slice is chosen explicitly.
+- [x] Follow-up implementation tickets are created for runtime/docs/prompt splits.
+- [x] Update history includes concrete examples and recommended next actions.
+- [x] Ticket is refined enough to move to `10-next/` or split into smaller ready slices.
 
 ## Updates
+
+### 2026-04-12
+- Evidence audit after confirming that core discovery/activation primitives are already live:
+  - runtime/doc evidence:
+    - `README.md` documents the small always-active baseline, lazy activation, and compact capability introspection.
+    - `docs/runtime-flows.md` documents the staged infra discovery flow `discover → capabilities/recommend → workflow_help → workflow`.
+  - runtime/tool evidence:
+    - `list_internal_tools`, `activate_tools`, and `reset_active_tools` are present as the general internal-tool substrate.
+  - related completed work:
+    - `workitems/50-done/internal-tools-naming-consistency-audit.md`
+    - `workitems/50-done/internal-fts-tooling-agent-friendly.md`
+- Audit pass after confirming that core discovery/activation primitives are already live:
+  - `list_internal_tools`
+  - `activate_tools`
+  - `reset_active_tools`
+- Additional already-landed supporting work:
+  - `workitems/50-done/internal-tools-naming-consistency-audit.md` closed with an inventory of 22 internal tools and a normalized verb-first naming convention.
+  - `workitems/50-done/internal-fts-tooling-agent-friendly.md` improved agent-facing search ergonomics, which is adjacent to tool-selection/discovery usability.
+  - `README.md` and `docs/runtime-flows.md` now explicitly document the small always-active baseline, same-turn activation, compact capability introspection, and the staged infra flow `discover → capabilities/recommend → workflow_help → workflow`.
+- Conclusion from the audit:
+  - the substrate is implemented
+  - the MCP-style umbrella itself is **not** done
+- Implemented today / can be treated as complete for this umbrella's starting assumptions:
+  - tool inventory exists
+  - same-turn activation exists
+  - reset/deactivation surface exists
+  - infra-family staged discovery patterns exist and are documented
+  - context-conservation guidance exists in docs
+- Still missing for this ticket:
+  - a unified internal-tool staged discovery contract beyond the infra/tool-family-specific flows
+  - explicit compact recommendation output for the general internal-tool surface
+  - shared capability-summary metadata for internal tools
+  - an explicit details/help/schema expansion step layered over general internal-tool discovery
+  - a chosen concrete first implementation ticket split out from this umbrella
+- Split concrete next-step tickets with clearly defined outcomes:
+  - `workitems/10-next/add-compact-capability-summaries-to-list-internal-tools.md`
+  - `workitems/10-next/add-intent-based-recommendation-for-internal-tools.md`
+  - `workitems/10-next/add-on-demand-detail-help-for-internal-tools.md`
+  - `workitems/10-next/align-prompt-and-doc-guidance-with-staged-tool-discovery.md`
+- Updated recommendation after audit: treat `add-compact-capability-summaries-to-list-internal-tools` as the first executable slice, then layer recommendation and detail/help on top.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
 
 ### 2026-04-06
 - Lane change: `00-inbox` → `10-next`.
@@ -257,6 +298,10 @@ This umbrella will probably need to split into at least these concrete slices:
 ## Links
 
 - `workitems/10-next/bundle-mcp-cli.md`
+- `workitems/10-next/add-compact-capability-summaries-to-list-internal-tools.md`
+- `workitems/10-next/add-intent-based-recommendation-for-internal-tools.md`
+- `workitems/10-next/add-on-demand-detail-help-for-internal-tools.md`
+- `workitems/10-next/align-prompt-and-doc-guidance-with-staged-tool-discovery.md`
 - `README.md`
 - `docs/runtime-flows.md`
 - `docs/tools-and-skills.md`

@@ -1,10 +1,11 @@
 ---
 id: azure-model-routing-and-stability
 title: Harden Azure / Foundry model routing and stability
-status: review
+status: done
 priority: high
 created: 2026-03-10
-updated: 2026-04-11
+updated: 2026-04-12
+completed: 2026-04-12
 target_release: next
 estimate: M
 risk: medium
