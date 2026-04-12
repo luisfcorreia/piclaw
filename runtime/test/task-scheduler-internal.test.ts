@@ -17,7 +17,7 @@ function writeDailyNote(workspace: string, date: string, summary: string) {
 
 afterEach(() => {
   sentMessages.length = 0;
-  try { db?.getDb().close(); } catch { /* expected */ }
+  try { db?.getDb().close(); } catch (_error) { void _error; }
   db = null;
   scheduler = null;
   dream = null;

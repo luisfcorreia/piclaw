@@ -64,8 +64,8 @@ describe("autoresearch workdir helpers", () => {
     cleanups.push(() => {
       try {
         execFileSync("git", ["-C", prepared.repoRoot, "worktree", "remove", "--force", prepared.worktreeRoot], { stdio: "ignore" });
-      } catch {
-        // ignore cleanup errors in temp repos
+      } catch (_error) {
+        void _error;
       }
     });
 
@@ -93,8 +93,8 @@ describe("autoresearch workdir helpers", () => {
     cleanups.push(() => {
       try {
         execFileSync("git", ["-C", prepared.repoRoot, "worktree", "remove", "--force", prepared.worktreeRoot], { stdio: "ignore" });
-      } catch {
-        // ignore cleanup errors in temp repos
+      } catch (_error) {
+        void _error;
       }
     });
 

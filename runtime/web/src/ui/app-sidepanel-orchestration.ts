@@ -29,12 +29,13 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   const value = typeof text === 'string' ? text : '';
   if (!value) return false;
 
+  let clipboardApiError: unknown = null;
   if (navigator.clipboard?.writeText) {
     try {
       await navigator.clipboard.writeText(value);
       return true;
-    } catch {
-      // Fall through to execCommand fallback.
+    } catch (error) {
+      clipboardApiError = error;
     }
   }
 
@@ -51,7 +52,11 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
     const copied = document.execCommand('copy');
     document.body.removeChild(textarea);
     return copied;
-  } catch {
+  } catch (error) {
+    console.debug('[sidepanel] Clipboard copy failed after falling back from navigator.clipboard.', error, {
+      clipboardApiAvailable: Boolean(navigator.clipboard?.writeText),
+      clipboardApiError,
+    });
     return false;
   }
 }

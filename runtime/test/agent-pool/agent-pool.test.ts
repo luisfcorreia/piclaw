@@ -48,8 +48,8 @@ afterEach(async () => {
     const sshCore = await import("../../src/extensions/ssh-core.js");
     sshCore.setSshConnectionResolverForTests(null);
     await sshCore.unregisterLiveChatSshSession("web:default");
-  } catch {
-    // ignore test cleanup failures for optional SSH state
+  } catch (_error) {
+    void _error;
   }
 });
 

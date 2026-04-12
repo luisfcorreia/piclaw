@@ -88,8 +88,8 @@ describe("scheduled-tasks extension", () => {
   afterEach(() => {
     try {
       getDb().close();
-    } catch {
-      // ignore
+    } catch (_error) {
+      void _error;
     }
   });
 

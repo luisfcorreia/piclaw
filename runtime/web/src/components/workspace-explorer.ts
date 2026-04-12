@@ -1205,8 +1205,11 @@ export function WorkspaceExplorer({
         const active = activeRef.current ?? visibleRef.current;
         const visible = document.visibilityState !== 'hidden'
             && (active || (media.matches && visibleRef.current));
-        setWorkspaceVisibility(visible, showHiddenRef.current).catch(() => {
-            /* expected: workspace visibility pings are best-effort. */
+        setWorkspaceVisibility(visible, showHiddenRef.current).catch((error) => {
+            console.debug('[workspace-explorer] Workspace visibility ping failed.', error, {
+                visible,
+                showHidden: showHiddenRef.current,
+            });
         });
     }).current;
 
@@ -1272,8 +1275,10 @@ export function WorkspaceExplorer({
                 clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = null;
             }
-            setWorkspaceVisibility(false, showHiddenRef.current).catch(() => {
-                /* expected: workspace visibility pings are best-effort during teardown. */
+            setWorkspaceVisibility(false, showHiddenRef.current).catch((error) => {
+                console.debug('[workspace-explorer] Workspace visibility teardown ping failed.', error, {
+                    showHidden: showHiddenRef.current,
+                });
             });
         };
     }, []);
@@ -1536,8 +1541,10 @@ export function WorkspaceExplorer({
                 setLocalStorageItem('workspaceShowHidden', String(next));
             }
             showHiddenRef.current = next;
-            setWorkspaceVisibility(true, next).catch(() => {
-                /* expected: show-hidden visibility refresh is best-effort. */
+            setWorkspaceVisibility(true, next).catch((error) => {
+                console.debug('[workspace-explorer] Workspace visibility refresh after toggling hidden files failed.', error, {
+                    showHidden: next,
+                });
             });
             lastSigRef.current = '';
             loadTreeFnRef.current?.();

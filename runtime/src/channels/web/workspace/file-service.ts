@@ -15,7 +15,7 @@ import { gunzipSync } from "zlib";
 import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 
 import { createMedia } from "../../../db.js";
-import { createLogger } from "../../../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { MAX_ATTACH_BYTES, MAX_EDIT_BYTES, MAX_PREVIEW_BYTES, MAX_UPLOAD_BYTES } from "./constants.js";
 import { contentTypeForPath, detectBinary, formatMtime, isImageFile, isTextFile } from "./file-utils.js";
 import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
@@ -273,8 +273,11 @@ export class WorkspaceFileService {
       if (path.extname(targetPath).toLowerCase() === ".json") {
         try {
           text = JSON.stringify(JSON.parse(text), null, 2);
-        } catch {
-          /* expected: invalid JSON files should still open as raw text. */
+        } catch (error) {
+          debugSuppressedError(log, "Workspace JSON preview was invalid; returning raw text.", error, {
+            operation: "get_file.invalid_json_preview",
+            targetPath,
+          });
         }
       }
 

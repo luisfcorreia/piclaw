@@ -27,6 +27,7 @@ import { Type } from "@sinclair/typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { createLogger, debugSuppressedError } from "../../../src/utils/logger.js";
 
 // Re-export shared infra (used by this file and available to transcripts.ts)
 export * from "./shared.ts";
@@ -42,6 +43,11 @@ import {
   getDocumentLinkMetadata,
 } from "./shared.ts";
 
+const log = createLogger("extensions.experimental.m365.index");
+
+function logSuppressedM365Index(message: string, error: unknown, fields: Record<string, unknown> = {}): void {
+  debugSuppressedError(log, message, error, fields);
+}
 
 /**
  * Register the public M365 tools.
@@ -675,7 +681,11 @@ export default function (pi: ExtensionAPI) {
 					try {
 						const attResult: any = await graphFetch(`me/messages/${params.messageId}/attachments?$select=id,name,contentType,size`);
 						attachments = (attResult?.value ?? []).map((a: any) => ({ name: a.name, type: a.contentType, size: a.size }));
-					} catch { /* best-effort fallback */ }
+					} catch (error) {
+						logSuppressedM365Index("Failed to list Outlook message attachments; continuing without attachment metadata.", error, {
+							messageId: params.messageId,
+						});
+					}
 				}
 				const result = {
 					id: msg.id, subject: msg.subject,
@@ -820,7 +830,17 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed("Batch deleting mail messages", params);
 				let deleted = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "DELETE" }); deleted++; } catch { /* best-effort fallback */ } }
+				for (const m of msgs) {
+					try {
+						await graphFetch(`me/messages/${m.id}`, { method: "DELETE" });
+						deleted++;
+					} catch (error) {
+						logSuppressedM365Index("Failed to delete one Outlook message during a batch delete; continuing.", error, {
+							messageId: m.id,
+							query: params.query,
+						});
+					}
+				}
 				return {
 					content: [{ type: "text", text: `Deleted ${deleted}/${msgs.length} messages matching "${params.query}"` }],
 					details: { action: "batch_delete", deleted, total: msgs.length, query: params.query },
@@ -841,7 +861,18 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`Batch moving mail messages to ${destFolder}`, params);
 				let moved = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}/move`, { method: "POST", body: { destinationId } }); moved++; } catch { /* best-effort fallback */ } }
+				for (const m of msgs) {
+					try {
+						await graphFetch(`me/messages/${m.id}/move`, { method: "POST", body: { destinationId } });
+						moved++;
+					} catch (error) {
+						logSuppressedM365Index("Failed to move one Outlook message during a batch move; continuing.", error, {
+							messageId: m.id,
+							destinationId,
+							query: params.query,
+						});
+					}
+				}
 				return {
 					content: [{ type: "text", text: `Moved ${moved}/${msgs.length} messages to ${destFolder}` }],
 					details: { action, moved, total: msgs.length, folder: destFolder, query: params.query },
@@ -861,7 +892,18 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`${flagStatus === "flagged" ? "Batch flagging" : "Batch unflagging"} mail messages`, params);
 				let updated = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { flag: { flagStatus } } }); updated++; } catch { /* best-effort fallback */ } }
+				for (const m of msgs) {
+					try {
+						await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { flag: { flagStatus } } });
+						updated++;
+					} catch (error) {
+						logSuppressedM365Index("Failed to update one Outlook flag during a batch flag operation; continuing.", error, {
+							messageId: m.id,
+							flagStatus,
+							query: params.query,
+						});
+					}
+				}
 				return {
 					content: [{ type: "text", text: `${flagStatus === "flagged" ? "Flagged" : "Unflagged"} ${updated}/${msgs.length} messages` }],
 					details: { action: "batch_flag", updated, total: msgs.length, flagStatus, query: params.query },
@@ -896,7 +938,18 @@ export default function (pi: ExtensionAPI) {
 				}
 				requireConfirmed(`Batch marking mail messages ${isRead ? "read" : "unread"}`, params);
 				let updated = 0;
-				for (const m of msgs) { try { await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { isRead } }); updated++; } catch { /* best-effort fallback */ } }
+				for (const m of msgs) {
+					try {
+						await graphFetch(`me/messages/${m.id}`, { method: "PATCH", body: { isRead } });
+						updated++;
+					} catch (error) {
+						logSuppressedM365Index("Failed to update one Outlook read-state during a batch mark operation; continuing.", error, {
+							messageId: m.id,
+							isRead,
+							query: params.query,
+						});
+					}
+				}
 				return {
 					content: [{ type: "text", text: `Marked ${isRead ? "read" : "unread"}: ${updated}/${msgs.length} messages` }],
 					details: { action, updated, total: msgs.length, query: params.query },
@@ -940,7 +993,12 @@ export default function (pi: ExtensionAPI) {
 					company: p.companyName || "",
 					type: p.personType?.subclass || p.personType?.class || "",
 				}));
-			} catch { /* best-effort fallback */ }
+			} catch (error) {
+				logSuppressedM365Index("People API search failed; falling back to directory lookup.", error, {
+					query: params.query,
+					top,
+				});
+			}
 
 			// Fallback: Directory users search
 			if (people.length === 0) {
@@ -956,7 +1014,12 @@ export default function (pi: ExtensionAPI) {
 						company: u.companyName || "",
 						type: "directory",
 					}));
-				} catch { /* best-effort fallback */ }
+				} catch (error) {
+					logSuppressedM365Index("Directory fallback for people search failed.", error, {
+						query: params.query,
+						top,
+					});
+				}
 			}
 
 			return {
@@ -1620,7 +1683,13 @@ export default function (pi: ExtensionAPI) {
 					}));
 				}
 				if (params.recurrence) {
-					try { event.recurrence = JSON.parse(params.recurrence); } catch { /* best-effort fallback */ }
+					try {
+						event.recurrence = JSON.parse(params.recurrence);
+					} catch (error) {
+						logSuppressedM365Index("Failed to parse calendar recurrence JSON for event creation; sending the event without recurrence.", error, {
+							recurrence: params.recurrence,
+						});
+					}
 				}
 
 				if (dryRun) {
@@ -1667,7 +1736,14 @@ export default function (pi: ExtensionAPI) {
 					}));
 				}
 				if (params.recurrence) {
-					try { patch.recurrence = JSON.parse(params.recurrence); } catch { /* best-effort fallback */ }
+					try {
+						patch.recurrence = JSON.parse(params.recurrence);
+					} catch (error) {
+						logSuppressedM365Index("Failed to parse calendar recurrence JSON for event updates; sending the patch without recurrence.", error, {
+							recurrence: params.recurrence,
+							eventId: params.eventId,
+						});
+					}
 				}
 
 				if (dryRun) {
@@ -1835,7 +1911,12 @@ export default function (pi: ExtensionAPI) {
 				for (const c of (catData?.value ?? [])) {
 					if (c?.displayName && c?.color && presetHex[c.color]) catColors.set(c.displayName, presetHex[c.color]);
 				}
-			} catch { /* best-effort fallback */ }
+			} catch (error) {
+				logSuppressedM365Index("Failed to load Outlook category colors; rendering the calendar SVG without category color accents.", error, {
+					date,
+					outPath,
+				});
+			}
 
 			// ── Parse events into rows ──
 			type ShowAs = "oof"|"busy"|"tentative"|"free"|"workingElsewhere"|"unknown";
@@ -1969,7 +2050,13 @@ export default function (pi: ExtensionAPI) {
 			try {
 				const item: any = await graphFetch(`drives/${driveId}/items/${itemId}?$select=id,name,parentReference`);
 				currentName = item?.name ?? null;
-			} catch { /* best-effort fallback */ }
+			} catch (error) {
+				logSuppressedM365Index("Failed to refresh the current SharePoint/OneDrive item name during move-target resolution.", error, {
+					driveId,
+					itemId,
+					sourceRef,
+				});
+			}
 		}
 		return { driveId, itemId, drivePath: drivePath || `drives/${driveId}`, sourceRef, currentName };
 	}

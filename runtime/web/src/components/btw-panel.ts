@@ -11,16 +11,16 @@ export function BtwPanel({ session, onClose, onInject, onRetry }) {
 
     useEffect(() => {
         if (thinkingRef.current && renderedThinking) {
-            renderMermaidDiagrams(thinkingRef.current).catch(() => {
-                /* expected: mermaid rendering is best-effort for BTW thinking panels. */
+            renderMermaidDiagrams(thinkingRef.current).catch((error) => {
+                console.debug('[btw-panel] Mermaid rendering failed for BTW thinking content.', error);
             });
         }
     }, [renderedThinking]);
 
     useEffect(() => {
         if (answerRef.current && renderedAnswer) {
-            renderMermaidDiagrams(answerRef.current).catch(() => {
-                /* expected: mermaid rendering is best-effort for BTW answer panels. */
+            renderMermaidDiagrams(answerRef.current).catch((error) => {
+                console.debug('[btw-panel] Mermaid rendering failed for BTW answer content.', error);
             });
         }
     }, [renderedAnswer]);

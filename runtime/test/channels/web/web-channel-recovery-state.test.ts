@@ -8,8 +8,8 @@ afterEach(async () => {
   try {
     const config = await import("../../../src/core/config.js");
     config.setWebTotpSecret("");
-  } catch {
-    // Ignore when config was not loaded in the test.
+  } catch (_error) {
+    void _error;
   }
   restoreEnv?.();
   restoreEnv = null;

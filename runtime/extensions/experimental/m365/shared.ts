@@ -30,7 +30,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execFileSync, execSync, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { createLogger } from "../../../src/utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../../src/utils/logger.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTH LAYER
@@ -40,6 +40,28 @@ import { createLogger } from "../../../src/utils/logger.js";
 
 
 const log = createLogger("extensions.experimental.m365.shared");
+
+function logSuppressedM365(message: string, error: unknown, fields: Record<string, unknown> = {}): void {
+	debugSuppressedError(log, message, error, fields);
+}
+
+function closeWebSocketBestEffort(ws: WebSocket | null | undefined, message: string, fields: Record<string, unknown> = {}): void {
+	if (!ws) return;
+	try {
+		ws.close();
+	} catch (error) {
+		logSuppressedM365(message, error, fields);
+	}
+}
+
+async function closeCdpTargetBestEffort(port: number, targetId: string | null | undefined, message: string, fields: Record<string, unknown> = {}): Promise<void> {
+	if (!targetId) return;
+	try {
+		await httpPut(`http://localhost:${port}/json/close/${targetId}`, 3000);
+	} catch (error) {
+		logSuppressedM365(message, error, { ...fields, port, targetId });
+	}
+}
 
 const PROFILE_DIR = path.join(os.tmpdir(), "m365tools-edge-profile");
 export const USE_TEMP_EDGE_PROFILE = (process.env["M365_USE_TEMP_EDGE_PROFILE"] ?? "").toLowerCase() === "true";
@@ -78,7 +100,9 @@ function setTenantIdFromToken(token: string): void {
 			_tenantId = payload.tid;
 			_isConsumer = payload.tid === CONSUMER_TENANT_ID;
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to infer the M365 tenant id from Graph token claims.", error);
+	}
 }
 
 // Chatsvc region: auto-discovered from Teams token or environment.
@@ -106,7 +130,9 @@ function setChatsvcFromToken(token: string): void {
 			const regionMatch = _chatsvcBaseUrl.match(/chatsvc\/([a-z]+)\//);
 			if (regionMatch) _chatsvcRegion = regionMatch[1];
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to infer the Teams chatsvc region from token claims.", error);
+	}
 }
 
 // ── Edge-compatible HTTP headers ────────────────────────────────────────
@@ -170,7 +196,9 @@ export function getEdgeVersion(): string {
 			timeout: 3000,
 		}).trim();
 		return parseBrowserVersion(out) ?? DEFAULT_EDGE_VERSION;
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to detect the Edge version; using the default header version.", error);
+	}
 	return DEFAULT_EDGE_VERSION;
 }
 
@@ -359,11 +387,17 @@ function killProcessTree(pid: number | undefined | null) {
 		try {
 			process.kill(-pid, "SIGKILL");
 			return;
-		} catch { /* best-effort fallback */ }
+		} catch (error) {
+			logSuppressedM365("Failed to terminate the managed browser process group; retrying the direct PID.", error, { pid });
+		}
 		try {
 			process.kill(pid, "SIGKILL");
-		} catch { /* best-effort fallback */ }
-	} catch { /* best-effort fallback */ }
+		} catch (error) {
+			logSuppressedM365("Failed to SIGKILL the managed browser process by PID.", error, { pid });
+		}
+	} catch (error) {
+		logSuppressedM365("Failed to terminate the managed browser process tree.", error, { pid });
+	}
 }
 
 function killMatchingUnixBrowserProcesses(predicate: (command: string) => boolean) {
@@ -385,7 +419,11 @@ export function killStaleEdge() {
 			return;
 		}
 		killMatchingUnixBrowserProcesses((command) => command.includes(PROFILE_DIR) || command.includes("m365tools-edge-profile"));
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to reap stale temporary-browser processes.", error, {
+			useTempEdgeProfile: USE_TEMP_EDGE_PROFILE,
+		});
+	}
 }
 
 function killEdgeCdpProcesses() {
@@ -400,7 +438,9 @@ function killEdgeCdpProcesses() {
 			return;
 		}
 		killMatchingUnixBrowserProcesses((command) => commandHasManagedCdpPort(command));
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to reap managed browser CDP processes.", error);
+	}
 }
 
 async function inspectCdpPort(port: number): Promise<"absent" | "healthy" | "unhealthy"> {
@@ -420,7 +460,14 @@ async function inspectCdpPort(port: number): Promise<"absent" | "healthy" | "unh
 		return "unhealthy";
 	} finally {
 		if (probeTargetId) {
-			try { await httpPut(`http://localhost:${port}/json/close/${probeTargetId}`, 3000); } catch { /* best-effort fallback */ }
+			try {
+				await httpPut(`http://localhost:${port}/json/close/${probeTargetId}`, 3000);
+			} catch (error) {
+				logSuppressedM365("Failed to close the CDP probe target after a health inspection.", error, {
+					port,
+					probeTargetId,
+				});
+			}
 		}
 	}
 }
@@ -601,7 +648,7 @@ async function extractTeamsRefreshToken(): Promise<string | null> {
 		})()`, false, 5000);
 		return typeof refreshToken === "string" && refreshToken.length > 100 ? refreshToken : null;
 	} finally {
-		try { ws.close(); } catch { /* best-effort fallback */ }
+		closeWebSocketBestEffort(ws, "Failed to close the Teams refresh-token debugger websocket.");
 	}
 }
 
@@ -836,7 +883,12 @@ async function acquireConsumerGraphToken(): Promise<string | null> {
 					authCode = maybeCode;
 					break;
 				}
-			} catch { /* retry */ }
+			} catch (error) {
+				logSuppressedM365("Failed to inspect the consumer auth tab while waiting for the redirect; retrying.", error, {
+					cdpPort,
+					authTabId,
+				});
+			}
 		}
 
 		// Cleanup auth tab
@@ -894,11 +946,12 @@ async function acquireConsumerGraphToken(): Promise<string | null> {
 			"}catch(e){return{error:String(e)}}})()";
 
 		const tokenResult: any = await wsEval(exchangeExpr, 15000);
-		ws.close();
+		closeWebSocketBestEffort(ws, "Failed to close the consumer auth websocket after exchanging the auth code.");
 
 		if (!tokenResult?.ok || !tokenResult?.data?.access_token) return null;
 		return tokenResult.data.access_token;
-	} catch {
+	} catch (error) {
+		logSuppressedM365("Consumer Graph auth-code redemption failed.", error);
 		return null;
 	}
 }
@@ -935,7 +988,9 @@ export function cdpCollect(ws: WebSocket, timeoutMs: number): Promise<any[]> {
 		const handler = (event: any) => {
 			try {
 				messages.push(JSON.parse(typeof event.data === "string" ? event.data : event.data.toString()));
-			} catch { /* best-effort fallback */ }
+			} catch (error) {
+				logSuppressedM365("Failed to parse a CDP websocket frame while collecting messages.", error);
+			}
 		};
 		ws.addEventListener("message", handler);
 		setTimeout(() => {
@@ -955,7 +1010,9 @@ export function cdpEval(ws: WebSocket, expression: string, awaitPromise = false,
 			try {
 				const msg = JSON.parse(typeof event.data === "string" ? event.data : event.data.toString());
 				if (msg.id === id) { ws.removeEventListener("message", handler); clearTimeout(timer); resolve(msg.result?.result?.value ?? null); }
-			} catch { /* best-effort fallback */ }
+			} catch (error) {
+				logSuppressedM365("Failed to parse a CDP websocket frame while evaluating an expression.", error);
+			}
 		};
 		ws.addEventListener("message", handler);
 	});
@@ -1524,14 +1581,18 @@ export async function acquireGraphToken(): Promise<string> {
 					}
 					return null;
 				})()`, false, 5000);
-				try { ws.close(); } catch { /* best-effort fallback */ }
+				closeWebSocketBestEffort(ws, "Failed to close the Teams Graph-token websocket after localStorage extraction.", {
+					existingPort,
+				});
 				if (extractResult && typeof extractResult === "string" && extractResult.length > 100) {
 					saveToken("graph", extractResult);
 					return extractResult;
 				}
 			}
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to extract a Graph token from the existing Teams browser session; falling back to refresh-token and OAuth flows.", error);
+	}
 
 	// ── Method 1: Redeem Teams refresh token for Graph access ──
 	try {
@@ -1540,7 +1601,9 @@ export async function acquireGraphToken(): Promise<string> {
 			saveToken("graph", refreshed);
 			return refreshed;
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to redeem the Teams refresh token for Graph access; falling back to OAuth automation.", error);
+	}
 
 	// ── Method 1+: OAuth implicit flow redirect (fallback) ──
 	const nonce = Math.random().toString(36).substring(2);
@@ -1577,7 +1640,7 @@ export async function acquireGraphToken(): Promise<string> {
 					if (match) {
 						const token = decodeURIComponent(match[1]);
 						saveToken("graph", token);
-						try { ws.close(); } catch { /* best-effort fallback */ }
+						closeWebSocketBestEffort(ws, "Failed to close the Graph OAuth websocket after detecting a redirect token in the page list.", { port });
 						return token;
 					}
 					if (page.url.match(/error=/) && page.url.match(/login\.microsoftonline/)) {
@@ -1591,17 +1654,25 @@ export async function acquireGraphToken(): Promise<string> {
 					try {
 						const pageWs = await cdpConnect(port, page.url?.includes("teams.microsoft.com") ? "teams.microsoft.com" : page.url?.includes("teams.cloud.microsoft") ? "teams.cloud.microsoft" : undefined);
 						const href = await cdpEval(pageWs, "location.href", false, 3000);
-						try { pageWs.close(); } catch { /* best-effort fallback */ }
+						closeWebSocketBestEffort(pageWs, "Failed to close a Graph OAuth probe websocket.", {
+							pageUrl: page.url ?? null,
+							port,
+						});
 						if (typeof href === "string") {
 							const hrefMatch = href.match(/access_token=([^&]+)/);
 							if (hrefMatch) {
 								const token = decodeURIComponent(hrefMatch[1]);
 								saveToken("graph", token);
-								try { ws.close(); } catch { /* best-effort fallback */ }
+								closeWebSocketBestEffort(ws, "Failed to close the Graph OAuth websocket after capturing a token.", { port });
 								return token;
 							}
 						}
-					} catch { /* best-effort fallback */ }
+					} catch (error) {
+						logSuppressedM365("Failed to inspect a Graph OAuth page while looking for a redirect token.", error, {
+							pageUrl: page.url ?? null,
+							port,
+						});
+					}
 				}
 
 				// Method 3: Check if any page captured the token via addScriptToEvaluateOnNewDocument
@@ -1609,7 +1680,7 @@ export async function acquireGraphToken(): Promise<string> {
 				if (captured && typeof captured === "string" && captured.length > 50) {
 					const token = decodeURIComponent(captured);
 					saveToken("graph", token);
-					try { ws.close(); } catch { /* best-effort fallback */ }
+					closeWebSocketBestEffort(ws, "Failed to close the Graph OAuth websocket after reading the captured token.", { port });
 					return token;
 				}
 
@@ -1641,24 +1712,32 @@ export async function acquireGraphToken(): Promise<string> {
 							}
 							return null;
 						})()`, false, 3000);
-						try { pageWs.close(); } catch { /* best-effort fallback */ }
+						closeWebSocketBestEffort(pageWs, "Failed to close a Graph OAuth dialog-probe websocket.", {
+							pageUrl: page.url ?? null,
+							port,
+						});
 						if (clickResult) {
 							await sleep(2000);
 						}
-					} catch { /* best-effort fallback */ }
+					} catch (error) {
+						logSuppressedM365("Failed to probe a Graph OAuth dialog page; continuing with other recovery paths.", error, {
+							pageUrl: page.url ?? null,
+							port,
+						});
+					}
 				}
 
 				const refreshed = await redeemTeamsRefreshToken("https://graph.microsoft.com");
 				if (refreshed) {
 					saveToken("graph", refreshed);
-					try { ws.close(); } catch { /* best-effort fallback */ }
+					closeWebSocketBestEffort(ws, "Failed to close the Graph OAuth websocket after refresh-token recovery.", { port });
 					return refreshed;
 				}
 			} catch (e: any) {
 				if (e.message.startsWith("OAuth")) throw e;
 			}
 		}
-		try { ws.close(); } catch { /* best-effort fallback */ }
+		closeWebSocketBestEffort(ws, "Failed to close the Graph OAuth websocket after timing out.", { port });
 		throw new Error("Graph token acquisition timed out");
 	} finally {
 		if (proc && proc.pid && USE_TEMP_EDGE_PROFILE) killProc(proc);
@@ -1722,7 +1801,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 					}
 					return best;
 				})()`, false, 5000);
-				try { ws.close(); } catch { /* best-effort fallback */ }
+				closeWebSocketBestEffort(ws, "Failed to close the Teams chatsvc websocket after localStorage extraction.", {
+					existingPort,
+				});
 				if (extractResult && typeof extractResult === "string" && extractResult.length > 100) {
 					setChatsvcFromToken(extractResult);
 					const baseUrl = getChatsvcBaseUrl();
@@ -1731,7 +1812,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 				}
 			}
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to extract a Teams chatsvc token from the existing browser session; falling back to refresh-token and OAuth flows.", error);
+	}
 
 	// ── Method 1: Redeem Teams refresh token for fresh Teams access ──
 	try {
@@ -1742,7 +1825,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 			saveToken("teams_chatsvc", refreshed, baseUrl);
 			return { token: refreshed, baseUrl };
 		}
-	} catch { /* best-effort fallback */ }
+	} catch (error) {
+		logSuppressedM365("Failed to redeem the Teams refresh token for chatsvc access; falling back to OAuth automation.", error);
+	}
 
 	// ── Method 1+: OAuth implicit flow for Teams.AccessAsUser.All ──
 	// When Teams is open but its cached localStorage tokens are expired, ask AAD for a
@@ -1782,7 +1867,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 							setChatsvcFromToken(token);
 							const baseUrl = getChatsvcBaseUrl();
 							saveToken("teams_chatsvc", token, baseUrl);
-							try { ws.close(); } catch { /* best-effort fallback */ }
+							closeWebSocketBestEffort(ws, "Failed to close the Teams OAuth websocket after detecting a redirect token in the page list.", {
+								oauthPort: oauth.port,
+							});
 							return { token, baseUrl };
 						}
 					}
@@ -1800,7 +1887,9 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 						setChatsvcFromToken(token);
 						const baseUrl = getChatsvcBaseUrl();
 						saveToken("teams_chatsvc", token, baseUrl);
-						try { ws.close(); } catch { /* best-effort fallback */ }
+						closeWebSocketBestEffort(ws, "Failed to close the Teams OAuth websocket after reading the captured token.", {
+							oauthPort: oauth.port,
+						});
 						return { token, baseUrl };
 					}
 				}
@@ -1817,9 +1906,17 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 							if (msButton && visible(msButton)) { msButton.click(); return 'clicked-ms-button: ' + (msButton.textContent || msButton.value || msButton.id).trim(); }
 							return null;
 						})()`, false, 3000);
-						try { pageWs.close(); } catch { /* best-effort fallback */ }
+						closeWebSocketBestEffort(pageWs, "Failed to close a Teams OAuth dialog-probe websocket.", {
+							pageUrl: page.url ?? null,
+							oauthPort: oauth.port,
+						});
 						if (clickResult) await sleep(2000);
-					} catch { /* best-effort fallback */ }
+					} catch (error) {
+						logSuppressedM365("Failed to probe a Teams OAuth dialog page; continuing with other recovery paths.", error, {
+							pageUrl: page.url ?? null,
+							oauthPort: oauth.port,
+						});
+					}
 				}
 
 				const refreshed = await redeemTeamsRefreshToken("https://ic3.teams.office.com");
@@ -1827,14 +1924,18 @@ export async function acquireChatsvcToken(): Promise<{ token: string; baseUrl: s
 					setChatsvcFromToken(refreshed);
 					const baseUrl = getChatsvcBaseUrl();
 					saveToken("teams_chatsvc", refreshed, baseUrl);
-					try { ws.close(); } catch { /* best-effort fallback */ }
+					closeWebSocketBestEffort(ws, "Failed to close the Teams OAuth websocket after refresh-token recovery.", {
+						oauthPort: oauth.port,
+					});
 					return { token: refreshed, baseUrl };
 				}
 			} catch (e: any) {
 				if (e.message.startsWith("Teams OAuth")) throw e;
 			}
 		}
-		try { ws.close(); } catch { /* best-effort fallback */ }
+		closeWebSocketBestEffort(ws, "Failed to close the Teams OAuth websocket after timing out.", {
+			oauthPort: oauth.port,
+		});
 		// fall through to network interception fallback if OAuth never yielded a token
 	} finally {
 		if (oauth.proc && oauth.proc.pid && USE_TEMP_EDGE_PROFILE) killProc(oauth.proc);
@@ -1932,16 +2033,30 @@ export async function acquireSPOCookies(siteUrl: string): Promise<CookieData[]> 
 		saveCookies(host, cookies);
 		return cookies;
 	} finally {
-		try { ws?.close(); } catch { /* best-effort fallback */ }
+		closeWebSocketBestEffort(ws, "Failed to close the SharePoint cookie-harvest websocket.", {
+			host,
+			port,
+		});
 		// Close the SPO tab we opened (prevent tab accumulation)
 		if (tabId) {
-			try { await httpPut(`http://localhost:${port}/json/close/${tabId}`, 3000); } catch { /* best-effort fallback */ }
+			await closeCdpTargetBestEffort(port, tabId, "Failed to close the SharePoint cookie-harvest tab.", {
+				host,
+			});
 		} else if (reusedExistingPort) {
 			try {
 				const tabs: any[] = await httpGet(`http://localhost:${port}/json`, 3000);
 				const spoTab = tabs.find((t: any) => t.type === "page" && t.url?.includes(host));
-				if (spoTab) await httpPut(`http://localhost:${port}/json/close/${spoTab.id}`, 3000);
-			} catch { /* best-effort fallback */ }
+				await closeCdpTargetBestEffort(port, spoTab?.id ?? null, "Failed to close the reused SharePoint tab after cookie harvesting.", {
+					host,
+					reusedExistingPort,
+				});
+			} catch (error) {
+				logSuppressedM365("Failed to inspect SharePoint tabs while cleaning up cookie harvesting.", error, {
+					host,
+					port,
+					reusedExistingPort,
+				});
+			}
 		}
 		if (proc && proc.pid && USE_TEMP_EDGE_PROFILE) killProc(proc);
 	}
