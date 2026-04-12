@@ -149,9 +149,10 @@ function buildDreamChatJid(chatJid: string, mode: "manual" | "auto"): string {
 
 /**
  * Reap stale dream artifacts from prior crashed or incomplete dream runs.
- * Cleans up dream chat rows, messages, media, branches, and session directories
- * that were not properly removed by cleanupDreamChat.
- * Optionally excludes a single dream chat JID (the current active one).
+ * Cleans up dream chat rows, messages, media, cursors, branches, token-usage
+ * rows, and session directories that were not properly removed by
+ * cleanupDreamChat. Optionally excludes a single dream chat JID (the current
+ * active one).
  */
 function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
   const excluded = new Set<string>();
@@ -166,13 +167,17 @@ function reapDreamArtifacts(excludeDreamChatJid?: string | null): void {
     if (excludeDreamChatJid) {
       db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?)").run(excludeDreamChatJid);
       db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
+      db.prepare("DELETE FROM chat_cursors WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
       db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
       db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%' AND jid != ?").run(excludeDreamChatJid);
+      db.prepare("DELETE FROM token_usage WHERE chat_jid LIKE 'dream:%' AND chat_jid != ?").run(excludeDreamChatJid);
     } else {
       db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid LIKE 'dream:%')").run();
       db.prepare("DELETE FROM messages WHERE chat_jid LIKE 'dream:%'").run();
+      db.prepare("DELETE FROM chat_cursors WHERE chat_jid LIKE 'dream:%'").run();
       db.prepare("DELETE FROM chat_branches WHERE chat_jid LIKE 'dream:%'").run();
       db.prepare("DELETE FROM chats WHERE jid LIKE 'dream:%'").run();
+      db.prepare("DELETE FROM token_usage WHERE chat_jid LIKE 'dream:%'").run();
     }
   } catch {
     /* ignore */
@@ -201,8 +206,10 @@ async function cleanupDreamChat(agentPool: AgentPool, dreamChatJid: string): Pro
     const db = getDb();
     db.prepare("DELETE FROM message_media WHERE message_rowid IN (SELECT rowid FROM messages WHERE chat_jid = ?)").run(dreamChatJid);
     db.prepare("DELETE FROM messages WHERE chat_jid = ?").run(dreamChatJid);
+    db.prepare("DELETE FROM chat_cursors WHERE chat_jid = ?").run(dreamChatJid);
     db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(dreamChatJid);
     db.prepare("DELETE FROM chats WHERE jid = ?").run(dreamChatJid);
+    db.prepare("DELETE FROM token_usage WHERE chat_jid = ?").run(dreamChatJid);
   } catch {
     /* ignore */
   }
