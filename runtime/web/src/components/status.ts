@@ -479,7 +479,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                         <span class="agent-thinking-title-text">${titleText}</span>
                         ${collapsedText && html`<span class="agent-thinking-title-meta">${collapsedText}</span>`}
                     </button>
-                    ${(actions.length > 0 || (isExpandable && !isExpanded)) && html`
+                    ${(actions.length > 0 || isExpandable) && html`
                         <div class="agent-thinking-tools-inline">
                             ${actions.length > 0 && html`
                                 <div class="agent-thinking-actions agent-thinking-actions-inline">
@@ -499,35 +499,24 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
                                     })}
                                 </div>
                             `}
-                            ${isExpandable && !isExpanded && html`
+                            ${isExpandable && html`
                                 <button
                                     class="agent-thinking-corner-toggle agent-thinking-corner-toggle-inline"
                                     type="button"
-                                    aria-label=${`Expand ${titleText}`}
-                                    title="Expand details"
+                                    aria-label=${`${isExpanded ? 'Collapse' : 'Expand'} ${titleText}`}
+                                    title=${isExpanded ? 'Collapse details' : 'Expand details'}
                                     onClick=${() => toggleExpand(panelKey)}
                                 >
                                     <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <polyline points="4 10 8 6 12 10"></polyline>
+                                        ${isExpanded
+                                            ? html`<polyline points="4 6 8 10 12 6"></polyline>`
+                                            : html`<polyline points="4 10 8 6 12 10"></polyline>`}
                                     </svg>
                                 </button>
                             `}
                         </div>
                     `}
                 </div>
-                ${isExpandable && isExpanded && html`
-                    <button
-                        class="agent-thinking-corner-toggle"
-                        type="button"
-                        aria-label=${`Collapse ${titleText}`}
-                        title="Collapse details"
-                        onClick=${() => toggleExpand(panelKey)}
-                    >
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <polyline points="4 6 8 10 12 6"></polyline>
-                        </svg>
-                    </button>
-                `}
                 ${isExpanded && html`
                     <div class=${`agent-thinking-autoresearch-layout${hasDetailColumn ? '' : ' chart-only'}`}>
                         ${hasDetailColumn && html`

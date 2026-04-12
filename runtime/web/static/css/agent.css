@@ -509,10 +509,6 @@
     color: var(--text-secondary);
 }
 
-.agent-thinking-autoresearch[data-expanded="true"] {
-    padding-bottom: calc(var(--spacing-md) + 10px);
-}
-
 .agent-thinking-autoresearch .agent-thinking-actions {
     justify-content: flex-end;
 }
