@@ -145,7 +145,8 @@ export function refreshModelState(options: RefreshModelStateOptions): void {
       if (payload) applyModelState(payload);
     })
     .catch(() => {
-      /* expected: model-state refresh is best-effort during chat switches. */
+      if (activeChatJidRef.current && activeChatJidRef.current !== targetChatJid) return;
+      applyModelState(null);
     });
 }
 
@@ -203,7 +204,7 @@ export function refreshCurrentChatBranches(options: RefreshCurrentChatBranchesOp
       setCurrentChatBranches(normalizeCurrentRootBranchRows(payload?.chats));
     })
     .catch(() => {
-      /* expected: branch-list refresh is best-effort while the UI is already usable. */
+      setCurrentChatBranches([]);
     });
 }
 

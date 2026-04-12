@@ -1,5 +1,7 @@
 import type { AuthStorage } from "@mariozechner/pi-coding-agent";
 
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
 export interface ProviderUsageWindow {
   label: string;
   used_percent: number | null;
@@ -28,6 +30,7 @@ type CachedUsage = {
 
 const USAGE_CACHE_TTL_MS = Number(process.env.PICLAW_PROVIDER_USAGE_TTL_MS || "60000");
 const usageCache = new Map<string, CachedUsage>();
+const log = createLogger("agent-pool.provider-usage");
 
 function clampPercent(value: unknown): number | null {
   const num = Number(value);
@@ -118,8 +121,10 @@ async function getOAuthCredential(authStorage: AuthStorage, providerId: string):
   if (typeof current.expires === "number" && Number.isFinite(current.expires) && Date.now() >= current.expires) {
     try {
       await (authStorage as any).refreshOAuthTokenWithLock(providerId);
-    } catch {
-      // Fall through and use whatever credentials are currently present.
+    } catch (error) {
+      debugSuppressedError(log, "Failed to refresh provider OAuth credentials before usage lookup; using current credentials.", error, {
+        providerId,
+      });
     }
   }
   const refreshed = (authStorage.get(providerId) as any) ?? null;
@@ -240,7 +245,11 @@ export async function getProviderUsage(authStorage: AuthStorage, providerId: str
     value = providerId === "openai-codex"
       ? await fetchCodexUsage(authStorage)
       : await fetchGitHubCopilotUsage(authStorage);
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "Provider usage refresh failed; returning the cached usage snapshot when available.", error, {
+      providerId,
+      hasCachedValue: cached?.value != null,
+    });
     value = cached?.value ?? null;
   }
 

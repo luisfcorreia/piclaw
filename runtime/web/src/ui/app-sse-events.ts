@@ -438,7 +438,8 @@ export function handleAppSseEvent(
         if (contextPayload) setContextUsage(contextPayload);
       })
       .catch(() => {
-        /* expected: context usage refresh is best-effort after model switches. */
+        if (activeChatJidRef.current !== targetChatJid) return;
+        setContextUsage(null);
       });
     return;
   }

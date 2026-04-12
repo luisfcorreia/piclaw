@@ -5,9 +5,11 @@
  * hostname used by the current browser session, even when behind proxies.
  */
 
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { getRequestOriginParts } from "../http/client.js";
 
 const originByChatJid = new Map<string, string>();
+const log = createLogger("web.request-origin");
 
 /** Persist the latest request origin for a web chat thread. */
 export function rememberWebOrigin(chatJid: string, req: Request): void {
@@ -15,8 +17,11 @@ export function rememberWebOrigin(chatJid: string, req: Request): void {
     const { proto, host } = getRequestOriginParts(req);
     if (!host) return;
     originByChatJid.set(chatJid, `${proto}://${host}`);
-  } catch {
-    // ignore parse failures
+  } catch (error) {
+    debugSuppressedError(log, "Failed to remember the last seen web request origin.", error, {
+      chatJid,
+      requestUrl: req?.url ?? null,
+    });
   }
 }
 

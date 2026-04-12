@@ -10,8 +10,11 @@
 import { extname, resolve } from "path";
 import { statSync } from "fs";
 
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
+
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
 const DOCS_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "docs");
+const log = createLogger("web.static");
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -39,8 +42,11 @@ function readAssetVersion(relPaths: string[]): string {
     try {
       const stats = statSync(filePath);
       newestMtimeMs = Math.max(newestMtimeMs, stats.mtimeMs || 0);
-    } catch {
-      // Ignore missing assets and fall back below.
+    } catch (error) {
+      debugSuppressedError(log, "Static asset version probe skipped a missing or unreadable asset.", error, {
+        relPath,
+        filePath,
+      });
     }
   }
 

@@ -5,6 +5,7 @@ import {
   handleMessageResponseRefresh,
   loadAgentsBootstrap,
   refreshActiveChatAgents,
+  refreshCurrentChatBranches,
   refreshModelState,
   updateAgentProfileFromEvent,
 } from '../../web/src/ui/app-auth-bootstrap.js';
@@ -124,6 +125,41 @@ test('refreshModelState applies the initial payload when the active-chat ref has
 
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(applied).toEqual([{ current: null, models: [], model_options: [] }]);
+});
+
+test('refreshModelState applies a null fallback when model refresh fails for the active chat', async () => {
+  const applied: any[] = [];
+
+  refreshModelState({
+    currentChatJid: 'web:default',
+    getAgentModels: async () => {
+      throw new Error('network');
+    },
+    activeChatJidRef: { current: 'web:default' },
+    applyModelState: (payload) => {
+      applied.push(payload);
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(applied).toEqual([null]);
+});
+
+test('refreshCurrentChatBranches clears rows when branch refresh fails', async () => {
+  let rows: any[] = [{ chat_jid: 'stale-branch' }];
+
+  refreshCurrentChatBranches({
+    currentRootChatJid: 'chat-a',
+    getChatBranches: async () => {
+      throw new Error('network');
+    },
+    setCurrentChatBranches: (next) => {
+      rows = typeof next === 'function' ? next(rows) : next;
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(rows).toEqual([]);
 });
 
 test('handleMessageResponseRefresh triggers queue refresh only for queued responses', () => {

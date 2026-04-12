@@ -13,7 +13,7 @@ import { resolve, extname } from "path";
 import { fileURLToPath } from "url";
 
 import { WORKSPACE_DIR } from "../../../core/config.js";
-import { createLogger } from "../../../utils/logger.js";
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { contentTypeForPath } from "../workspace/file-utils.js";
 
 const log = createLogger("web.avatar");
@@ -88,7 +88,11 @@ function readMeta(kind: AvatarKind): AvatarMeta | null {
       const record = parsed as AvatarMeta;
       if (record.source && record.file && record.contentType) return record;
     }
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "Failed to read cached avatar metadata; ignoring the stale metadata file.", error, {
+      kind,
+      metaPath,
+    });
     return null;
   }
   return null;
@@ -104,8 +108,10 @@ function cleanupFile(pathname: string | undefined): void {
   if (!pathname) return;
   try {
     if (existsSync(pathname)) rmSync(pathname);
-  } catch {
-    // ignore
+  } catch (error) {
+    debugSuppressedError(log, "Failed to remove superseded avatar file.", error, {
+      pathname,
+    });
   }
 }
 
@@ -139,7 +145,12 @@ function loadDataAvatar(source: string): { data: Uint8Array; contentType: string
   try {
     const raw = isBase64 ? Buffer.from(payload, "base64") : Buffer.from(decodeURIComponent(payload), "utf-8");
     return { data: new Uint8Array(raw), contentType: contentType || "application/octet-stream" };
-  } catch {
+  } catch (error) {
+    debugSuppressedError(log, "Failed to decode inline avatar data URI.", error, {
+      contentType: contentType || "application/octet-stream",
+      isBase64,
+      payloadLength: payload.length,
+    });
     return null;
   }
 }

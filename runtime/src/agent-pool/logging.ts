@@ -12,6 +12,10 @@
 import { writeFileSync } from "fs";
 import { join } from "path";
 
+import { createLogger, debugSuppressedError } from "../utils/logger.js";
+
+const log = createLogger("agent-pool.logging");
+
 /**
  * Write a single agent run log entry to disk.
  * Filenames are timestamped to avoid collisions.
@@ -39,7 +43,11 @@ export function writeAgentLog(
       .filter((line) => line !== null)
       .join("\n");
     writeFileSync(join(logsDir, `agent-${ts}.log`), content);
-  } catch {
-    // ignore log failures
+  } catch (error) {
+    debugSuppressedError(log, "Failed to write agent run log entry.", error, {
+      logsDir,
+      chatJid,
+      timedOut,
+    });
   }
 }

@@ -195,6 +195,25 @@ test('handleAppSseEvent refreshes compaction status metadata even when title sta
   });
 });
 
+test('handleAppSseEvent clears stale context usage when model context refresh fails', async () => {
+  const state = createDeps();
+  const updates: any[] = [];
+  state.deps.setContextUsage = (next) => {
+    updates.push(typeof next === 'function' ? next(updates.at(-1)) : next);
+  };
+  state.deps.getAgentContext = async () => {
+    throw new Error('network');
+  };
+
+  handleAppSseEvent('model_changed', {
+    chat_jid: 'chat:alpha',
+    current: 'gpt-5.4',
+  }, state.deps);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(updates).toEqual([null]);
+});
+
 test('handleAppSseEvent maps extension notify events into intent toasts', () => {
   const state = createDeps();
 

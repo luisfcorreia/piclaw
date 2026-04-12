@@ -2,6 +2,7 @@
  * channels/web/webauthn-challenges.ts – transient WebAuthn challenge tracking and helpers.
  */
 
+import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { getRequestOriginParts } from "../http/client.js";
 
 /** In-memory challenge entry for pending WebAuthn login/registration flows. */
@@ -17,6 +18,7 @@ export type PendingWebauthnChallenge = {
 };
 
 const DEFAULT_CHALLENGE_TTL_MS = 10 * 60 * 1000;
+const log = createLogger("web.webauthn-challenges");
 
 /** Tracks pending login/registration WebAuthn challenges with TTL-based pruning. */
 export class WebauthnChallengeTracker {
@@ -103,8 +105,10 @@ export function resolveWebauthnRpInfo(req: Request): { rpId: string; origin: str
     try {
       const originUrl = new URL(originHeader);
       return { rpId: originUrl.hostname, origin: originUrl.origin };
-    } catch {
-      // Ignore invalid Origin header and fall back to request host/proto.
+    } catch (error) {
+      debugSuppressedError(log, "Ignoring invalid WebAuthn Origin header; falling back to the request origin.", error, {
+        originHeader,
+      });
     }
   }
 
