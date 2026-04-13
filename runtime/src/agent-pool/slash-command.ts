@@ -22,6 +22,7 @@ import { getAgentRuntimeConfig } from "../core/config.js";
 import { withChatContext } from "../core/chat-context.js";
 import { detectChannel } from "../router.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { waitForSessionIdle } from "./prompt-utils.js";
 
 const log = createLogger("agent-pool.slash-command");
 
@@ -42,6 +43,8 @@ interface CapturedSlashMessage {
   customType?: string;
 }
 
+type SlashCommandKind = "skill" | "template" | "extension";
+
 function extractTextFromContent(content: unknown): string {
   if (!content) return "";
   if (typeof content === "string") return content;
@@ -61,6 +64,75 @@ function toMessageRole(value: unknown): string {
   return typeof value === "string" ? value : "unknown";
 }
 
+function parseSlashCommand(rawText: string): { trimmed: string; rawCommand: string; commandName: string } | null {
+  const trimmed = rawText.trim();
+  if (!trimmed.startsWith("/")) return null;
+
+  const rawCommand = trimmed.slice(1);
+  const spaceIndex = rawCommand.indexOf(" ");
+  const commandName = spaceIndex === -1 ? rawCommand : rawCommand.slice(0, spaceIndex);
+  return { trimmed, rawCommand, commandName };
+}
+
+function resolveSlashCommandKind(
+  session: AgentSession,
+  rawCommand: string,
+  commandName: string,
+): { known: true; kind: SlashCommandKind } | { known: false; message: string } {
+  const skills = session.resourceLoader.getSkills().skills;
+  const templates = session.promptTemplates;
+  const extensionRunner = session.extensionRunner;
+
+  if (rawCommand.startsWith("skill:")) {
+    const skillName = rawCommand.slice(6).split(/\s+/)[0];
+    const known = skills.some((skill) => skill.name === skillName);
+    if (!known) {
+      return {
+        known: false,
+        message: `Unknown skill: /skill:${skillName}. Use /commands to list available commands.`,
+      };
+    }
+    return { known: true, kind: "skill" };
+  }
+
+  if (templates.some((template) => template.name === commandName)) {
+    return { known: true, kind: "template" };
+  }
+
+  if (extensionRunner?.getCommand(commandName)) {
+    return { known: true, kind: "extension" };
+  }
+
+  return {
+    known: false,
+    message: `Unknown command: /${commandName}. Use /commands to list available commands.`,
+  };
+}
+
+async function executeExtensionSlashCommand(
+  session: AgentSession,
+  commandName: string,
+  args: string,
+): Promise<void> {
+  const extensionRunner = session.extensionRunner;
+  const command = extensionRunner?.getCommand(commandName);
+  if (!command || !extensionRunner) {
+    throw new Error(`Unknown extension command: /${commandName}`);
+  }
+
+  const ctx = extensionRunner.createCommandContext();
+  try {
+    await command.handler(args, ctx);
+  } catch (err) {
+    extensionRunner.emitError({
+      extensionPath: `command:${commandName}`,
+      event: "command",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
 /** Execute a /skill or /prompt-template slash command within a session. */
 export async function executeSlashCommand(
   session: AgentSession,
@@ -76,40 +148,15 @@ export async function executeSlashCommand(
       rawText,
     });
 
-    const trimmed = rawText.trim();
-    if (!trimmed.startsWith("/")) {
+    const parsed = parseSlashCommand(rawText);
+    if (!parsed) {
       return { status: "error", message: "Not a slash command." };
     }
 
-    const rawCommand = trimmed.slice(1);
-    const spaceIndex = rawCommand.indexOf(" ");
-    const commandName = spaceIndex === -1 ? rawCommand : rawCommand.slice(0, spaceIndex);
-
-    const skills = session.resourceLoader.getSkills().skills;
-    const templates = session.promptTemplates;
-    const extensionRunner = session.extensionRunner;
-
-    let known = false;
-    if (rawCommand.startsWith("skill:")) {
-      const skillName = rawCommand.slice(6).split(/\s+/)[0];
-      known = skills.some((skill) => skill.name === skillName);
-      if (!known) {
-        return {
-          status: "error",
-          message: `Unknown skill: /skill:${skillName}. Use /commands to list available commands.`,
-        };
-      }
-    } else if (templates.some((template) => template.name === commandName)) {
-      known = true;
-    } else if (extensionRunner?.getCommand(commandName)) {
-      known = true;
-    }
-
-    if (!known) {
-      return {
-        status: "error",
-        message: `Unknown command: /${commandName}. Use /commands to list available commands.`,
-      };
+    const { trimmed, rawCommand, commandName } = parsed;
+    const kind = resolveSlashCommandKind(session, rawCommand, commandName);
+    if (!kind.known) {
+      return { status: "error", message: kind.message };
     }
 
     // Collect textual output from events (both streaming deltas and final message_end)
@@ -182,7 +229,13 @@ export async function executeSlashCommand(
     const channel = detectChannel(chatJid);
     try {
       await withChatContext(chatJid, channel, async () => {
-        await session.prompt(rawText);
+        if (kind.kind === "extension") {
+          const args = rawCommand === commandName ? "" : rawCommand.slice(commandName.length).trimStart();
+          await executeExtensionSlashCommand(session, commandName, args);
+        } else {
+          await session.prompt(rawText);
+          await waitForSessionIdle(session);
+        }
       });
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
