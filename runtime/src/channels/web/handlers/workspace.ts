@@ -114,6 +114,24 @@ export function handleWorkspaceDelete(req: Request): Response {
  * @param req Incoming HTTP request with file path and optional range headers.
  * @returns File response with security/range headers, or an error response when file access fails.
  */
+function buildWorkspaceRawCsp(contentType: string): string {
+  const normalized = String(contentType || '').toLowerCase();
+  if (normalized.startsWith('text/html')) {
+    return [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https: http:",
+      "connect-src 'self' https: http:",
+      "frame-src 'self' blob:",
+      "frame-ancestors 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; ');
+  }
+  return "default-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'";
+}
+
 export function handleWorkspaceRaw(req: Request): Response {
   const url = new URL(req.url);
   const download = url.searchParams.get("download") === "1" || url.searchParams.get("download") === "true";
@@ -129,6 +147,7 @@ export function handleWorkspaceRaw(req: Request): Response {
   }
 
   const contentType = result.contentType || "application/octet-stream";
+  const contentSecurityPolicy = buildWorkspaceRawCsp(contentType);
   const file = result.body as ReturnType<typeof Bun.file>;
   const filePath = result.filePath || null;
   const fileSize = typeof result.size === "number" ? result.size : (typeof file?.size === "number" ? file.size : 0);
@@ -137,7 +156,7 @@ export function handleWorkspaceRaw(req: Request): Response {
     "Content-Type": contentType,
     "Accept-Ranges": "bytes",
     "X-Frame-Options": "SAMEORIGIN",
-    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'",
+    "Content-Security-Policy": contentSecurityPolicy,
     ...(result.download ? { "Content-Disposition": `attachment; filename="${downloadFilename}"` } : {}),
   };
 
