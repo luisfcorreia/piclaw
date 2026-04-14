@@ -71,6 +71,21 @@ export function withResolvedToolStatusHints(chatJid: string, payload: Record<str
   return { ...payload, status_hints: statusHints };
 }
 
+export function stripMarkdownCodeFenceMarkers(value: string): string {
+  return value
+    .replace(/^```[a-zA-Z0-9_-]*\s*\n?/, "")
+    .replace(/\n?```\s*$/, "")
+    .trim();
+}
+
+export function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
+  const raw = typeof message === "string" ? message.trim() : "";
+  if (!raw) return fallback;
+  const unfenced = stripMarkdownCodeFenceMarkers(raw);
+  const collapsed = unfenced.replace(/\s*\n\s*/g, " ").trim();
+  return collapsed || fallback;
+}
+
 function parseLeadingAgentMention(content: string): { agentName: string; remainder: string } | null {
   const match = content.match(/^\s*@([a-zA-Z0-9][a-zA-Z0-9_-]{0,31})(?:\s+([\s\S]*))?$/);
   if (!match) return null;
@@ -610,7 +625,9 @@ export async function handleAgentMessage(
       agent_id: agentId,
       turn_id: commandTurnId,
       type: result.status === "success" ? "done" : "error",
-      title: result.status === "success" ? "Completed " + commandTitle : (result.message || "Command failed"),
+      title: result.status === "success"
+        ? "Completed " + commandTitle
+        : summarizeCommandStatusTitle(result.message, "Command failed"),
     });
 
     if (isSteerCommand && (result as { queued_steer?: boolean }).queued_steer) {
@@ -669,7 +686,9 @@ export async function handleAgentMessage(
         agent_id: agentId,
         turn_id: commandTurnId,
         type: cmdResult.status === "success" ? "done" : "error",
-        title: cmdResult.status === "success" ? "Completed " + slashName : (cmdResult.message || "Command failed"),
+        title: cmdResult.status === "success"
+          ? "Completed " + slashName
+          : summarizeCommandStatusTitle(cmdResult.message, "Command failed"),
       });
     }
 
