@@ -205,9 +205,12 @@ The expected split should look roughly like:
 ## Updates
 
 ### 2026-04-14
-- Continued the active provider-readiness child slice by fixing a source-level regression that prevented the provider-ready / first-use OOBE panel from ever appearing once models were available.
-- The web OOBE state helper now returns `provider-ready` when providers/models are loaded and the local completion flag is still unset; focused OOBE tests and typecheck passed.
-- Immediate next umbrella question remains browser-level validation / evidence and then whether any access/trust onboarding still needs an additional child slice.
+- Closed the active provider-readiness child slice end to end:
+  - fixed the source-level regression that prevented the provider-ready / first-use OOBE panel from ever appearing once models were available
+  - fixed the provider-missing copy so `/login` is explicitly described as AI-provider setup rather than app sign-in
+  - passed the local-container Playwright browser smoke for provider-missing, dismiss persistence, provider-ready, and ready-state completion persistence
+- The provider-readiness child ticket can now move out of review because source-level tests, typecheck, and browser evidence are all in place.
+- Immediate next umbrella question is whether a separate access/trust onboarding slice still needs to be promoted, or whether the umbrella should narrow to docs/copy coordination only.
 
 ### 2026-04-12
 - Lane change: `10-next` → `20-doing`.
