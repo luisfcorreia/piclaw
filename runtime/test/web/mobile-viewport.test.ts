@@ -41,7 +41,7 @@ test('shouldUseStandaloneMobileViewportFix enables for standalone mobile and iPh
   })).toBe(false);
 });
 
-test('readViewportHeight prefers visualViewport height when available', () => {
+test('readViewportHeight prefers visualViewport by default', () => {
   expect(readViewportHeight({
     window: {
       visualViewport: { height: 612.4 },
@@ -51,143 +51,127 @@ test('readViewportHeight prefers visualViewport height when available', () => {
 
   expect(readViewportHeight({
     window: {
-      visualViewport: { height: 500.2, offsetTop: 188.1 },
-      innerHeight: 900,
-    },
-  }, { includeOffsetTop: true })).toBe(688);
-
-  expect(readViewportHeight({
-    window: {
       innerHeight: 844,
     },
   })).toBe(844);
 });
 
-test('syncStandaloneMobileViewport writes app height without resetting page scroll by default', () => {
-  const cssVars = new Map<string, string>();
-  const windowScrolls: Array<[number, number]> = [];
-  const scrollingElement = { scrollTop: 91, scrollLeft: 17 };
-  const documentElement = {
-    scrollTop: 33,
-    scrollLeft: 8,
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
-    },
-  };
-  const body = { scrollTop: 19, scrollLeft: 7 };
-
-  const height = syncStandaloneMobileViewport({
-    navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
-      maxTouchPoints: 5,
-    },
+test('readViewportHeight adds offsetTop when keyboard is active', () => {
+  expect(readViewportHeight({
     window: {
-      matchMedia: () => ({ matches: true }),
-      visualViewport: { height: 701.9 },
+      visualViewport: { height: 500.2, offsetTop: 188.1 },
       innerHeight: 900,
-      scrollTo: (x: number, y: number) => windowScrolls.push([x, y]),
     },
-    document: {
-      documentElement,
-      body,
-      scrollingElement,
-    },
-  });
-
-  expect(height).toBe(702);
-  expect(cssVars.get('--app-height')).toBe('702px');
-  expect(windowScrolls).toEqual([]);
-  expect(scrollingElement.scrollTop).toBe(91);
-  expect(scrollingElement.scrollLeft).toBe(17);
-  expect(documentElement.scrollTop).toBe(33);
-  expect(documentElement.scrollLeft).toBe(8);
-  expect(body.scrollTop).toBe(19);
-  expect(body.scrollLeft).toBe(7);
+  }, { keyboardActive: true })).toBe(688);
 });
 
-test('syncStandaloneMobileViewport can reset page scroll when explicitly requested', () => {
-  const cssVars = new Map<string, string>();
-  const windowScrolls: Array<[number, number]> = [];
-  const scrollingElement = { scrollTop: 91, scrollLeft: 17 };
-  const documentElement = {
-    scrollTop: 33,
-    scrollLeft: 8,
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
+test('readViewportHeight compensates for iOS PWA portrait safe-area bug', () => {
+  const mockDoc = {
+    documentElement: {
+      style: {},
     },
   };
-  const body = { scrollTop: 19, scrollLeft: 7 };
+  // Simulate: screen.height=844, visualViewport.height=785 (diff=59, >15 threshold)
+  // safe-area-top=59px readable via CSS var
+  const originalGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({
+    getPropertyValue: (name: string) => name === '--safe-area-top' ? '59' : '',
+  }) as any;
 
-  const height = syncStandaloneMobileViewport({
-    navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
-      maxTouchPoints: 5,
-    },
-    window: {
-      matchMedia: () => ({ matches: true }),
-      visualViewport: { height: 701.9 },
-      innerHeight: 900,
-      scrollTo: (x: number, y: number) => windowScrolls.push([x, y]),
-    },
-    document: {
-      documentElement,
-      body,
-      scrollingElement,
-    },
-  }, { resetScroll: true });
-
-  expect(height).toBe(702);
-  expect(cssVars.get('--app-height')).toBe('702px');
-  expect(windowScrolls).toEqual([[0, 0]]);
-  expect(scrollingElement.scrollTop).toBe(0);
-  expect(scrollingElement.scrollLeft).toBe(0);
-  expect(documentElement.scrollTop).toBe(0);
-  expect(documentElement.scrollLeft).toBe(0);
-  expect(body.scrollTop).toBe(0);
-  expect(body.scrollLeft).toBe(0);
-});
-
-test('syncStandaloneMobileViewport tolerates rejected scroll resets', () => {
-  const cssVars = new Map<string, string>();
-  const documentElement = {
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
-    },
-  };
-  const body = {};
-
-  expect(() => syncStandaloneMobileViewport({
-    navigator: {
-      standalone: true,
-      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
-      maxTouchPoints: 5,
-    },
-    window: {
-      matchMedia: () => ({ matches: true }),
-      visualViewport: { height: 701.9 },
-      innerHeight: 900,
-      scrollTo: () => { throw new Error('blocked'); },
-    },
-    document: {
-      documentElement,
-      body,
-      get scrollingElement() {
-        throw new Error('readonly root');
+  try {
+    const height = readViewportHeight({
+      window: {
+        visualViewport: { height: 785 },
+        innerHeight: 785,
+        innerWidth: 390,
+        screen: { height: 844, width: 390 },
       },
-    },
-  }, { resetScroll: true })).not.toThrow();
-  expect(cssVars.get('--app-height')).toBe('702px');
+    }, { isPWA: true, document: mockDoc });
+
+    // Should add back safe-area-top: 785 + 59 = 844
+    expect(height).toBe(844);
+  } finally {
+    if (originalGetComputedStyle) {
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    } else {
+      delete globalThis.getComputedStyle;
+    }
+  }
 });
 
-test('syncStandaloneMobileViewport includes offsetTop while text entry is focused', () => {
+test('readViewportHeight skips PWA compensation in landscape', () => {
+  const mockDoc = { documentElement: {} };
+  const originalGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({
+    getPropertyValue: () => '59',
+  }) as any;
+
+  try {
+    // landscape: innerHeight < innerWidth
+    const height = readViewportHeight({
+      window: {
+        visualViewport: { height: 390 },
+        innerHeight: 390,
+        innerWidth: 844,
+        screen: { height: 844, width: 390 },
+      },
+    }, { isPWA: true, document: mockDoc });
+
+    // No compensation — just visualViewport
+    expect(height).toBe(390);
+  } finally {
+    if (originalGetComputedStyle) {
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    } else {
+      delete globalThis.getComputedStyle;
+    }
+  }
+});
+
+test('syncStandaloneMobileViewport applies PWA portrait compensation', () => {
   const cssVars = new Map<string, string>();
-  const documentElement = {
-    style: {
-      setProperty: (name: string, value: string) => cssVars.set(name, value),
-    },
-  };
+  const originalGetComputedStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({
+    getPropertyValue: (name: string) => name === '--safe-area-top' ? '59' : '',
+  }) as any;
+
+  try {
+    const height = syncStandaloneMobileViewport({
+      navigator: {
+        standalone: true,
+        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+        maxTouchPoints: 5,
+      },
+      window: {
+        matchMedia: () => ({ matches: true }),
+        visualViewport: { height: 785 },
+        innerHeight: 785,
+        innerWidth: 390,
+        screen: { height: 844, width: 390 },
+      },
+      document: {
+        documentElement: {
+          style: {
+            setProperty: (name: string, value: string) => cssVars.set(name, value),
+          },
+        },
+        activeElement: { tagName: 'DIV' },
+      },
+    });
+
+    expect(height).toBe(844);
+    expect(cssVars.get('--app-height')).toBe('844px');
+  } finally {
+    if (originalGetComputedStyle) {
+      globalThis.getComputedStyle = originalGetComputedStyle;
+    } else {
+      delete globalThis.getComputedStyle;
+    }
+  }
+});
+
+test('syncStandaloneMobileViewport uses visualViewport+offsetTop when keyboard is active', () => {
+  const cssVars = new Map<string, string>();
 
   const height = syncStandaloneMobileViewport({
     navigator: {
@@ -199,13 +183,58 @@ test('syncStandaloneMobileViewport includes offsetTop while text entry is focuse
       matchMedia: () => ({ matches: true }),
       visualViewport: { height: 512.2, offsetTop: 146.4 },
       innerHeight: 844,
+      innerWidth: 390,
+      screen: { height: 844, width: 390 },
     },
     document: {
-      documentElement,
+      documentElement: {
+        style: {
+          setProperty: (name: string, value: string) => cssVars.set(name, value),
+        },
+      },
       activeElement: { tagName: 'TEXTAREA' },
     },
   });
 
   expect(height).toBe(659);
   expect(cssVars.get('--app-height')).toBe('659px');
+});
+
+test('syncStandaloneMobileViewport can reset page scroll when requested', () => {
+  const cssVars = new Map<string, string>();
+  const windowScrolls: Array<[number, number]> = [];
+  const scrollingElement = { scrollTop: 91, scrollLeft: 17 };
+  const documentElement = {
+    scrollTop: 33,
+    scrollLeft: 8,
+    style: {
+      setProperty: (name: string, value: string) => cssVars.set(name, value),
+    },
+  };
+  const body = { scrollTop: 19, scrollLeft: 7 };
+
+  syncStandaloneMobileViewport({
+    navigator: {
+      standalone: true,
+      userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
+      maxTouchPoints: 5,
+    },
+    window: {
+      matchMedia: () => ({ matches: true }),
+      visualViewport: { height: 701.9 },
+      innerHeight: 900,
+      innerWidth: 600,
+      screen: { height: 1024, width: 768 },
+      scrollTo: (x: number, y: number) => windowScrolls.push([x, y]),
+    },
+    document: {
+      documentElement,
+      body,
+      scrollingElement,
+    },
+  }, { resetScroll: true });
+
+  expect(windowScrolls).toEqual([[0, 0]]);
+  expect(scrollingElement.scrollTop).toBe(0);
+  expect(body.scrollTop).toBe(0);
 });

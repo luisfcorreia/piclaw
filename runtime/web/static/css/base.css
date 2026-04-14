@@ -197,6 +197,8 @@ html, body {
 html {
     background-color: var(--bg-primary);
     --app-height: 100dvh;
+    --safe-area-top: env(safe-area-inset-top);
+    --safe-area-bottom: env(safe-area-inset-bottom);
     text-size-adjust: 100%;
     -webkit-text-size-adjust: 100%;
 }

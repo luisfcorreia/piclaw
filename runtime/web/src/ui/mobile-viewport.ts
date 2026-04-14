@@ -57,21 +57,72 @@ function resetDocumentScrollRootsBestEffort(doc) {
   }
 }
 
+/**
+ * Read the safe-area-inset-top CSS env value in pixels.
+ * Returns 0 if unavailable (e.g. env values not yet computed by iOS at launch).
+ */
+function readSafeAreaInsetTop(doc) {
+  try {
+    const style = doc?.documentElement
+      ? (typeof getComputedStyle === 'function' ? getComputedStyle(doc.documentElement) : null)
+      : null;
+    const raw = style?.getPropertyValue?.('--safe-area-top');
+    const value = parseInt(raw, 10);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Compute the correct viewport height for --app-height.
+ *
+ * On iOS PWA/standalone mode, iOS incorrectly subtracts safe-area-inset-top
+ * from window.innerHeight in portrait mode, leaving a gap at the bottom.
+ * The fix uses visualViewport.height as the base and adds back the safe-area
+ * compensation when the shortfall is detected.
+ *
+ * When the keyboard is open (text entry focused), we add visualViewport.offsetTop
+ * to get the full layout height above the keyboard.
+ */
 export function readViewportHeight(runtime = {}, options = {}) {
   const win = runtime.window ?? (typeof window !== 'undefined' ? window : null);
-  const viewportHeight = Number(win?.visualViewport?.height || 0);
-  const viewportOffsetTop = Number(win?.visualViewport?.offsetTop || 0);
-  const includeOffsetTop = options.includeOffsetTop === true;
-  if (includeOffsetTop) {
-    const viewportBottom = viewportHeight + Math.max(0, viewportOffsetTop);
-    if (Number.isFinite(viewportBottom) && viewportBottom > 0) {
-      return Math.round(viewportBottom);
+  const doc = options.document ?? (typeof document !== 'undefined' ? document : null);
+  if (!win) return null;
+
+  const visualViewportHeight = Number(win.visualViewport?.height || 0);
+  const visualViewportOffsetTop = Number(win.visualViewport?.offsetTop || 0);
+  const innerHeight = Number(win.innerHeight || 0);
+  const screenHeight = Math.max(
+    Number(win.screen?.height || 0),
+    Number(win.screen?.width || 0),
+  );
+
+  // Keyboard open: use visualViewport height + offsetTop for the visible area
+  if (options.keyboardActive && visualViewportHeight > 0) {
+    const total = visualViewportHeight + Math.max(0, visualViewportOffsetTop);
+    return Number.isFinite(total) && total > 0 ? Math.round(total) : null;
+  }
+
+  // PWA portrait compensation: iOS subtracts safe-area-inset-top from
+  // innerHeight incorrectly. Detect the shortfall and add it back.
+  const isPWA = options.isPWA === true;
+  const isPortrait = innerHeight > Number(win.innerWidth || 0);
+  if (isPWA && isPortrait && visualViewportHeight > 0 && screenHeight > 0) {
+    const difference = screenHeight - visualViewportHeight;
+    // iPhone diff ~59px, iPad diff ~32px; use 15px threshold
+    if (difference > 15) {
+      const safeTop = readSafeAreaInsetTop(doc);
+      if (safeTop > 0) {
+        return Math.round(visualViewportHeight + safeTop);
+      }
     }
   }
-  if (Number.isFinite(viewportHeight) && viewportHeight > 0) {
-    return Math.round(viewportHeight);
+
+  // Default: prefer visualViewport, fall back to innerHeight
+  if (Number.isFinite(visualViewportHeight) && visualViewportHeight > 0) {
+    return Math.round(visualViewportHeight);
   }
-  const innerHeight = Number(win?.innerHeight || 0);
   if (Number.isFinite(innerHeight) && innerHeight > 0) {
     return Math.round(innerHeight);
   }
@@ -89,19 +140,16 @@ export function syncStandaloneMobileViewport(runtime = {}, options = {}) {
     return null;
   }
 
+  const keyboardActive = isTextEntryFocused(doc);
+  const isPWA = isStandaloneWebAppMode(runtime);
   const height = readViewportHeight(
     { window: win },
-    { includeOffsetTop: isTextEntryFocused(doc) },
+    { keyboardActive, isPWA, document: doc },
   );
   if (height && height > 0) {
     doc.documentElement.style.setProperty('--app-height', `${height}px`);
   }
 
-  // Do not force the page back to the top during normal viewport sync.
-  // On mobile, virtual keyboard / caret movement triggers visualViewport
-  // resize+scroll events while typing. Resetting scroll here causes the
-  // chat to jump on every keystroke. Keep scroll resets opt-in for any
-  // future call sites that explicitly need a top reset.
   if (options.resetScroll === true) {
     scrollWindowToTopBestEffort(win);
     resetDocumentScrollRootsBestEffort(doc);
@@ -137,7 +185,7 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
 
   const runSync = () => {
     rafId = 0;
-    syncStandaloneMobileViewport({ window: win, document: doc });
+    syncStandaloneMobileViewport({ window: win, document: doc, navigator: win.navigator });
   };
 
   const scheduleSync = () => {
@@ -149,7 +197,9 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
 
   const scheduleSettledSync = () => {
     scheduleSync();
-    for (const delay of [80, 220, 420]) {
+    // Stagger retries because iOS doesn't always have safe-area env values
+    // ready at launch. Cover fast and slow devices.
+    for (const delay of [50, 150, 300, 500, 800, 1200]) {
       const timer = win.setTimeout?.(() => {
         timers.delete(timer);
         scheduleSync();
@@ -165,12 +215,23 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
     scheduleSettledSync();
   };
 
+  const handleOrientationChange = () => {
+    // iOS recalculates everything on rotation; stagger to catch it
+    for (const delay of [100, 300]) {
+      const timer = win.setTimeout?.(() => {
+        timers.delete(timer);
+        scheduleSync();
+      }, delay);
+      if (timer != null) timers.add(timer);
+    }
+  };
+
   const viewport = win.visualViewport;
   scheduleSettledSync();
   win.addEventListener('focus', scheduleSettledSync);
   win.addEventListener('pageshow', scheduleSettledSync);
   win.addEventListener('resize', scheduleSettledSync);
-  win.addEventListener('orientationchange', scheduleSettledSync);
+  win.addEventListener('orientationchange', handleOrientationChange);
   doc.addEventListener('visibilitychange', handleVisibility);
   doc.addEventListener('focusin', scheduleSettledSync, true);
   viewport?.addEventListener?.('resize', scheduleSettledSync);
@@ -181,7 +242,7 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
     win.removeEventListener('focus', scheduleSettledSync);
     win.removeEventListener('pageshow', scheduleSettledSync);
     win.removeEventListener('resize', scheduleSettledSync);
-    win.removeEventListener('orientationchange', scheduleSettledSync);
+    win.removeEventListener('orientationchange', handleOrientationChange);
     doc.removeEventListener('visibilitychange', handleVisibility);
     doc.removeEventListener('focusin', scheduleSettledSync, true);
     viewport?.removeEventListener?.('resize', scheduleSettledSync);
