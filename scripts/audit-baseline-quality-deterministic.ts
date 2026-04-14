@@ -342,7 +342,7 @@ const groupDefinitions: GroupDefinition[] = [
     id: "scripts",
     label: "scripts and vendoring",
     notes: "Repo maintenance scripts, vendor builds, and audit helper checks.",
-    match: (relativePath) => relativePath.startsWith("scripts/"),
+    match: (relativePath) => relativePath.startsWith("scripts/") || relativePath.startsWith("vendor/"),
   },
   {
     id: "web-ui-interaction-and-state",

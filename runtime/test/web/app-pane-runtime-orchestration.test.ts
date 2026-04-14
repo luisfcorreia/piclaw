@@ -148,7 +148,11 @@ test('buildPanePopoutReattachRequestMessage can disable live transfer for close-
     type: 'piclaw-pane-reattach-request',
     panePath: 'piclaw://terminal',
     paneInstanceId: 'pane-inst-1',
-    paneTransferToken: expect.any(String),
+    paneTransferPayload: {
+      kind: 'terminal',
+      live: true,
+      handoffToken: 'handoff-1',
+    },
     allowLiveTransfer: false,
   });
 
@@ -158,12 +162,13 @@ test('buildPanePopoutReattachRequestMessage can disable live transfer for close-
     editorTransfer: null,
     hostTransfer: {
       path: 'piclaw://terminal',
+      panePath: 'piclaw://terminal',
       payload: {
         kind: 'terminal',
         live: true,
         handoffToken: 'handoff-1',
       },
-      capturedAt: 1_000,
+      capturedAt: 1_500,
     },
     allowLiveTransfer: false,
   });
