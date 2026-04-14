@@ -21,7 +21,7 @@ test('blank installs stay in provider-missing even if a current model string exi
   });
 });
 
-test('provider-ready only shows when actual available models exist', () => {
+test('configured instances stay hidden once actual available models exist', () => {
   expect(resolveOobePanelState({
     modelsLoaded: true,
     modelPayload: {
@@ -31,7 +31,7 @@ test('provider-ready only shows when actual available models exist', () => {
     providerMissingDismissed: false,
     providerReadyCompleted: false,
   })).toEqual({
-    kind: 'provider-ready',
+    kind: 'hidden',
     hasAvailableModels: true,
     availableModelCount: 1,
   });

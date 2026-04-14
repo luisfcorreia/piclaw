@@ -64,6 +64,15 @@ export function orderAgentStatusHints(statusHints) {
         .map((entry) => entry.hint);
 }
 
+export function formatAgentStatusGitLabel(repoPath, branch) {
+    const normalizedRepoPath = typeof repoPath === 'string' ? repoPath.trim() : '';
+    const normalizedBranch = typeof branch === 'string' ? branch.trim() : '';
+    const repoName = normalizedRepoPath
+        ? normalizedRepoPath.split(/[\\/]+/).filter(Boolean).pop() || normalizedRepoPath
+        : '';
+    return [repoName, normalizedBranch].filter(Boolean).join(' • ');
+}
+
 /** Preact component: agent status bar with draft/thought/plan panels. */
 export function AgentStatus({ status, draft, plan, thought, pendingRequest, intent, extensionPanels = [], pendingPanelActions = new Set(), onExtensionPanelAction, turnId, steerQueued, onPanelToggle, showCorePanels = true, showExtensionPanels = true }) {
     const THOUGHT_MAX_LINES = 8;
@@ -259,7 +268,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
     const toolRepoRepoPath = toolRepoContext?.repoPath || '';
     const toolRepoBranch = toolRepoContext?.branch || '';
     const toolRepoLabel = toolRepoContext
-        ? [toolRepoRepoPath, toolRepoBranch].filter(Boolean).join(' · ')
+        ? formatAgentStatusGitLabel(toolRepoRepoPath, toolRepoBranch)
         : '';
     const statusHints = normalizeStatusHints(status?.status_hints || status?.statusHints);
     const orderedStatusHints = useMemo(
