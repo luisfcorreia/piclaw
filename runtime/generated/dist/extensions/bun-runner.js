@@ -9,7 +9,7 @@ import { Type } from "@sinclair/typebox";
 import { registerToolStatusHintProvider } from "../tool-status-hints.js";
 import { runBunScript } from "../tools/bun-runner.js";
 import { buildSubprocessExecutionHint } from "../utils/process-spawn.js";
-const BUN_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h2.5v6H9"></path><path d="M13.5 9h3v1.8h-1.2V15c0 1.3-.9 2-2.2 2-.5 0-.9-.1-1.2-.3"></path></svg>`;
+const BUN_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4.8C8.6 6.6 4 8.6 3.2 12c-.9 3.6 3.2 7.2 8.8 7.2s9.7-3.6 8.8-7.2C20 8.6 15.4 6.6 12 4.8Z"></path><path d="M12 4.8c-.7 1-1.1 2-1.4 3.1"></path><path d="M12 4.8c.1 1.1.3 2.1.6 3.1"></path><ellipse cx="8.2" cy="12.6" rx="1.5" ry="1.55" fill="currentColor" stroke="none"></ellipse><ellipse cx="15.8" cy="12.6" rx="1.5" ry="1.55" fill="currentColor" stroke="none"></ellipse><circle cx="7.7" cy="12.1" r="0.44" fill="white" stroke="none"></circle><circle cx="15.3" cy="12.1" r="0.44" fill="white" stroke="none"></circle><path d="M9.2 15.6c.7.8 1.7 1.2 2.8 1.2s2.1-.4 2.8-1.2"></path></svg>`;
 const BunRunSchema = Type.Object({
     script: Type.String({ description: "Workspace-relative script file to execute with Bun (for example `runtime/scripts/foo.ts`)." }),
     args: Type.Optional(Type.Array(Type.String(), { description: "Arguments passed to the script. No shell parsing is performed." })),
