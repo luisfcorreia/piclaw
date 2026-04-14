@@ -3,7 +3,7 @@ id: assess-first-class-scheduled-task-inspection-surface
 title: Assess a first-class scheduled-task inspection surface for agents
 status: doing
 created: 2026-04-12
-updated: 2026-04-12
+updated: 2026-04-13
 tags:
   - work-item
   - kanban
@@ -29,17 +29,107 @@ The goal is to give the agent a stable, supported surface for answering question
 
 ## Acceptance Criteria
 
-- [ ] Current scheduled-task inspection paths are documented, including DB and shell/python fallbacks currently used.
-- [ ] Desired agent-facing inspection scenarios are listed and prioritized.
-- [ ] At least one recommended supported surface is proposed, such as:
-  - a native tool
-  - a slash command / control command
-  - a web/API endpoint
-  - a shared service used by both tool and UI layers
-- [ ] The proposal explains how to avoid direct DB poking for routine task inspection.
-- [ ] The proposal identifies what metadata should be exposed for each task.
-- [ ] Security, privacy, and channel-appropriate output concerns are covered.
-- [ ] Follow-up implementation tickets are created if the work is split.
+- [x] Current scheduled-task inspection paths are documented, including DB and shell/python fallbacks currently used.
+- [x] Desired agent-facing inspection scenarios are listed and prioritized.
+- [x] At least one recommended supported surface is proposed, such as:
+  - [x] a native tool
+  - [ ] a slash command / control command
+  - [ ] a web/API endpoint
+  - [x] a shared service used by both tool and UI layers
+- [x] The proposal explains how to avoid direct DB poking for routine task inspection.
+- [x] The proposal identifies what metadata should be exposed for each task.
+- [x] Security, privacy, and channel-appropriate output concerns are covered.
+- [x] Follow-up implementation tickets are created if the work is split.
+
+## Current paths and gaps
+
+### Existing supported surfaces
+- `schedule_task` internal tool exists, but only for **creation**, not inspection.
+- `/tasks` and `/scheduled` already exist via `runtime/src/extensions/scheduled-tasks.ts`.
+  - current support is limited to text listing plus a simple status filter (`all|active|paused|completed`)
+  - the extension currently queries SQLite directly instead of using a shared task-query service
+- `runtime/src/db/tasks.ts` already exposes low-level DB helpers such as:
+  - `getTaskById(...)`
+  - `getTaskRunLogs(...)`
+  - `updateTask(...)`
+  - `deleteTask(...)`
+
+### Existing unsupported / low-level fallbacks still used
+- direct SQLite inspection for routine checks
+- ad hoc Python or shell scripts to answer `did it run yet?`
+- raw IPC file writes for pause/resume/update flows
+- schedule skill guidance still points verification toward SQL introspection
+
+## Prioritized user scenarios
+
+### Tier 1 — inspection (must support first)
+1. Did this task run already?
+2. When will it run next?
+3. What is the current status?
+4. What happened the last time it ran?
+5. Show me the recent tasks for this chat.
+
+### Tier 2 — routine mutation (next slice)
+1. Delay this task by 5 minutes.
+2. Pause/resume this task.
+3. Cancel/delete this task.
+4. Update the prompt/model/schedule safely.
+
+## Recommended supported surface
+
+### Recommended path — shared service + native tool first
+
+Choose **Path B + Path A together**:
+
+1. extract a canonical scheduled-task query service
+2. expose it through a first-class internal inspection tool
+3. optionally reuse it from `/tasks` / `/scheduled`
+4. keep mutation/update as a second explicit follow-up slice
+
+This is the best fit for current code reality because:
+
+- there is already a `schedule_task` creation tool
+- there are already `/tasks` and `/scheduled` command surfaces
+- the main missing piece is a **structured inspection surface** that does not depend on raw DB access
+- the current extension path is useful but too text-only and too coupled to ad hoc SQL
+
+### Why not command/UI first?
+
+A command-only solution would still leave the agent without a structured task
+inspection surface and would keep autonomy weaker than necessary.
+
+## Proposed metadata contract
+
+The inspection surface should expose at least:
+
+- `id`
+- `chat_jid`
+- `task_kind`
+- `status`
+- `prompt` or `command` summary
+- `model`
+- `schedule_type`
+- `schedule_value`
+- `next_run`
+- `last_run`
+- `last_result`
+- `created_at`
+- latest run-log summary where available
+
+Useful filters in v1:
+
+- task id
+- chat JID
+- status
+- recency / limit
+- optionally prompt text contains / task kind
+
+## Security, privacy, and channel output notes
+
+- default results should be bounded and summary-first; avoid dumping large `last_result` bodies by default
+- shell-task inspection should avoid echoing sensitive command output unless explicitly requested
+- chat scoping should be available so routine agent checks prefer the active chat over global enumeration
+- structured tool output should be primary; human-readable summary formatting can be layered on top for `/tasks` or future UI surfaces
 
 ## Implementation Paths
 
@@ -48,12 +138,12 @@ The goal is to give the agent a stable, supported surface for answering question
 - Return structured task records plus summary formatting guidance
 - Prefer this for agent autonomy and reuse
 
-### Path B — Shared service + thin surfaces
+### Path B — Shared service + thin surfaces (**recommended**)
 - Extract a canonical scheduled-task query service
 - Use it from:
   - agent tool
   - slash command
-  - web/API views
+  - web/API views later if needed
 - Keep formatting separate from retrieval
 
 ### Path C — Control command/UI-first
@@ -87,16 +177,31 @@ The goal is to give the agent a stable, supported surface for answering question
 
 ## Definition of Done
 
-- [ ] All acceptance criteria satisfied and verified
+- [x] All acceptance criteria satisfied and verified
 - [ ] Tests added or updated — passing locally
 - [ ] Type check clean
-- [ ] Docs and notes updated with links to ticket
-- [ ] Operational impact assessed
-- [ ] Follow-up tickets created for deferred scope
-- [ ] Update history complete with evidence
-- [ ] Ticket front matter updated
+- [x] Docs and notes updated with links to ticket
+- [x] Operational impact assessed
+- [x] Follow-up tickets created for deferred scope
+- [x] Update history complete with evidence
+- [x] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-13 — assessment conclusion and split
+- Code-path review confirmed the current state:
+  - `schedule_task` exists for creation only
+  - `/tasks` and `/scheduled` already exist, but they are text-only and query SQLite directly inside `runtime/src/extensions/scheduled-tasks.ts`
+  - routine mutation/update still falls back to IPC or low-level DB knowledge
+- Recommended architecture:
+  - canonical scheduled-task query service
+  - first-class internal inspection tool over that service
+  - mutation/update as a separate follow-up slice
+- Split concrete implementation tickets:
+  - `workitems/10-next/add-scheduled-task-inspection-tool-and-shared-query-service.md`
+  - `workitems/10-next/add-scheduled-task-update-and-reschedule-tool.md`
+- This assessment is now refined enough to drive implementation without reopening the product question.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 1, deps: 2, risk: 1)
 
 ### 2026-04-12 — concrete pain point from live scheduling flow
 - During a real user request, I scheduled a one-shot agent task to check for new GHCR images and upgrade `relay` and `sandbox` later.
@@ -141,3 +246,8 @@ The goal is to give the agent a stable, supported surface for answering question
 - `runtime/src/ipc.ts`
 - `runtime/src/agent-control/handlers/info.ts`
 - `runtime/src/extensions/messages-crud.ts`
+- `runtime/src/extensions/scheduled-tasks.ts`
+- `runtime/src/db/tasks.ts`
+- `/workspace/.pi/skills/schedule/SKILL.md`
+- `workitems/10-next/add-scheduled-task-inspection-tool-and-shared-query-service.md`
+- `workitems/10-next/add-scheduled-task-update-and-reschedule-tool.md`

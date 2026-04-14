@@ -1153,10 +1153,11 @@ export default function autoresearchExtension(pi: ExtensionAPI) {
   };
 
   pi.on("session_start", async (_e, ctx) => reconstructState(ctx));
-  pi.on("session_switch", async (_e, ctx) => reconstructState(ctx));
-  pi.on("session_fork", async (_e, ctx) => reconstructState(ctx));
   pi.on("session_tree", async (_e, ctx) => reconstructState(ctx));
   pi.on("session_before_switch", async () => {
+    clearOverlay();
+  });
+  pi.on("session_before_fork", async () => {
     clearOverlay();
   });
   pi.on("session_shutdown", async (_e, ctx) => {
