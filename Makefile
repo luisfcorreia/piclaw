@@ -118,13 +118,17 @@ build-piclaw: build-web build-ts ## Full build: vendor + web + ts
 
 # ── Pack & install ───────────────────────────────────────────────────
 
-PACK_DIR ?= /tmp/piclaw-pack
+PICLAW_TMPDIR ?= /workspace/.piclaw/tmp
+PACK_DIR ?= $(PICLAW_TMPDIR)/piclaw-pack
+BUN_CACHE_DIR ?= $(PICLAW_TMPDIR)/bun-cache
 
 pack: build-piclaw ## Pack piclaw into a .tgz (outside the repo)
 	@set -e; \
 	exec 1>&2; \
+	mkdir -p $(PICLAW_TMPDIR); \
 	rm -rf $(PACK_DIR) && mkdir -p $(PACK_DIR); \
-	bun pm pack --destination $(PACK_DIR); \
+	TMPDIR=$(PICLAW_TMPDIR) TMP=$(PICLAW_TMPDIR) TEMP=$(PICLAW_TMPDIR) BUN_TMPDIR=$(PICLAW_TMPDIR) \
+		bun pm pack --destination $(PACK_DIR); \
 	ls -lh $(PACK_DIR)/piclaw-*.tgz || true
 
 restart: ## Restart piclaw (auto-detects supervisor or systemd)
@@ -154,7 +158,11 @@ local-install: pack ## Pack and install piclaw globally (no restart)
 	printf '{"dependencies":{"@mariozechner/pi-coding-agent":"$(PI_AGENT_VERSION)","piclaw":"%s"}}\n' \
 		"$$TGZ" | sudo tee $(GLOBAL_PKG) >/dev/null; \
 	sudo rm -f $(GLOBAL_LOCK); \
-	sudo BUN_INSTALL=$(BUN_ROOT) BUN_INSTALL_CACHE_DIR=/tmp/bun-cache \
+	sudo mkdir -p $(PICLAW_TMPDIR) $(BUN_CACHE_DIR); \
+	sudo BUN_INSTALL=$(BUN_ROOT) \
+		BUN_TMPDIR=$(PICLAW_TMPDIR) \
+		BUN_INSTALL_CACHE_DIR=$(BUN_CACHE_DIR) \
+		TMPDIR=$(PICLAW_TMPDIR) TMP=$(PICLAW_TMPDIR) TEMP=$(PICLAW_TMPDIR) \
 		$(BUN_ROOT)/bin/bun install -g "$$TGZ" \
 		--registry https://registry.npmjs.org; \
 	sudo chmod -R a+rX $(BUN_ROOT); \
