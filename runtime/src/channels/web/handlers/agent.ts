@@ -345,11 +345,13 @@ export async function handleAgentMessage(
     // Broadcast model state so the UI hint updates immediately
     let nextModel = result.model_label ?? null;
     let thinkingLevel = result.thinking_level ?? null;
+    let thinkingLevelLabel = result.thinking_level_label ?? null;
     let supportsThinking: boolean | undefined = undefined;
     try {
       const modelState = await channel.agentPool.getAvailableModels(chatJid);
       if (!nextModel) nextModel = modelState.current ?? null;
       if (thinkingLevel == null) thinkingLevel = modelState.thinking_level ?? null;
+      if (!thinkingLevelLabel) thinkingLevelLabel = modelState.thinking_level_label ?? thinkingLevel;
       supportsThinking = modelState.supports_thinking;
     } catch {
       if (typeof channel.agentPool.getCurrentModelLabel === "function") {
@@ -362,6 +364,7 @@ export async function handleAgentMessage(
         chat_jid: chatJid,
         model: nextModel ?? null,
         thinking_level: thinkingLevel ?? null,
+        thinking_level_label: thinkingLevelLabel ?? thinkingLevel ?? null,
         supports_thinking: supportsThinking,
       });
       if (command.type === "model" || command.type === "cycle_model") {
@@ -372,7 +375,7 @@ export async function handleAgentMessage(
     return channel.json(
       {
         thread_id: null,
-        command: { ...result, model_label: nextModel, thinking_level: thinkingLevel, supports_thinking: supportsThinking },
+        command: { ...result, model_label: nextModel, thinking_level: thinkingLevel, thinking_level_label: thinkingLevelLabel ?? thinkingLevel, supports_thinking: supportsThinking },
         ui_only: true,
       },
       200,
@@ -595,12 +598,14 @@ export async function handleAgentMessage(
     if (result.status === "success" && modelCommands.includes(command.type)) {
       let nextModel = result.model_label ?? null;
       let thinkingLevel = result.thinking_level ?? null;
+      let thinkingLevelLabel = result.thinking_level_label ?? null;
       let supportsThinking: boolean | undefined = undefined;
 
       try {
         const modelState = await channel.agentPool.getAvailableModels(chatJid);
         if (!nextModel) nextModel = modelState.current ?? null;
         if (thinkingLevel == null) thinkingLevel = modelState.thinking_level ?? null;
+        if (!thinkingLevelLabel) thinkingLevelLabel = modelState.thinking_level_label ?? thinkingLevel;
         supportsThinking = modelState.supports_thinking;
       } catch {
         if (typeof channel.agentPool.getCurrentModelLabel === "function") {
@@ -612,6 +617,7 @@ export async function handleAgentMessage(
         chat_jid: chatJid,
         model: nextModel ?? null,
         thinking_level: thinkingLevel ?? null,
+        thinking_level_label: thinkingLevelLabel ?? thinkingLevel ?? null,
         supports_thinking: supportsThinking,
       });
     }
