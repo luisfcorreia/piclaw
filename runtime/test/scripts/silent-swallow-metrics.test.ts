@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   buildSilentSwallowRemediationHint,
+  buildSilentSwallowReport,
   findSilentCatchBlocks,
   findSilentPromiseCatches,
   getSilentSwallowMetrics,
@@ -131,6 +132,17 @@ describe("silent-swallow-metrics", () => {
     expect(hint).toContain("Do not leave catch blocks empty or comment-only");
   });
 
+  test("builds a failure report that names missing logging call sites", () => {
+    const report = buildSilentSwallowReport("Silent catch block sites", [{
+      filePath: "runtime/web/src/ui/mobile-viewport.ts",
+      line: 48,
+      snippet: "} catch {}",
+    }]);
+    expect(report).toContain("Silent catch block sites (1)");
+    expect(report).toContain("runtime/web/src/ui/mobile-viewport.ts:48 — missing logging call");
+    expect(report).toContain("snippet: } catch {} ".trim());
+  });
+
   test("fails in --check mode when silent swallows are present", async () => {
     await withTempDir("silent-swallow-check-", async (dir) => {
       mkdirSync(join(dir, "src"), { recursive: true });
@@ -154,6 +166,11 @@ describe("silent-swallow-metrics", () => {
       expect(proc.exitCode).toBe(1);
       const stderr = new TextDecoder().decode(proc.stderr);
       expect(stderr).toContain("Comment-only handlers count as silent");
+      expect(stderr).toContain("Silent catch block sites");
+      expect(stderr).toContain("missing logging call");
+      expect(stderr).toContain("sample.ts:1");
+      expect(stderr).toContain("Silent promise catch sites");
+      expect(stderr).toContain("sample.ts:2");
       expect(stderr).toContain("debugSuppressedError(log");
       expect(stderr).toContain("log.warn");
       expect(stderr).toContain("log.error");

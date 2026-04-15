@@ -363,6 +363,17 @@ export function printSilentSwallowMetrics(metrics: SilentSwallowMetrics): void {
   console.log(`METRIC runtime_core_silent_catches=${metrics.runtimeCoreSilentCatches}`);
 }
 
+export function buildSilentSwallowReport(label: string, matches: SilentSwallowMatch[]): string {
+  const lines = [`[check:silent-swallows] ${label} (${matches.length}):`];
+  for (const match of matches) {
+    lines.push(`- ${match.filePath}:${match.line} — missing logging call`);
+    if (match.snippet) {
+      lines.push(`  snippet: ${match.snippet}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export function buildSilentSwallowRemediationHint(): string {
   return [
     "[check:silent-swallows] Remediation: replace empty/comment-only catches with centralized logging or explicit handling.",
@@ -375,13 +386,24 @@ export function buildSilentSwallowRemediationHint(): string {
 
 if (import.meta.main) {
   const checkMode = process.argv.includes("--check");
-  const metrics = getSilentSwallowMetrics();
+  const repoDirs = parseEnvRoots("PICLAW_SILENT_SWALLOW_SCAN_ROOTS", DEFAULT_REPO_DIRS);
+  const runtimeCoreDirs = parseEnvRoots("PICLAW_SILENT_SWALLOW_RUNTIME_CORE_ROOTS", DEFAULT_RUNTIME_CORE_DIRS);
+  const metrics = getSilentSwallowMetrics({ repoDirs, runtimeCoreDirs });
   printSilentSwallowMetrics(metrics);
 
   if (checkMode && (metrics.repoSilentCatchBlocks > 0 || metrics.repoSilentPromiseCatches > 0)) {
+    const repoFiles = collectFiles(repoDirs);
+    const catchMatches = findSilentCatchBlocks(repoFiles);
+    const promiseMatches = findSilentPromiseCatches(repoFiles);
     console.error(
       `[check:silent-swallows] Found ${metrics.repoSilentCatchBlocks} silent catch block(s) and ${metrics.repoSilentPromiseCatches} silent promise catch(es). Comment-only handlers count as silent and must log or handle the error explicitly.`,
     );
+    if (catchMatches.length > 0) {
+      console.error(buildSilentSwallowReport("Silent catch block sites", catchMatches));
+    }
+    if (promiseMatches.length > 0) {
+      console.error(buildSilentSwallowReport("Silent promise catch sites", promiseMatches));
+    }
     console.error(buildSilentSwallowRemediationHint());
     process.exit(1);
   }
