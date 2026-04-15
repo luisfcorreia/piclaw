@@ -81,6 +81,11 @@ export function installStandaloneMobileViewportFix(runtime = {}) {
     return () => {};
   }
 
+  // In standalone mode, override --app-height to 100vh immediately.
+  // 100dvh is broken on iOS standalone cold start (reports ~59px too short).
+  // 100vh is correct in standalone because there's no browser chrome.
+  doc.documentElement?.style?.setProperty?.('--app-height', '100vh');
+
   let rafId = 0;
   const timers = new Set();
 
