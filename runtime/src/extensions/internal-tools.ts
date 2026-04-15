@@ -32,6 +32,15 @@ function summarizeDescription(value: string | undefined): string {
 const HINT = [
   "## Internal Tool Discovery",
   "If you are unsure about available tools, call list_internal_tools.",
+  "",
+  "## Baseline working principles",
+  "These apply even when no AGENTS.md or project instructions are present:",
+  "- Read relevant files before editing. Never edit blind.",
+  "- Test after changes. Never declare done without verification.",
+  "- Prefer editing over rewriting whole files.",
+  "- Keep output direct, concise, and specific. Lead with findings.",
+  "- Attach generated files to the chat with attach_file instead of only naming paths.",
+  "- Keychain entries are auto-injected as $ENV_VARS into bash (names with `/`, `-`, `.` become `_` and uppercase). Never fetch secrets and inline them.",
 ].join("\n");
 
 /** Extension factory that registers list_internal_tools. */
