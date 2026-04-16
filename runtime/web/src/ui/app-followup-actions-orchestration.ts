@@ -125,7 +125,8 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
     });
   }, [clearQueuedSteerStateIfStale, currentChatJid, dismissedQueueRowIdsRef, followupQueueItemsRef, refreshQueueState, removeAgentQueueItem, setFollowupQueueItems, showIntentToast, steerAgentQueueItem]);
 
-  const handleMoveQueuedFollowup = useCallback((fromIndex: number, toIndex: number) => {
+  const handleMoveQueuedFollowup = useCallback(async (fromIndex: number, toIndex: number) => {
+    // Optimistic local reorder
     setFollowupQueueItems((prev: any[]) => {
       if (!Array.isArray(prev) || fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length || fromIndex === toIndex) return prev;
       const next = [...prev];
@@ -133,7 +134,16 @@ export function useFollowupActionsOrchestration(options: UseFollowupActionsOrche
       next.splice(toIndex, 0, moved);
       return next;
     });
-  }, [setFollowupQueueItems]);
+    // Persist to backend
+    try {
+      const { reorderAgentQueueItem } = await import('../api.js');
+      await reorderAgentQueueItem(fromIndex, toIndex, currentChatJid);
+    } catch (error) {
+      console.warn('Failed to persist queue reorder:', error);
+      // Refresh from backend to restore correct state
+      void refreshQueueState();
+    }
+  }, [currentChatJid, refreshQueueState, setFollowupQueueItems]);
 
   const handleMessageResponse = useCallback((response: any) => {
     runMessageResponseRefresh(response, {

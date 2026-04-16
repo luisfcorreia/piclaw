@@ -207,6 +207,15 @@ export class QueuedFollowupLifecycleService {
     setDeferredQueuedFollowups(chatJid, items.map((item) => toDeferredQueuedFollowupRecord(item)));
   }
 
+  reorderQueuedFollowupItems(chatJid: string, fromIndex: number, toIndex: number): boolean {
+    const queued = this.getDeferredQueuedFollowupItems(chatJid);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= queued.length || toIndex >= queued.length || fromIndex === toIndex) return false;
+    const [moved] = queued.splice(fromIndex, 1);
+    queued.splice(toIndex, 0, moved);
+    this.setDeferredQueuedFollowupItems(chatJid, queued);
+    return true;
+  }
+
   private allocateDeferredQueuedRowId(chatJid: string): number {
     const queued = this.getDeferredQueuedFollowupItems(chatJid);
     const minQueuedRowId = queued.reduce((min, item) => (item.rowId < min ? item.rowId : min), 0);

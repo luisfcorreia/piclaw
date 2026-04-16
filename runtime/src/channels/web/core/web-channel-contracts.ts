@@ -159,6 +159,7 @@ export interface WebChannelLike
   handleAgentQueueState(req: Request): Promise<Response>;
   handleAgentQueueRemove(req: Request): Promise<Response>;
   handleAgentQueueSteer(req: Request): Promise<Response>;
+  handleAgentQueueReorder(req: Request): Promise<Response>;
   handleAgentModels(req: Request): Promise<Response>;
   handleSessionTree(req: Request): Response;
   handleSystemMetrics(req: Request): Response;

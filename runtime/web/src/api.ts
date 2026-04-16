@@ -373,6 +373,21 @@ export async function steerAgentQueueItem(rowId, chatJid = null) {
     return response.json();
 }
 
+export async function reorderAgentQueueItem(fromIndex, toIndex, chatJid = null) {
+    const response = await fetch(API_BASE + '/agent/queue-reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from_index: fromIndex, to_index: toIndex, chat_jid: chatJid || undefined }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to reorder queued item' }));
+        throw new Error(error.error || `HTTP ${response.status}`);
+    }
+
+    return response.json();
+}
+
 /**
  * Get available models and current selection.
  */

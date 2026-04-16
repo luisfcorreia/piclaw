@@ -42,6 +42,7 @@ type WebChannelHttpSurfaceControlPlane = Pick<
   | "handleAgentQueueState"
   | "handleAgentQueueRemove"
   | "handleAgentQueueSteer"
+  | "handleAgentQueueReorder"
   | "handleAgentBranchFork"
   | "handleAgentBranchRename"
   | "handleAgentBranchPrune"
@@ -203,6 +204,10 @@ export class WebChannelHttpSurfaceService {
 
   async handleAgentQueueSteer(req: Request): Promise<Response> {
     return await this.channel.controlPlaneService.handleAgentQueueSteer(req);
+  }
+
+  async handleAgentQueueReorder(req: Request): Promise<Response> {
+    return await this.channel.controlPlaneService.handleAgentQueueReorder(req);
   }
 
   async handleAgentModels(req: Request): Promise<Response> {

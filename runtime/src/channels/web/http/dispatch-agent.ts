@@ -72,6 +72,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "POST",
+    path: "/agent/queue-reorder",
+    handle: (channel, req) => channel.handleAgentQueueReorder(req),
+  },
+  {
+    method: "POST",
     path: "/agent/queue-steer",
     handle: (channel, req) => channel.handleAgentQueueSteer(req),
   },
