@@ -132,8 +132,7 @@ export class QueuedFollowupLifecycleService {
         if (seen.has(row.rowId)) return false;
         seen.add(row.rowId);
         return true;
-      })
-      .sort((a, b) => String(a.queuedAt).localeCompare(String(b.queuedAt)));
+      });
   }
 
   removeQueuedFollowupItem(chatJid: string, rowId: number): QueuedFollowupItem | null {
