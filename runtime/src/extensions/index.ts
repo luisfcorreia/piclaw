@@ -9,7 +9,7 @@
  *   - fileAttachments: attach_file tool for delivering workspace files.
  *   - messages: unified messages tool for searching, retrieving, adding, and deleting chat messages.
  *   - modelControl: get_model_state, list_models, switch_model, switch_thinking.
- *   - internalTools: list_internal_tools for tool discovery.
+ *   - internalTools: list_tools for tool discovery (with a deprecated list_internal_tools compatibility alias).
  *   - runtimeScripts: list_scripts for packaged/workspace script discovery.
  *   - toolActivation: activate_tools/reset_active_tools for lazy tool activation.
  *   - sqlIntrospect: introspect_sql for read-only DB introspection.

@@ -368,7 +368,8 @@ function scoreIntent(entry: ScriptCatalogEntry, intent: string): RecommendationM
   match.matchedTerms = uniqueStrings(match.matchedTerms);
   match.matchedSources = uniqueStrings(match.matchedSources);
   if (match.score <= 0 || match.matchedTerms.length === 0) return null;
-  if (entry.role === "module") match.score -= 1;
+  if (entry.role === "entrypoint") match.score += 1;
+  if (entry.role === "module") match.score -= 2;
   if (entry.weight === "heavy") match.score -= 1;
   return match.score > 0 ? match : null;
 }
@@ -379,6 +380,8 @@ const RUNTIME_SCRIPTS_HINT = [
   "Prefer entrypoint scripts by default; helper modules are available with role=all or role=module.",
   "When a script has a workspace-relative path, prefer bun_run to execute it without a shell.",
 ].join("\n");
+
+const VISIBLE_SCRIPT_HINT = "Hint: use scope=packaged|workspace|all, role=entrypoint|module|all, and prefer bun_run for workspace-relative entrypoints.";
 
 /** Extension factory that registers list_scripts. */
 export const runtimeScripts: ExtensionFactory = (pi: ExtensionAPI) => {
@@ -411,14 +414,14 @@ export const runtimeScripts: ExtensionFactory = (pi: ExtensionAPI) => {
 
         if (recommendations.length === 0) {
           return {
-            content: [{ type: "text", text: `No strong script recommendation for "${intent}".` }],
+            content: [{ type: "text", text: `No strong script recommendation for "${intent}".\n${VISIBLE_SCRIPT_HINT}` }],
             details: { total: filtered.length, count: 0, intent, query: params.query?.trim() || undefined, scope, role, scripts: [] },
           };
         }
 
         const lines = recommendations.map(({ script }) => `• ${script.displayPath} — ${script.summary} {${script.collection}} [${script.kind}, ${script.weight}, ${script.role}]`);
         return {
-          content: [{ type: "text", text: `Recommended scripts for "${intent}": ${recommendations.length}.\n${lines.join("\n")}` }],
+          content: [{ type: "text", text: `Recommended scripts for "${intent}": ${recommendations.length}.\n${VISIBLE_SCRIPT_HINT}\n${lines.join("\n")}` }],
           details: {
             total: filtered.length,
             count: recommendations.length,
@@ -449,7 +452,7 @@ export const runtimeScripts: ExtensionFactory = (pi: ExtensionAPI) => {
       const scripts = filtered.slice(0, limit);
       if (scripts.length === 0) {
         return {
-          content: [{ type: "text", text: query ? `No scripts found matching "${params.query}".` : "No scripts found." }],
+          content: [{ type: "text", text: query ? `No scripts found matching "${params.query}".\n${VISIBLE_SCRIPT_HINT}` : `No scripts found.\n${VISIBLE_SCRIPT_HINT}` }],
           details: { total: filtered.length, count: 0, query: params.query?.trim() || undefined, scope, role, scripts: [] },
         };
       }
@@ -459,7 +462,7 @@ export const runtimeScripts: ExtensionFactory = (pi: ExtensionAPI) => {
         : `Available scripts: ${scripts.length} of ${filtered.length}.`;
       const lines = scripts.map((script) => `• ${script.displayPath} — ${script.summary} {${script.collection}} [${script.kind}, ${script.weight}, ${script.role}]`);
       return {
-        content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }],
+        content: [{ type: "text", text: `${header}\n${VISIBLE_SCRIPT_HINT}\n${lines.join("\n")}` }],
         details: {
           total: filtered.length,
           count: scripts.length,

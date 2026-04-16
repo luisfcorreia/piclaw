@@ -431,6 +431,36 @@
     font-size: var(--font-size-xs); color: var(--text-secondary);
 }
 .session-tree-error-inline { color: var(--danger-color); }
+.session-tree-host-update {
+    max-width: min(40vw, 360px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-primary) 82%, var(--text-secondary) 18%);
+    color: var(--text-secondary);
+    font-size: var(--font-size-xs);
+}
+.session-tree-host-update.pending {
+    border-color: color-mix(in srgb, var(--warning-color, var(--accent-color)) 45%, var(--border-color) 55%);
+    color: var(--warning-color, var(--accent-color));
+}
+.session-tree-host-update.info {
+    border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-color) 55%);
+    color: var(--accent-color);
+}
+.session-tree-host-update.success {
+    border-color: color-mix(in srgb, var(--success-color) 45%, var(--border-color) 55%);
+    color: var(--success-color);
+}
+.session-tree-host-update.error {
+    border-color: color-mix(in srgb, var(--danger-color) 45%, var(--border-color) 55%);
+    color: var(--danger-color);
+}
 .st-search-input {
     flex: 1; min-width: 80px; max-width: 260px;
     padding: 5px 10px; border: 1px solid var(--border-color);

@@ -15,7 +15,7 @@ It is built for people who want a practical, stateful agent they can run locally
 - **Workspace-native workflow** — browse files, preview documents, upload attachments, drag files into the workspace explorer with progress feedback and a client-side size guard, edit code, reference files in prompts, and optionally flip core tools to a remote SSH host for the current session
 - **Built-in tools** — Ghostty-based terminal, code editor, Office/PDF/CSV/image/video viewers, draw.io, kanban board and mindmap editors, VNC client, browser automation, bundled MCP access via `pi-mcp-adapter`, and agent-only infrastructure tools for SSH, Proxmox, and Portainer
 - **Agent control features** — steering, queued follow-ups, threading, side prompts, autoresearch experiment loops, and scheduled tasks
-- **Context conservation by default** — small always-active tool baseline, staged internal-tool discovery (filtered discovery → compact summary → on-demand detail → activate/use), lazy activation for non-default tools, and opt-in examples for higher-detail workflow help
+- **Context conservation by default** — small always-active tool baseline, staged tool discovery via `list_tools` (filtered discovery → compact summary → on-demand detail → activate/use), lazy activation for non-default tools, and opt-in examples for higher-detail workflow help
 - **Optional auth and channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration
 
 ## Quick start

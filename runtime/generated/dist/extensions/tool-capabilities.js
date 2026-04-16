@@ -1,7 +1,7 @@
 /**
  * tool-capabilities – compact capability metadata for internal tool discovery.
  *
- * Each entry describes a tool's behavioral profile so that list_internal_tools
+ * Each entry describes a tool's behavioral profile so that list_tools
  * can return actionable summaries without dumping full schemas.
  */
 function rec(profile) {
@@ -87,9 +87,20 @@ const TOOL_CAPABILITIES = {
         }),
     },
     // discovery
+    list_tools: {
+        kind: "read-only",
+        weight: "lightweight",
+        summary: "List tools. Hint: start with query or intent, then request parameters only for shortlisted tools.",
+        recommend: rec({
+            domains: ["tools", "discovery"],
+            verbs: ["list", "discover", "find", "inspect"],
+            nouns: ["tools", "tool", "capabilities", "catalog"],
+        }),
+    },
     list_internal_tools: {
         kind: "read-only",
         weight: "lightweight",
+        summary: "Deprecated alias for list_tools.",
         recommend: rec({
             domains: ["tools", "discovery"],
             verbs: ["list", "discover", "find", "inspect"],
@@ -99,6 +110,7 @@ const TOOL_CAPABILITIES = {
     list_scripts: {
         kind: "read-only",
         weight: "standard",
+        summary: "List scripts and skills. Hint: use scope and role filters, then run workspace entrypoints with bun_run.",
         recommend: rec({
             domains: ["scripts", "discovery", "automation"],
             verbs: ["list", "discover", "find", "inspect"],

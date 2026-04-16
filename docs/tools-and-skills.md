@@ -28,7 +28,7 @@ Fixed baseline:
 - `edit`
 - `write`
 - `bash` on Linux/macOS, or `powershell` plus `bun_run` on Windows
-- `list_internal_tools`
+- `list_tools`
 - `activate_tools`
 - `reset_active_tools`
 - `attach_file`
@@ -42,14 +42,14 @@ Newly activated tools become available immediately to subsequent tool/model step
 
 For internal-tool discovery, prefer this order:
 
-1. **Recommend / narrow** — call `list_internal_tools` with `intent` when you know the goal but not the tool name, or use `query` when you already know the rough capability area.
+1. **Recommend / narrow** — call `list_tools` with `intent` when you know the goal but not the tool name, or use `query` when you already know the rough capability area.
 2. **Read compact summaries** — use the default summary/recommendation output first instead of requesting full schemas for everything.
 3. **Request detail only when needed** — use `include_parameters=true` only for the specific shortlisted tool you are about to use or inspect more deeply.
 4. **Activate / use** — call `activate_tools` only for the tool(s) you actually need beyond the effective default set.
 
 That keeps discovery separate from activation and avoids bulky “dump every tool schema first” behavior.
 
-`list_internal_tools(intent=...)` scores explicit tool metadata first (`name`, `description`, `promptSnippet`, toolsets, and capability profiles). When a tool also exposes structured discovery docs/JDocs (for example aliases, domains, verbs, nouns, keywords, guidance, or examples), those are treated as supplemental low-weight hints rather than overrides.
+`list_tools(intent=...)` scores explicit tool metadata first (`name`, `description`, `promptSnippet`, toolsets, and capability profiles). `list_internal_tools` remains as a deprecated compatibility alias during migration. When a tool also exposes structured discovery docs/JDocs (for example aliases, domains, verbs, nouns, keywords, guidance, or examples), those are treated as supplemental low-weight hints rather than overrides.
 
 ### ToolJDoc: supplemental discovery metadata
 
@@ -167,9 +167,9 @@ The same vocabulary is intentionally suitable for script discovery too. For scri
 Example:
 
 ```text
-1. list_internal_tools(intent="inspect recent messages")
+1. list_tools(intent="inspect recent messages")
 2. inspect the compact recommendations
-3. list_internal_tools(query="messages", include_parameters=true)
+3. list_tools(query="messages", include_parameters=true)
 4. if needed beyond the effective default set, activate_tools(names=["messages"])
 5. use the tool
 ```
@@ -201,7 +201,7 @@ You can extend that baseline with `.piclaw/config.json`:
 - `keychain` — list, get, set, and delete encrypted keychain entries
 - `schedule_task` — schedule agent prompts or shell commands (cron, interval, or one-shot)
 - `introspect_sql` — run read-only SQL queries against the messages database
-- `list_internal_tools` — list available tools with descriptions, active-state markers, and toolset membership; also supports compact intent-based recommendations via `intent`
+- `list_tools` — list available tools with descriptions, active-state markers, and toolset membership; also supports compact intent-based recommendations via `intent` (`list_internal_tools` remains as a deprecated compatibility alias during migration)
 - `list_scripts` — discover packaged skill scripts plus workspace skill/note scripts with compact summaries, role markers (`entrypoint` vs `module`), and Bun invocation hints
 - `activate_tools` — activate one or more available tools for the current session
 - `reset_active_tools` — restore the configured default active-tool set for the current session

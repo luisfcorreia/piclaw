@@ -965,7 +965,7 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         const userVisibleError = rateLimited
             ? `⚠️ AI provider rate limit after automatic retries:\n\n\`${errorText.slice(0, 500)}\`\n\nPiclaw now retries 429/rate-limit failures with exponential backoff up to 5 times before surfacing the error.`
             : isApiError
-                ? `⚠️ API error — the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error will repeat on every message. Try \`/new-session\` to start fresh, or manually repair the session JSONL.`
+                ? `⚠️ API error — the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error may repeat on every message. Try \`/compact\` to rewrite the session (this strips corrupt image blocks automatically), or \`/new-session\` to start fresh.`
                 : `⚠️ Agent error: ${errorText.slice(0, 300)}`;
         const errorNotice = channel.storeMessage(chatJid, userVisibleError, true, [], {
             threadId: resolvedThreadRootId ?? undefined,

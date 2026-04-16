@@ -1,5 +1,5 @@
 /**
- * internal-tools – registers list_internal_tools for quick tool discovery.
+ * internal-tools – registers list_tools for quick tool discovery.
  */
 import { Type } from "@sinclair/typebox";
 import { getToolsetsForTool, getEffectiveDefaultActiveToolNames } from "./tool-activation.js";
@@ -35,6 +35,7 @@ function normalizeText(value) {
         .trim();
 }
 const SHORT_TOKEN_ALLOWLIST = new Set(["ai", "db", "fs", "id", "ip", "mcp", "sql", "ssh", "ui", "vm", "vnc"]);
+const HIDDEN_DISCOVERY_ALIAS_NAMES = new Set(["list_internal_tools"]);
 const STOP_TOKENS = new Set([
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "get", "help", "how", "i", "if", "in", "into", "is", "it", "me", "my", "of", "on", "or", "our", "show", "something", "task", "that", "the", "this", "to", "tool", "tools", "use", "using", "want", "what", "with", "you",
 ]);
@@ -184,9 +185,10 @@ function getStructuredDiscoveryDoc(tool) {
 }
 function buildCatalog(api, includeParameters) {
     const activeSet = new Set(api.getActiveTools());
-    const visibleTools = process.platform === "win32" && api.getAllTools().some((tool) => tool.name === "powershell")
+    const platformVisibleTools = process.platform === "win32" && api.getAllTools().some((tool) => tool.name === "powershell")
         ? api.getAllTools().filter((tool) => tool.name !== "bash")
         : api.getAllTools();
+    const visibleTools = platformVisibleTools.filter((tool) => !HIDDEN_DISCOVERY_ALIAS_NAMES.has(tool.name));
     const defaultSet = new Set(getEffectiveDefaultActiveToolNames(visibleTools));
     return visibleTools
         .map((tool) => {
@@ -211,10 +213,8 @@ function buildCatalog(api, includeParameters) {
     })
         .sort((a, b) => a.name.localeCompare(b.name));
 }
-function filterCatalog(tools, query) {
-    if (!query)
-        return tools;
-    return tools.filter((tool) => tool.name.toLowerCase().includes(query)
+function matchesQuery(tool, query) {
+    return Boolean(tool.name.toLowerCase().includes(query)
         || tool.description.toLowerCase().includes(query)
         || tool.summary.toLowerCase().includes(query)
         || tool.promptSnippet?.toLowerCase().includes(query)
@@ -224,6 +224,85 @@ function filterCatalog(tools, query) {
         || tool.discoveryDoc?.keywords.some((entry) => entry.toLowerCase().includes(query))
         || tool.discoveryDoc?.examples.some((entry) => entry.toLowerCase().includes(query))
         || tool.discoveryDoc?.guidance.some((entry) => entry.toLowerCase().includes(query)));
+}
+function scoreQuery(tool, query) {
+    const normalizedQuery = normalizeText(query);
+    if (!normalizedQuery)
+        return 0;
+    const queryTokens = new Set(tokenizeText(query));
+    let score = 0;
+    const name = normalizeText(tool.name);
+    const summary = normalizeText(tool.summary);
+    const description = normalizeText(tool.description);
+    const promptSnippet = normalizeText(tool.promptSnippet);
+    const toolsets = tool.toolsets.map((toolset) => normalizeText(toolset));
+    if (name === normalizedQuery)
+        score += 60;
+    else if (name.includes(normalizedQuery))
+        score += 32;
+    if (summary.includes(normalizedQuery))
+        score += 20;
+    if (description.includes(normalizedQuery))
+        score += 12;
+    if (promptSnippet.includes(normalizedQuery))
+        score += 16;
+    if (toolsets.some((entry) => entry.includes(normalizedQuery)))
+        score += 12;
+    if (tool.discoveryDoc) {
+        if (normalizeText(tool.discoveryDoc.summary).includes(normalizedQuery))
+            score += 12;
+        if (tool.discoveryDoc.aliases.some((entry) => normalizeText(entry).includes(normalizedQuery)))
+            score += 20;
+        if (tool.discoveryDoc.keywords.some((entry) => normalizeText(entry).includes(normalizedQuery)))
+            score += 10;
+        if (tool.discoveryDoc.examples.some((entry) => normalizeText(entry).includes(normalizedQuery)))
+            score += 10;
+        if (tool.discoveryDoc.guidance.some((entry) => normalizeText(entry).includes(normalizedQuery)))
+            score += 8;
+    }
+    const addTokenScore = (terms, points) => {
+        if (!terms?.length || queryTokens.size === 0)
+            return;
+        for (const term of terms) {
+            for (const token of tokenizeText(term)) {
+                if (!queryTokens.has(token))
+                    continue;
+                score += points;
+            }
+        }
+    };
+    addTokenScore([tool.name], 6);
+    addTokenScore(tool.toolsets, 3);
+    addTokenScore([tool.summary], 3);
+    addTokenScore([tool.description], 2);
+    addTokenScore(tool.promptSnippet ? [tool.promptSnippet] : [], 4);
+    addTokenScore(tool.discoveryDoc?.aliases, 4);
+    addTokenScore(tool.discoveryDoc?.keywords, 2);
+    addTokenScore(tool.discoveryDoc?.examples, 2);
+    addTokenScore(tool.discoveryDoc?.guidance, 1);
+    addTokenScore(tool.discoveryDoc?.domains, 2);
+    addTokenScore(tool.discoveryDoc?.verbs, 1);
+    addTokenScore(tool.discoveryDoc?.nouns, 1);
+    if (tool.capability.recommend) {
+        addTokenScore(tool.capability.recommend.domains, 3);
+        addTokenScore(tool.capability.recommend.verbs, 2);
+        addTokenScore(tool.capability.recommend.nouns, 2);
+        addTokenScore(tool.capability.recommend.keywords, 2);
+    }
+    const mentionsScripts = queryTokens.has("script") || queryTokens.has("scripts") || queryTokens.has("skill") || queryTokens.has("skills");
+    const mentionsTools = queryTokens.has("tool") || queryTokens.has("tools") || queryTokens.has("discover") || queryTokens.has("discovery");
+    if (tool.name === "list_scripts" && mentionsScripts)
+        score += 40;
+    if (tool.name === PRIMARY_TOOL_NAME && mentionsTools)
+        score += 30;
+    return score;
+}
+function filterCatalog(tools, query) {
+    if (!query)
+        return tools;
+    return tools
+        .filter((tool) => matchesQuery(tool, query))
+        .sort((a, b) => scoreQuery(b, query) - scoreQuery(a, query) || a.name.localeCompare(b.name));
 }
 function addExactPhraseMatches(haystack, phrases, source, points, match) {
     if (!phrases?.length)
@@ -336,7 +415,7 @@ function scoreIntent(tool, intent) {
 }
 const HINT = [
     "## Internal Tool Discovery",
-    "If you are unsure about available tools, call list_internal_tools.",
+    "If you are unsure about available tools, call list_tools.",
     "Prefer the staged flow: query-filtered discovery → compact summary → on-demand parameters/details → activate/use.",
     "Use intent when you know the goal but not the tool name; use query when you already know the capability area.",
     "Use include_parameters only for the specific tool you are about to use or inspect in detail.",
@@ -352,118 +431,152 @@ const HINT = [
     "- Prefer Bun scripts over Python/uv. Use `brew install` for system tools, `sudo apt install` for system-level dependencies.",
     "- Keychain entries are auto-injected as $ENV_VARS into bash (names with `/`, `-`, `.` become `_` and uppercase). Never fetch secrets and inline them.",
 ].join("\n");
-/** Extension factory that registers list_internal_tools. */
+const PRIMARY_TOOL_NAME = "list_tools";
+const DEPRECATED_ALIAS_TOOL_NAME = "list_internal_tools";
+const PRIMARY_TOOL_DESCRIPTION = "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy, activation: default/on-demand) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.";
+const PRIMARY_TOOL_PROMPT_SNIPPET = "list_tools: Discover available tools with compact summaries first, or use intent for a compact recommendation shortlist before requesting schema details.";
+const VISIBLE_TOOL_HINT = "Hint: use query when you know the capability area, use intent when you know the goal, and request parameters only after shortlisting a tool.";
+const DEPRECATED_ALIAS_NOTICE = `Deprecated alias: use ${PRIMARY_TOOL_NAME} instead.`;
+/** Extension factory that registers list_tools plus a deprecated compatibility alias. */
 export const internalTools = (pi) => {
     pi.on("before_agent_start", async (event) => ({
         systemPrompt: `${event.systemPrompt}\n\n${HINT}`,
     }));
-    pi.registerTool({
-        name: "list_internal_tools",
-        label: "list_internal_tools",
-        description: "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy, activation: default/on-demand) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.",
-        promptSnippet: "list_internal_tools: Discover available internal tools with compact summaries first, or use intent for a compact recommendation shortlist before requesting schema details.",
-        parameters: InternalToolsSchema,
-        async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-            const query = params.query?.trim().toLowerCase() || "";
-            const intent = params.intent?.trim() || "";
-            const limit = clampLimit(params.limit, 100);
-            const includeParameters = Boolean(params.include_parameters);
-            const catalog = buildCatalog(pi, includeParameters);
-            const filtered = filterCatalog(catalog, query);
-            if (intent) {
-                const recommendations = filtered
-                    .map((tool) => scoreIntent(tool, intent))
-                    .filter((entry) => Boolean(entry))
-                    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
-                    .slice(0, Math.min(limit, 5));
-                if (recommendations.length === 0) {
-                    const queryHint = intent.split(/\s+/).slice(0, 4).join(" ").trim();
-                    const fallbackText = queryHint
-                        ? `No strong recommendation for "${intent}". Try list_internal_tools(query="${queryHint}") to narrow the catalog first.`
-                        : `No strong recommendation for "${intent}".`;
-                    return {
-                        content: [{ type: "text", text: fallbackText }],
-                        details: {
-                            total: filtered.length,
-                            count: 0,
-                            intent,
-                            ...(query ? { query: params.query?.trim() } : {}),
-                            recommendations: [],
-                        },
-                    };
-                }
-                const header = `Recommended tools for "${intent}": ${recommendations.length}.`;
-                const lines = recommendations.map(({ tool, reasons }) => {
-                    const active = tool.active ? " [active]" : "";
-                    const toolsets = tool.toolsets.length > 0 ? ` {${tool.toolsets.join(", ")}}` : "";
-                    const meta = `[${tool.kind}, ${tool.weight}, ${tool.activation}]`;
-                    const reasonText = reasons.length > 0 ? ` — ${joinReasonList(reasons)}` : "";
-                    return `• ${tool.name} — ${tool.summary}${reasonText}${active}${toolsets} ${meta}`;
-                });
+    const executeListTools = async (toolName, params) => {
+        const query = params.query?.trim().toLowerCase() || "";
+        const intent = params.intent?.trim() || "";
+        const limit = clampLimit(params.limit, 100);
+        const includeParameters = Boolean(params.include_parameters);
+        const catalog = buildCatalog(pi, includeParameters);
+        const filtered = filterCatalog(catalog, query);
+        if (intent) {
+            const recommendations = filtered
+                .map((tool) => scoreIntent(tool, intent))
+                .filter((entry) => Boolean(entry))
+                .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
+                .slice(0, Math.min(limit, 5));
+            if (recommendations.length === 0) {
+                const queryHint = intent.split(/\s+/).slice(0, 4).join(" ").trim();
+                const fallbackText = queryHint
+                    ? `No strong recommendation for "${intent}". Try ${PRIMARY_TOOL_NAME}(query="${queryHint}") to narrow the catalog first.`
+                    : `No strong recommendation for "${intent}".`;
+                const contentText = toolName === DEPRECATED_ALIAS_TOOL_NAME
+                    ? `${DEPRECATED_ALIAS_NOTICE}\n${fallbackText}`
+                    : fallbackText;
                 return {
-                    content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }],
+                    content: [{ type: "text", text: contentText }],
                     details: {
                         total: filtered.length,
-                        count: recommendations.length,
+                        count: 0,
                         intent,
                         ...(query ? { query: params.query?.trim() } : {}),
-                        recommendations: recommendations.map(({ tool, score, matchedTerms, matchedSources, reasons }) => ({
-                            name: tool.name,
-                            summary: tool.summary,
-                            score,
-                            matched_terms: matchedTerms,
-                            matched_sources: matchedSources,
-                            reason_summary: joinReasonList(reasons),
-                            active: tool.active,
-                            activation: tool.activation,
-                            kind: tool.kind,
-                            weight: tool.weight,
-                            toolsets: tool.toolsets,
-                            ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
-                            ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
-                            ...(tool.capability.recommend ? { recommendation_profile: tool.capability.recommend } : {}),
-                        })),
+                        recommendations: [],
+                        ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
                     },
                 };
             }
-            const tools = filtered.slice(0, limit);
-            if (tools.length === 0) {
-                return {
-                    content: [{ type: "text", text: query ? `No tools found matching "${params.query}".` : "No tools available." }],
-                    details: { total: filtered.length, count: 0, query: params.query?.trim(), tools: [] },
-                };
-            }
-            const activeCount = filtered.filter((tool) => tool.active).length;
-            const header = query
-                ? `Available tools (filtered): ${tools.length} of ${filtered.length}. Active in this view: ${activeCount}.`
-                : `Available tools: ${tools.length} of ${filtered.length}. Active: ${activeCount}.`;
-            const lines = tools.map((tool) => {
+            const header = `Recommended tools for "${intent}": ${recommendations.length}.`;
+            const lines = recommendations.map(({ tool, reasons }) => {
                 const active = tool.active ? " [active]" : "";
                 const toolsets = tool.toolsets.length > 0 ? ` {${tool.toolsets.join(", ")}}` : "";
                 const meta = `[${tool.kind}, ${tool.weight}, ${tool.activation}]`;
-                return `• ${tool.name} — ${tool.summary}${active}${toolsets} ${meta}`;
+                const reasonText = reasons.length > 0 ? ` — ${joinReasonList(reasons)}` : "";
+                return `• ${tool.name} — ${tool.summary}${reasonText}${active}${toolsets} ${meta}`;
             });
+            const bodyText = `${header}\n${VISIBLE_TOOL_HINT}\n${lines.join("\n")}`;
             return {
-                content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }],
+                content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${bodyText}` : bodyText }],
                 details: {
                     total: filtered.length,
-                    count: tools.length,
-                    query: params.query?.trim() || undefined,
-                    tools: tools.map((tool) => ({
+                    count: recommendations.length,
+                    intent,
+                    ...(query ? { query: params.query?.trim() } : {}),
+                    ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
+                    recommendations: recommendations.map(({ tool, score, matchedTerms, matchedSources, reasons }) => ({
                         name: tool.name,
-                        description: tool.description,
-                        ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
+                        summary: tool.summary,
+                        score,
+                        matched_terms: matchedTerms,
+                        matched_sources: matchedSources,
+                        reason_summary: joinReasonList(reasons),
                         active: tool.active,
                         activation: tool.activation,
                         kind: tool.kind,
                         weight: tool.weight,
-                        summary: tool.summary,
                         toolsets: tool.toolsets,
                         ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+                        ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
                         ...(tool.capability.recommend ? { recommendation_profile: tool.capability.recommend } : {}),
                     })),
                 },
             };
+        }
+        const tools = filtered.slice(0, limit);
+        if (tools.length === 0) {
+            const emptyText = query ? `No tools found matching "${params.query}".` : "No tools available.";
+            return {
+                content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${emptyText}` : emptyText }],
+                details: {
+                    total: filtered.length,
+                    count: 0,
+                    query: params.query?.trim(),
+                    tools: [],
+                    ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
+                },
+            };
+        }
+        const activeCount = filtered.filter((tool) => tool.active).length;
+        const header = query
+            ? `Available tools (filtered): ${tools.length} of ${filtered.length}. Active in this view: ${activeCount}.`
+            : `Available tools: ${tools.length} of ${filtered.length}. Active: ${activeCount}.`;
+        const lines = tools.map((tool) => {
+            const active = tool.active ? " [active]" : "";
+            const toolsets = tool.toolsets.length > 0 ? ` {${tool.toolsets.join(", ")}}` : "";
+            const meta = `[${tool.kind}, ${tool.weight}, ${tool.activation}]`;
+            return `• ${tool.name} — ${tool.summary}${active}${toolsets} ${meta}`;
+        });
+        const bodyText = `${header}\n${VISIBLE_TOOL_HINT}\n${lines.join("\n")}`;
+        return {
+            content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${bodyText}` : bodyText }],
+            details: {
+                total: filtered.length,
+                count: tools.length,
+                query: params.query?.trim() || undefined,
+                ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
+                tools: tools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    ...(tool.parameters !== undefined ? { parameters: tool.parameters } : {}),
+                    active: tool.active,
+                    activation: tool.activation,
+                    kind: tool.kind,
+                    weight: tool.weight,
+                    summary: tool.summary,
+                    toolsets: tool.toolsets,
+                    ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+                    ...(tool.capability.recommend ? { recommendation_profile: tool.capability.recommend } : {}),
+                })),
+            },
+        };
+    };
+    pi.registerTool({
+        name: PRIMARY_TOOL_NAME,
+        label: PRIMARY_TOOL_NAME,
+        description: PRIMARY_TOOL_DESCRIPTION,
+        promptSnippet: PRIMARY_TOOL_PROMPT_SNIPPET,
+        parameters: InternalToolsSchema,
+        async execute(_toolCallId, params) {
+            return executeListTools(PRIMARY_TOOL_NAME, params);
+        },
+    });
+    pi.registerTool({
+        name: DEPRECATED_ALIAS_TOOL_NAME,
+        label: DEPRECATED_ALIAS_TOOL_NAME,
+        description: `${DEPRECATED_ALIAS_NOTICE} ${PRIMARY_TOOL_DESCRIPTION}`,
+        promptSnippet: `${DEPRECATED_ALIAS_TOOL_NAME}: deprecated alias for ${PRIMARY_TOOL_NAME}. Prefer ${PRIMARY_TOOL_NAME} for staged tool discovery.`,
+        parameters: InternalToolsSchema,
+        async execute(_toolCallId, params) {
+            return executeListTools(DEPRECATED_ALIAS_TOOL_NAME, params);
         },
     });
 };

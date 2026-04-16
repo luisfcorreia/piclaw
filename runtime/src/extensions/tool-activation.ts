@@ -22,7 +22,7 @@ export const TOOLSETS: ToolsetDefinition[] = [
   {
     name: "discovery",
     description: "Tool discovery and lazy activation controls.",
-    toolNames: ["list_internal_tools", "list_scripts", "activate_tools", "reset_active_tools"],
+    toolNames: ["list_tools", "list_internal_tools", "list_scripts", "activate_tools", "reset_active_tools"],
   },
   {
     name: "attachments",
@@ -88,7 +88,7 @@ const DEFAULT_ACTIVE_TOOL_NAMES = [
   "powershell",
   "edit",
   "write",
-  "list_internal_tools",
+  "list_tools",
   "activate_tools",
   "reset_active_tools",
   "attach_file",
@@ -113,7 +113,7 @@ const AUTO_ACTIVE_TOOL_NAMES = [
 const TOOL_ACTIVATION_HINT = [
   "## Tool Activation",
   "Keep the active tool set small by default.",
-  "Discover first: if you are unsure which capability is available, call list_internal_tools with a focused query before activating extra tools.",
+  "Discover first: if you are unsure which capability is available, call list_tools with a focused query before activating extra tools.",
   "Use activate_tools to enable only what you need, when you need it.",
   "Newly activated tools become available immediately to subsequent tool/model steps in the same turn.",
   "Use reset_active_tools to return to the default configured tool set.",

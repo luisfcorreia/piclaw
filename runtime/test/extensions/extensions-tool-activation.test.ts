@@ -18,7 +18,8 @@ describe("tool-activation extension", () => {
 
     expect(fake.tools.has("activate_tools")).toBe(true);
     expect(fake.tools.has("reset_active_tools")).toBe(true);
-    expect(getDefaultActiveToolNames()).toContain("list_internal_tools");
+    expect(getDefaultActiveToolNames()).toContain("list_tools");
+    expect(getDefaultActiveToolNames()).not.toContain("list_internal_tools");
     expect(getDefaultActiveToolNames()).toContain("attach_file");
     expect(getDefaultActiveToolNames()).toContain("messages");
     expect(getDefaultActiveToolNames()).toContain("keychain");
@@ -95,7 +96,8 @@ describe("tool-activation extension", () => {
         { name: "read", description: "Read a file." },
         { name: "bash", description: "Run shell commands." },
         { name: "messages", description: "Read and write timeline messages." },
-        { name: "list_internal_tools", description: "List tools." },
+        { name: "list_tools", description: "List tools." },
+        { name: "list_internal_tools", description: "Deprecated list tools alias." },
         { name: "activate_tools", description: "Activate tools." },
         { name: "reset_active_tools", description: "Reset tools." },
         { name: "attach_file", description: "Attach a file." },
@@ -106,7 +108,7 @@ describe("tool-activation extension", () => {
         { name: "switch_model", description: "Switch model." },
         { name: "switch_thinking", description: "Switch thinking." },
       ],
-      activeTools: ["read", "bash", "list_internal_tools", "activate_tools", "reset_active_tools"],
+      activeTools: ["read", "bash", "list_tools", "activate_tools", "reset_active_tools"],
     });
 
     toolActivation(fake.api);

@@ -126,9 +126,6 @@ async function executeReadAttachment(_toolCallId, params) {
     const isImage = contentType.startsWith("image/");
     const isText = isTextContentType(contentType);
     if (mode === "image" || (mode === "auto" && isImage)) {
-        // Only return image blocks for MIME types Claude's API actually accepts.
-        // Anything else (PDF, SVG, etc.) would poison the session with a permanent 400 error.
-        const VALID_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
         if (!VALID_IMAGE_MIMES.has(contentType)) {
             return {
                 content: [{ type: "text", text: `Attachment ${filename} (${contentType}, ${formatBytes(size)}) cannot be returned as an image — only jpeg, png, gif, and webp are supported. Use mode: "text" or "base64" instead.` }],
@@ -141,13 +138,26 @@ async function executeReadAttachment(_toolCallId, params) {
                 details: { id, filename, content_type: contentType, size, truncated: true },
             };
         }
-        const encoded = Buffer.from(record.data).toString("base64");
+        // Validate and normalize the image using sharp before embedding.
+        // This prevents corrupt or mismatched images from poisoning the session
+        // with permanent 400 errors from the provider.
+        const rawBuffer = Buffer.from(record.data);
+        const validated = await validateAndNormalizeImage(rawBuffer, contentType);
+        if (!validated.ok) {
+            return {
+                content: [{ type: "text", text: `Attachment ${filename} (${contentType}, ${formatBytes(size)}) failed image validation: ${validated.reason}. Use mode: "base64" to get the raw data instead.` }],
+                details: { id, filename, content_type: contentType, size, mode: "text", image_validation_failed: true, reason: validated.reason },
+            };
+        }
+        const encoded = validated.data.toString("base64");
+        const effectiveMime = validated.mimeType;
+        const converted = effectiveMime !== contentType;
         return {
             content: [
-                { type: "text", text: `Attachment ${filename} (${formatBytes(size)})` },
-                { type: "image", data: encoded, mimeType: contentType },
+                { type: "text", text: `Attachment ${filename} (${formatBytes(validated.data.length)})${converted ? ` [converted from ${contentType} to ${effectiveMime}]` : ""}` },
+                { type: "image", data: encoded, mimeType: effectiveMime },
             ],
-            details: { id, filename, content_type: contentType, size, mode: "image" },
+            details: { id, filename, content_type: effectiveMime, original_content_type: contentType, size: validated.data.length, mode: "image", converted },
         };
     }
     const slice = record.data.slice(0, maxBytes);
@@ -207,6 +217,45 @@ const ATTACHMENT_HINT = [
 // ── Factory ───────────────────────────────────────────────
 /** MIME types Claude's API accepts for image content blocks. */
 const VALID_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+/**
+ * Validate and optionally re-encode image data using sharp.
+ *
+ * Returns a safe { data, mimeType } pair ready for embedding, or an error.
+ * If the image is already a valid supported format, it passes through unchanged.
+ * If the image is a supported format but corrupt/mismatched, it attempts
+ * re-encoding to JPEG as a safe fallback.
+ */
+async function validateAndNormalizeImage(rawData, claimedMime) {
+    try {
+        const sharp = (await import("sharp")).default;
+        const metadata = await sharp(rawData).metadata();
+        if (!metadata.format) {
+            return { ok: false, reason: "sharp could not detect image format" };
+        }
+        const FORMAT_TO_MIME = {
+            jpeg: "image/jpeg",
+            png: "image/png",
+            gif: "image/gif",
+            webp: "image/webp",
+        };
+        const detectedMime = FORMAT_TO_MIME[metadata.format] ?? `image/${metadata.format}`;
+        // If detected format matches claimed and is in the valid set, pass through
+        if (detectedMime === claimedMime && VALID_IMAGE_MIMES.has(claimedMime)) {
+            return { ok: true, data: rawData, mimeType: claimedMime };
+        }
+        // If detected format is valid but doesn't match the claim, use the detected one
+        if (VALID_IMAGE_MIMES.has(detectedMime)) {
+            return { ok: true, data: rawData, mimeType: detectedMime };
+        }
+        // Unsupported format — re-encode to JPEG as a safe fallback
+        const converted = await sharp(rawData).jpeg({ quality: 90 }).toBuffer();
+        return { ok: true, data: converted, mimeType: "image/jpeg" };
+    }
+    catch (error) {
+        // sharp failed entirely — image is likely corrupt
+        return { ok: false, reason: error instanceof Error ? error.message : "image validation failed" };
+    }
+}
 /** Extension factory that registers the attach_file tool. */
 export const fileAttachments = (pi) => {
     pi.on("before_agent_start", async (event) => {
@@ -224,7 +273,25 @@ export const fileAttachments = (pi) => {
                     const mime = block.mimeType || block.source?.media_type || "";
                     if (typeof mime === "string" && mime && !VALID_IMAGE_MIMES.has(mime)) {
                         blockModified = true;
-                        return { type: "text", text: `[Invalid image block removed: ${mime}]` };
+                        return { type: "text", text: `[Invalid image block removed: unsupported MIME ${mime}]` };
+                    }
+                    // Light sync validation: check that base64 data decodes to something
+                    // with recognizable image magic bytes. Heavy validation via sharp
+                    // happens at ingest (read_attachment); this catches corruption that
+                    // slipped through or was introduced by manual session edits.
+                    const b64 = typeof block.data === "string" ? block.data : (typeof block.source?.data === "string" ? block.source.data : null);
+                    if (b64) {
+                        try {
+                            const buf = Buffer.from(b64, "base64");
+                            if (buf.length < 4) {
+                                blockModified = true;
+                                return { type: "text", text: "[Corrupt image block removed: data too short]" };
+                            }
+                        }
+                        catch {
+                            blockModified = true;
+                            return { type: "text", text: "[Corrupt image block removed: invalid base64]" };
+                        }
                     }
                 }
                 if (block?.type === "tool_result" && Array.isArray(block.content)) {

@@ -1,8 +1,9 @@
 /**
- * internal-tools – registers list_internal_tools for quick tool discovery.
+ * internal-tools – registers list_tools for quick tool discovery.
  */
 import { Type } from "@sinclair/typebox";
 import type {
+  AgentToolResult,
   ExtensionAPI,
   ExtensionFactory,
 } from "@mariozechner/pi-coding-agent";
@@ -41,6 +42,7 @@ function normalizeText(value: string | undefined): string {
 }
 
 const SHORT_TOKEN_ALLOWLIST = new Set(["ai", "db", "fs", "id", "ip", "mcp", "sql", "ssh", "ui", "vm", "vnc"]);
+const HIDDEN_DISCOVERY_ALIAS_NAMES = new Set(["list_internal_tools"]);
 const STOP_TOKENS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "get", "help", "how", "i", "if", "in", "into", "is", "it", "me", "my", "of", "on", "or", "our", "show", "something", "task", "that", "the", "this", "to", "tool", "tools", "use", "using", "want", "what", "with", "you",
 ]);
@@ -238,9 +240,10 @@ function getStructuredDiscoveryDoc(tool: unknown): StructuredDiscoveryDoc | unde
 
 function buildCatalog(api: ExtensionAPI, includeParameters: boolean): ToolCatalogEntry[] {
   const activeSet = new Set(api.getActiveTools());
-  const visibleTools = process.platform === "win32" && api.getAllTools().some((tool) => tool.name === "powershell")
+  const platformVisibleTools = process.platform === "win32" && api.getAllTools().some((tool) => tool.name === "powershell")
     ? api.getAllTools().filter((tool) => tool.name !== "bash")
     : api.getAllTools();
+  const visibleTools = platformVisibleTools.filter((tool) => !HIDDEN_DISCOVERY_ALIAS_NAMES.has(tool.name));
   const defaultSet = new Set(getEffectiveDefaultActiveToolNames(visibleTools));
   return visibleTools
     .map((tool) => {
@@ -266,9 +269,8 @@ function buildCatalog(api: ExtensionAPI, includeParameters: boolean): ToolCatalo
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function filterCatalog(tools: ToolCatalogEntry[], query: string): ToolCatalogEntry[] {
-  if (!query) return tools;
-  return tools.filter((tool) =>
+function matchesQuery(tool: ToolCatalogEntry, query: string): boolean {
+  return Boolean(
     tool.name.toLowerCase().includes(query)
     || tool.description.toLowerCase().includes(query)
     || tool.summary.toLowerCase().includes(query)
@@ -278,8 +280,80 @@ function filterCatalog(tools: ToolCatalogEntry[], query: string): ToolCatalogEnt
     || tool.discoveryDoc?.aliases.some((entry) => entry.toLowerCase().includes(query))
     || tool.discoveryDoc?.keywords.some((entry) => entry.toLowerCase().includes(query))
     || tool.discoveryDoc?.examples.some((entry) => entry.toLowerCase().includes(query))
-    || tool.discoveryDoc?.guidance.some((entry) => entry.toLowerCase().includes(query)),
+    || tool.discoveryDoc?.guidance.some((entry) => entry.toLowerCase().includes(query))
   );
+}
+
+function scoreQuery(tool: ToolCatalogEntry, query: string): number {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return 0;
+  const queryTokens = new Set(tokenizeText(query));
+  let score = 0;
+
+  const name = normalizeText(tool.name);
+  const summary = normalizeText(tool.summary);
+  const description = normalizeText(tool.description);
+  const promptSnippet = normalizeText(tool.promptSnippet);
+  const toolsets = tool.toolsets.map((toolset) => normalizeText(toolset));
+
+  if (name === normalizedQuery) score += 60;
+  else if (name.includes(normalizedQuery)) score += 32;
+  if (summary.includes(normalizedQuery)) score += 20;
+  if (description.includes(normalizedQuery)) score += 12;
+  if (promptSnippet.includes(normalizedQuery)) score += 16;
+  if (toolsets.some((entry) => entry.includes(normalizedQuery))) score += 12;
+
+  if (tool.discoveryDoc) {
+    if (normalizeText(tool.discoveryDoc.summary).includes(normalizedQuery)) score += 12;
+    if (tool.discoveryDoc.aliases.some((entry) => normalizeText(entry).includes(normalizedQuery))) score += 20;
+    if (tool.discoveryDoc.keywords.some((entry) => normalizeText(entry).includes(normalizedQuery))) score += 10;
+    if (tool.discoveryDoc.examples.some((entry) => normalizeText(entry).includes(normalizedQuery))) score += 10;
+    if (tool.discoveryDoc.guidance.some((entry) => normalizeText(entry).includes(normalizedQuery))) score += 8;
+  }
+
+  const addTokenScore = (terms: string[] | undefined, points: number): void => {
+    if (!terms?.length || queryTokens.size === 0) return;
+    for (const term of terms) {
+      for (const token of tokenizeText(term)) {
+        if (!queryTokens.has(token)) continue;
+        score += points;
+      }
+    }
+  };
+
+  addTokenScore([tool.name], 6);
+  addTokenScore(tool.toolsets, 3);
+  addTokenScore([tool.summary], 3);
+  addTokenScore([tool.description], 2);
+  addTokenScore(tool.promptSnippet ? [tool.promptSnippet] : [], 4);
+  addTokenScore(tool.discoveryDoc?.aliases, 4);
+  addTokenScore(tool.discoveryDoc?.keywords, 2);
+  addTokenScore(tool.discoveryDoc?.examples, 2);
+  addTokenScore(tool.discoveryDoc?.guidance, 1);
+  addTokenScore(tool.discoveryDoc?.domains, 2);
+  addTokenScore(tool.discoveryDoc?.verbs, 1);
+  addTokenScore(tool.discoveryDoc?.nouns, 1);
+
+  if (tool.capability.recommend) {
+    addTokenScore(tool.capability.recommend.domains, 3);
+    addTokenScore(tool.capability.recommend.verbs, 2);
+    addTokenScore(tool.capability.recommend.nouns, 2);
+    addTokenScore(tool.capability.recommend.keywords, 2);
+  }
+
+  const mentionsScripts = queryTokens.has("script") || queryTokens.has("scripts") || queryTokens.has("skill") || queryTokens.has("skills");
+  const mentionsTools = queryTokens.has("tool") || queryTokens.has("tools") || queryTokens.has("discover") || queryTokens.has("discovery");
+  if (tool.name === "list_scripts" && mentionsScripts) score += 40;
+  if (tool.name === PRIMARY_TOOL_NAME && mentionsTools) score += 30;
+
+  return score;
+}
+
+function filterCatalog(tools: ToolCatalogEntry[], query: string): ToolCatalogEntry[] {
+  if (!query) return tools;
+  return tools
+    .filter((tool) => matchesQuery(tool, query))
+    .sort((a, b) => scoreQuery(b, query) - scoreQuery(a, query) || a.name.localeCompare(b.name));
 }
 
 function addExactPhraseMatches(
@@ -404,7 +478,7 @@ function scoreIntent(tool: ToolCatalogEntry, intent: string): RecommendationMatc
 
 const HINT = [
   "## Internal Tool Discovery",
-  "If you are unsure about available tools, call list_internal_tools.",
+  "If you are unsure about available tools, call list_tools.",
   "Prefer the staged flow: query-filtered discovery → compact summary → on-demand parameters/details → activate/use.",
   "Use intent when you know the goal but not the tool name; use query when you already know the capability area.",
   "Use include_parameters only for the specific tool you are about to use or inspect in detail.",
@@ -421,19 +495,23 @@ const HINT = [
   "- Keychain entries are auto-injected as $ENV_VARS into bash (names with `/`, `-`, `.` become `_` and uppercase). Never fetch secrets and inline them.",
 ].join("\n");
 
-/** Extension factory that registers list_internal_tools. */
+const PRIMARY_TOOL_NAME = "list_tools";
+const DEPRECATED_ALIAS_TOOL_NAME = "list_internal_tools";
+const PRIMARY_TOOL_DESCRIPTION = "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy, activation: default/on-demand) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.";
+const PRIMARY_TOOL_PROMPT_SNIPPET = "list_tools: Discover available tools with compact summaries first, or use intent for a compact recommendation shortlist before requesting schema details.";
+const VISIBLE_TOOL_HINT = "Hint: use query when you know the capability area, use intent when you know the goal, and request parameters only after shortlisting a tool.";
+const DEPRECATED_ALIAS_NOTICE = `Deprecated alias: use ${PRIMARY_TOOL_NAME} instead.`;
+
+/** Extension factory that registers list_tools plus a deprecated compatibility alias. */
 export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.on("before_agent_start", async (event) => ({
     systemPrompt: `${event.systemPrompt}\n\n${HINT}`,
   }));
 
-  pi.registerTool({
-    name: "list_internal_tools",
-    label: "list_internal_tools",
-    description: "List available internal tools with brief descriptions. Each result includes capability metadata (kind: read-only/mutating/mixed, weight: lightweight/standard/heavy, activation: default/on-demand) and toolset groupings. Start with query-filtered compact summaries; use intent for compact recommendations when you know the goal but not the tool name.",
-    promptSnippet: "list_internal_tools: Discover available internal tools with compact summaries first, or use intent for a compact recommendation shortlist before requesting schema details.",
-    parameters: InternalToolsSchema,
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+  const executeListTools = async (
+    toolName: string,
+    params: { query?: string; intent?: string; limit?: number; include_parameters?: boolean },
+  ): Promise<AgentToolResult<Record<string, unknown>>> => {
       const query = params.query?.trim().toLowerCase() || "";
       const intent = params.intent?.trim() || "";
       const limit = clampLimit(params.limit, 100);
@@ -451,16 +529,20 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
         if (recommendations.length === 0) {
           const queryHint = intent.split(/\s+/).slice(0, 4).join(" ").trim();
           const fallbackText = queryHint
-            ? `No strong recommendation for "${intent}". Try list_internal_tools(query="${queryHint}") to narrow the catalog first.`
+            ? `No strong recommendation for "${intent}". Try ${PRIMARY_TOOL_NAME}(query="${queryHint}") to narrow the catalog first.`
             : `No strong recommendation for "${intent}".`;
+          const contentText = toolName === DEPRECATED_ALIAS_TOOL_NAME
+            ? `${DEPRECATED_ALIAS_NOTICE}\n${fallbackText}`
+            : fallbackText;
           return {
-            content: [{ type: "text", text: fallbackText }],
+            content: [{ type: "text", text: contentText }],
             details: {
               total: filtered.length,
               count: 0,
               intent,
               ...(query ? { query: params.query?.trim() } : {}),
               recommendations: [],
+              ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
             },
           };
         }
@@ -474,13 +556,15 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
           return `• ${tool.name} — ${tool.summary}${reasonText}${active}${toolsets} ${meta}`;
         });
 
+        const bodyText = `${header}\n${VISIBLE_TOOL_HINT}\n${lines.join("\n")}`;
         return {
-          content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }],
+          content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${bodyText}` : bodyText }],
           details: {
             total: filtered.length,
             count: recommendations.length,
             intent,
             ...(query ? { query: params.query?.trim() } : {}),
+            ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
             recommendations: recommendations.map(({ tool, score, matchedTerms, matchedSources, reasons }) => ({
               name: tool.name,
               summary: tool.summary,
@@ -503,9 +587,16 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
 
       const tools = filtered.slice(0, limit);
       if (tools.length === 0) {
+        const emptyText = query ? `No tools found matching "${params.query}".` : "No tools available.";
         return {
-          content: [{ type: "text", text: query ? `No tools found matching "${params.query}".` : "No tools available." }],
-          details: { total: filtered.length, count: 0, query: params.query?.trim(), tools: [] },
+          content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${emptyText}` : emptyText }],
+          details: {
+            total: filtered.length,
+            count: 0,
+            query: params.query?.trim(),
+            tools: [],
+            ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
+          },
         };
       }
 
@@ -520,12 +611,14 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
         return `• ${tool.name} — ${tool.summary}${active}${toolsets} ${meta}`;
       });
 
+      const bodyText = `${header}\n${VISIBLE_TOOL_HINT}\n${lines.join("\n")}`;
       return {
-        content: [{ type: "text", text: `${header}\n${lines.join("\n")}` }],
+        content: [{ type: "text", text: toolName === DEPRECATED_ALIAS_TOOL_NAME ? `${DEPRECATED_ALIAS_NOTICE}\n${bodyText}` : bodyText }],
         details: {
           total: filtered.length,
           count: tools.length,
           query: params.query?.trim() || undefined,
+          ...(toolName === DEPRECATED_ALIAS_TOOL_NAME ? { deprecated_alias_of: PRIMARY_TOOL_NAME } : {}),
           tools: tools.map((tool) => ({
             name: tool.name,
             description: tool.description,
@@ -541,6 +634,27 @@ export const internalTools: ExtensionFactory = (pi: ExtensionAPI) => {
           })),
         },
       };
+    };
+
+  pi.registerTool({
+    name: PRIMARY_TOOL_NAME,
+    label: PRIMARY_TOOL_NAME,
+    description: PRIMARY_TOOL_DESCRIPTION,
+    promptSnippet: PRIMARY_TOOL_PROMPT_SNIPPET,
+    parameters: InternalToolsSchema,
+    async execute(_toolCallId, params) {
+      return executeListTools(PRIMARY_TOOL_NAME, params);
+    },
+  });
+
+  pi.registerTool({
+    name: DEPRECATED_ALIAS_TOOL_NAME,
+    label: DEPRECATED_ALIAS_TOOL_NAME,
+    description: `${DEPRECATED_ALIAS_NOTICE} ${PRIMARY_TOOL_DESCRIPTION}`,
+    promptSnippet: `${DEPRECATED_ALIAS_TOOL_NAME}: deprecated alias for ${PRIMARY_TOOL_NAME}. Prefer ${PRIMARY_TOOL_NAME} for staged tool discovery.`,
+    parameters: InternalToolsSchema,
+    async execute(_toolCallId, params) {
+      return executeListTools(DEPRECATED_ALIAS_TOOL_NAME, params);
     },
   });
 };

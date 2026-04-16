@@ -129,14 +129,101 @@ function getRowDisplay(node) {
     return { tag: role, tagClass: 'other', text: node.preview || '' };
 }
 
+export function buildTreeNavigationPayload(targetId, summarize = false) {
+    const cleanTargetId = typeof targetId === 'string' ? targetId.trim() : '';
+    if (!cleanTargetId) return null;
+    return {
+        text: summarize ? `/tree ${cleanTargetId} --summarize` : `/tree ${cleanTargetId}`,
+        navigateTargetId: cleanTargetId,
+        summarize: Boolean(summarize),
+    };
+}
+
+export function parseTreeNavigationCommand(text) {
+    const raw = typeof text === 'string' ? text.trim() : '';
+    if (!raw.startsWith('/tree')) return null;
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts[0] !== '/tree') return null;
+    let targetId = null;
+    let summarize = false;
+    for (let i = 1; i < parts.length; i++) {
+        const part = parts[i];
+        if (part === '--summarize') {
+            summarize = true;
+            continue;
+        }
+        if (!targetId && !part.startsWith('--')) {
+            targetId = part;
+        }
+    }
+    return targetId ? { targetId, summarize } : null;
+}
+
+export function resolveTreeSelectionId(rows, currentSelectedId, preferredId, leafId) {
+    const list = Array.isArray(rows) ? rows : [];
+    if (list.length === 0) return null;
+    const has = (id) => typeof id === 'string' && list.some((row) => row?.id === id);
+    if (has(currentSelectedId)) return currentSelectedId;
+    if (has(preferredId)) return preferredId;
+    if (has(leafId)) return leafId;
+    const active = list.find((row) => row?.active);
+    if (active?.id) return active.id;
+    return list[0]?.id || null;
+}
+
+export function describeSessionTreeHostUpdate(update) {
+    if (!update || typeof update !== 'object') return null;
+    const type = typeof update.type === 'string' ? update.type : '';
+    const preview = typeof update.preview === 'string' ? update.preview.trim() : '';
+    const error = typeof update.error === 'string' ? update.error.trim() : '';
+    const parsed = parseTreeNavigationCommand(preview);
+    const label = preview || 'tree command';
+
+    if (type === 'submit_pending') {
+        return { tone: 'pending', text: parsed ? `Sending ${label}` : 'Sending tree command…', refreshDelays: [] };
+    }
+    if (type === 'submit_sent') {
+        return {
+            tone: 'info',
+            text: parsed ? `Running ${label}` : 'Tree command sent.',
+            refreshDelays: parsed ? [500, 1500, 3500, 8000] : [],
+        };
+    }
+    if (type === 'submit_queued') {
+        return {
+            tone: 'info',
+            text: parsed ? `Queued ${label}` : 'Tree command queued.',
+            refreshDelays: parsed ? [1200, 3200, 7000, 12000] : [],
+        };
+    }
+    if (type === 'submit_failed') {
+        return { tone: 'error', text: error ? `Tree command failed: ${error}` : 'Tree command failed.', refreshDelays: [] };
+    }
+    if (type === 'refresh_building') {
+        return { tone: 'pending', text: 'Refreshing widget…', refreshDelays: [] };
+    }
+    if (type === 'refresh_failed') {
+        return { tone: 'error', text: error ? `Refresh failed: ${error}` : 'Refresh failed.', refreshDelays: [] };
+    }
+    if (type === 'refresh_dashboard' || type === 'refresh_ack') {
+        return { tone: 'success', text: 'Widget refreshed.', refreshDelays: [] };
+    }
+    return null;
+}
+
 export function SessionTreeWidget({ widget, onWidgetEvent }) {
     const initialTree = widget?.artifact?.tree && typeof widget.artifact.tree === 'object' ? widget.artifact.tree : null;
     const chatJid = (typeof widget?.originChatJid === 'string' && widget.originChatJid.trim()) ? widget.originChatJid.trim() : null;
+    const runtimeState = widget?.runtimeState && typeof widget.runtimeState === 'object' ? widget.runtimeState : null;
+    const hostUpdate = runtimeState?.lastHostUpdate && typeof runtimeState.lastHostUpdate === 'object' ? runtimeState.lastHostUpdate : null;
     const [state, setState] = useState(() => ({ loading: !initialTree, error: null, data: initialTree }));
-    const [selectedId, setSelectedId] = useState(null);
+    const [selectedId, setSelectedId] = useState(() => initialTree?.leafId || null);
     const [searchFilter, setSearchFilter] = useState('');
     const searchInputRef = useRef(null);
     const activeRowRef = useRef(null);
+    const preferredSelectionRef = useRef(initialTree?.leafId || null);
+    const loadTreeRef = useRef(null);
+    const scheduledRefreshKeyRef = useRef('');
 
     const loadTree = async () => {
         setState((current) => ({ ...current, loading: true, error: null }));
@@ -150,6 +237,7 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
             setState((current) => ({ loading: false, error: error?.message || 'Failed to load tree.', data: current?.data || initialTree || null }));
         }
     };
+    loadTreeRef.current = loadTree;
 
     useEffect(() => { loadTree(); }, [chatJid]);
 
@@ -158,6 +246,16 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
         if (!data || !Array.isArray(data.nodes) || data.nodes.length === 0) return [];
         return flattenTree(data.flat ? buildTreeFromFlat(data.nodes) : data.nodes);
     }, [state.data]);
+
+    useEffect(() => {
+        const nextSelectedId = resolveTreeSelectionId(flatRows, selectedId, preferredSelectionRef.current, state.data?.leafId || null);
+        if (nextSelectedId !== selectedId) {
+            setSelectedId(nextSelectedId);
+        }
+        if (preferredSelectionRef.current && state.data?.leafId === preferredSelectionRef.current) {
+            preferredSelectionRef.current = null;
+        }
+    }, [flatRows, selectedId, state.data?.leafId]);
 
     const filteredRows = useMemo(() => {
         const q = (searchFilter || '').trim().toLowerCase();
@@ -173,14 +271,40 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
     }, [flatRows, searchFilter]);
 
     const selectedNode = useMemo(() => filteredRows.find((n) => n.id === selectedId) || null, [filteredRows, selectedId]);
+    const hostUpdateSummary = useMemo(() => describeSessionTreeHostUpdate(hostUpdate), [
+        hostUpdate?.type,
+        hostUpdate?.preview,
+        hostUpdate?.error,
+        hostUpdate?.submittedAt,
+    ]);
 
-    useEffect(() => { if (activeRowRef.current) activeRowRef.current.scrollIntoView({ block: 'center', behavior: 'auto' }); }, [filteredRows.length]);
+    useEffect(() => {
+        if (activeRowRef.current) activeRowRef.current.scrollIntoView({ block: 'center', behavior: 'auto' });
+    }, [selectedId, state.data?.leafId, filteredRows.length]);
+
+    useEffect(() => {
+        const parsed = parseTreeNavigationCommand(hostUpdate?.preview);
+        if (parsed?.targetId) {
+            preferredSelectionRef.current = parsed.targetId;
+        }
+        const refreshDelays = hostUpdateSummary?.refreshDelays || [];
+        if (!refreshDelays.length) return undefined;
+        const refreshKey = [chatJid || '', hostUpdate?.type || '', hostUpdate?.submittedAt || '', hostUpdate?.preview || ''].join('|');
+        if (scheduledRefreshKeyRef.current === refreshKey) return undefined;
+        scheduledRefreshKeyRef.current = refreshKey;
+        const timers = refreshDelays.map((delay) => setTimeout(() => loadTreeRef.current?.(), delay));
+        return () => timers.forEach((timer) => clearTimeout(timer));
+    }, [chatJid, hostUpdate?.type, hostUpdate?.submittedAt, hostUpdate?.preview, hostUpdateSummary?.refreshDelays]);
 
     const submitNavigation = (summarize = false) => {
         const targetId = selectedNode?.id;
-        if (!targetId) return;
-        onWidgetEvent?.({ kind: 'widget.submit', payload: { text: summarize ? `/tree ${targetId} --summarize` : `/tree ${targetId}`, closeAfterSubmit: true } }, widget);
+        const payload = buildTreeNavigationPayload(targetId, summarize);
+        if (!payload) return;
+        preferredSelectionRef.current = payload.navigateTargetId;
+        onWidgetEvent?.({ kind: 'widget.submit', payload }, widget);
     };
+
+    const hostUpdateTone = hostUpdateSummary?.tone || 'info';
 
     return html`
         <div class="session-tree-widget">
@@ -197,6 +321,7 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
                     ${state.error && html`<span class="session-tree-error-inline">${state.error}</span>`}
                 </div>
                 <div class="session-tree-toolbar-right">
+                    ${hostUpdateSummary?.text && html`<span class=${`session-tree-host-update ${hostUpdateTone}`}>${hostUpdateSummary.text}</span>`}
                     ${state.data?.capped && html`<span class="session-tree-meta">Showing ${state.data?.nodes?.length || 0} of ${state.data?.total || 0}</span>`}
                     ${chatJid && html`<span class="session-tree-meta">${chatJid}</span>`}
                 </div>
@@ -213,7 +338,7 @@ export function SessionTreeWidget({ widget, onWidgetEvent }) {
                         const hasBranch = (node.children || []).length > 1;
                         const d = getRowDisplay(node);
                         return html`
-                            <button key=${node.id} ref=${node.active ? activeRowRef : null}
+                            <button key=${node.id} ref=${(node.active || sel) ? activeRowRef : null}
                                 class=${rowClass} type="button" role="treeitem" aria-selected=${sel}
                                 onClick=${() => setSelectedId(node.id)}>
                                 <span class="st-indent" style=${`width:${(node.depth || 0) * 16 + 6}px`}></span>

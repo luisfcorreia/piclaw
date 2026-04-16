@@ -7,31 +7,35 @@ import "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
 
 describe("internal-tools extension", () => {
-  test("registers list_internal_tools tool", async () => {
+  test("registers list_tools plus a deprecated list_internal_tools alias", async () => {
     const { internalTools } = await import("../../src/extensions/internal-tools.js");
     const fake = createFakeExtensionApi({ allTools: [] });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
+    const alias = fake.tools.get("list_internal_tools");
     expect(tool).toBeDefined();
-    expect(tool.name).toBe("list_internal_tools");
+    expect(tool.name).toBe("list_tools");
+    expect(alias).toBeDefined();
+    expect(alias.name).toBe("list_internal_tools");
   });
 
-  test("lists tools with brief descriptions and query filter", async () => {
+  test("lists tools with brief descriptions, query filter, and a visible discovery hint", async () => {
     const { internalTools } = await import("../../src/extensions/internal-tools.js");
     const fake = createFakeExtensionApi({
       allTools: [
         { name: "bash", description: "Run a shell command and return output." },
         { name: "messages", description: "Search, retrieve, add, or delete messages." },
-        { name: "list_internal_tools", description: "List available internal tools." },
+        { name: "list_tools", description: "List available internal tools." },
       ],
-      activeTools: ["bash", "list_internal_tools"],
+      activeTools: ["bash", "list_tools"],
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const all = await tool.execute("t1", {});
     expect(all.content[0].text).toContain("Available tools:");
+    expect(all.content[0].text).toContain("Hint: use query when you know the capability area");
     // bash line now uses summary from capability registry and includes metadata
     expect(all.content[0].text).toContain("bash");
     expect(all.content[0].text).toContain("[active]");
@@ -45,6 +49,37 @@ describe("internal-tools extension", () => {
     expect(filtered.content[0].text).not.toContain("• bash —");
   });
 
+  test("simple script/skill queries rank list_scripts into the visible list", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        {
+          name: "bun_run",
+          description: "Run a workspace Bun script directly.",
+          promptSnippet: "Execute workspace scripts directly.",
+        },
+        {
+          name: "search_workspace",
+          description: "Search workspace notes and script references.",
+          promptSnippet: "Search notes and scripts.",
+        },
+        {
+          name: "list_scripts",
+          description: "Discover packaged skill scripts plus workspace skill/note scripts with compact summaries and bun invocation hints.",
+          promptSnippet: "list_scripts: discover packaged skill or workspace scripts, then use bun_run for workspace-relative entrypoints when appropriate.",
+        },
+      ],
+    });
+    internalTools(fake.api);
+
+    const tool = fake.tools.get("list_tools");
+    const scriptsQuery = await tool.execute("t-scripts", { query: "scripts", limit: 1 });
+    expect(scriptsQuery.details.tools[0].name).toBe("list_scripts");
+
+    const skillsQuery = await tool.execute("t-skills", { query: "skills", limit: 1 });
+    expect(skillsQuery.details.tools[0].name).toBe("list_scripts");
+  });
+
   test("includes parameter schemas when requested", async () => {
     const { internalTools } = await import("../../src/extensions/internal-tools.js");
     const fake = createFakeExtensionApi({ allTools: [
@@ -56,7 +91,7 @@ describe("internal-tools extension", () => {
     ] });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t3", { include_parameters: true });
     expect(result.details.count).toBe(1);
     expect(result.details.tools[0].parameters).toBeDefined();
@@ -76,7 +111,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t6", { intent: "inspect recent messages" });
     expect(result.content[0].text).toContain('Recommended tools for "inspect recent messages"');
     expect(result.content[0].text).toContain('messages');
@@ -106,7 +141,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t7", { intent: "inspect recent Teams messages", include_parameters: true });
     expect(result.details.recommendations[0].name).toBe("m365_teams_messages");
     expect(result.details.recommendations[0].matched_sources).toContain("promptSnippet");
@@ -123,7 +158,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t8", { intent: "solder gpio pins" });
     expect(result.content[0].text).toContain('No strong recommendation');
     expect(result.details.recommendations).toEqual([]);
@@ -155,7 +190,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t8b", { intent: "check stale dist in the repo" });
     expect(result.details.recommendations[0].name).toBe("repo_validate");
     expect(result.details.recommendations[0].matched_sources.some((source: string) => source.startsWith("jdoc."))).toBe(true);
@@ -178,10 +213,81 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t8c", { query: "repo audit" });
     expect(result.details.count).toBe(1);
     expect(result.details.tools[0].name).toBe("repo_validate");
+  });
+
+  test("query mode can match examples and guidance from structured discovery docs", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        {
+          name: "send_invoice",
+          description: "Billing helper.",
+          promptSnippet: "General helper.",
+          jdoc: {
+            guidance: ["Always confirm before sending an invoice."],
+            examples: [{ description: "send the April invoice" }],
+          },
+        },
+      ],
+    });
+    internalTools(fake.api);
+
+    const tool = fake.tools.get("list_tools");
+    const byExample = await tool.execute("t8d", { query: "April invoice" });
+    expect(byExample.details.count).toBe(1);
+    expect(byExample.details.tools[0].name).toBe("send_invoice");
+
+    const byGuidance = await tool.execute("t8e", { query: "confirm before sending" });
+    expect(byGuidance.details.count).toBe(1);
+    expect(byGuidance.details.tools[0].name).toBe("send_invoice");
+  });
+
+  test("structured discovery doc can be assembled from metadata aliases, promptGuidelines, and examples", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        {
+          name: "invoice_send",
+          description: "Finance helper.",
+          promptSnippet: "General helper.",
+          aliases: ["invoice sender"],
+          promptGuidelines: ["Always confirm the recipient before sending."],
+          examples: [{ description: "send this invoice to accounting" }],
+          metadata: {
+            discovery: {
+              summary: "Send invoices after confirmation.",
+              domains: ["finance"],
+              verbs: ["send"],
+              nouns: ["invoice"],
+            },
+          },
+        },
+      ],
+    });
+    internalTools(fake.api);
+
+    const tool = fake.tools.get("list_tools");
+    const result = await tool.execute("t8f", { intent: "send invoice to accounting", include_parameters: true });
+    expect(result.details.recommendations[0].name).toBe("invoice_send");
+    expect(result.details.recommendations[0].matched_sources).toEqual(expect.arrayContaining(["jdoc.aliases", "jdoc.examples"]));
+  });
+
+  test("intent fallback includes a query hint when the intent has useful words", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        { name: "messages", description: "Search, retrieve, add, or delete messages." },
+      ],
+    });
+    internalTools(fake.api);
+
+    const tool = fake.tools.get("list_tools");
+    const result = await tool.execute("t8g", { intent: "solder gpio pins carefully" });
+    expect(result.content[0].text).toContain('Try list_tools(query="solder gpio pins carefully")');
   });
 
   test("details include capability metadata fields", async () => {
@@ -199,7 +305,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t4", {});
     const tools = result.details.tools;
 
@@ -241,6 +347,41 @@ describe("internal-tools extension", () => {
     expect(proxmoxTool.activation).toBe("on-demand");
   });
 
+  test("list_tools hides the deprecated alias from normal discovery output", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        { name: "bash", description: "Run a shell command." },
+        { name: "list_tools", description: "List tools." },
+        { name: "list_internal_tools", description: "Deprecated list tools alias." },
+      ],
+      activeTools: ["list_tools"],
+    });
+    internalTools(fake.api);
+
+    const tool = fake.tools.get("list_tools");
+    const result = await tool.execute("t-hidden-alias", {});
+    expect(result.details.tools.some((entry: any) => entry.name === "list_internal_tools")).toBe(false);
+  });
+
+  test("deprecated alias returns a deprecation notice while preserving results", async () => {
+    const { internalTools } = await import("../../src/extensions/internal-tools.js");
+    const fake = createFakeExtensionApi({
+      allTools: [
+        { name: "bash", description: "Run a shell command." },
+        { name: "list_tools", description: "List tools." },
+      ],
+      activeTools: ["list_tools"],
+    });
+    internalTools(fake.api);
+
+    const alias = fake.tools.get("list_internal_tools");
+    const result = await alias.execute("t-deprecated", { query: "shell" });
+    expect(result.content[0].text).toContain("Deprecated alias: use list_tools instead.");
+    expect(result.details.deprecated_alias_of).toBe("list_tools");
+    expect(result.details.tools[0].name).toBe("bash");
+  });
+
   test("unknown tools get sensible default capabilities", async () => {
     const { internalTools } = await import("../../src/extensions/internal-tools.js");
     const fake = createFakeExtensionApi({
@@ -250,7 +391,7 @@ describe("internal-tools extension", () => {
     });
     internalTools(fake.api);
 
-    const tool = fake.tools.get("list_internal_tools");
+    const tool = fake.tools.get("list_tools");
     const result = await tool.execute("t5", {});
     const custom = result.details.tools[0];
     expect(custom.kind).toBe("mixed");

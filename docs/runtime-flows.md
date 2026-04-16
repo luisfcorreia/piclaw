@@ -276,7 +276,7 @@ For infrastructure work, the preferred discovery path is:
 
 For internal tools, the parallel staged path is:
 
-`list_internal_tools(query)` → compact summaries → on-demand parameters/details → `activate_tools` / use
+`list_tools(query)` → compact summaries → on-demand parameters/details → `activate_tools` / use
 
 Only fall back to raw `request` when the curated workflow surface is not the right fit.
 

@@ -322,7 +322,7 @@ Notes:
 ### Default active tools
 
 Piclaw now keeps the agent's always-active tool list intentionally small and uses
-`list_internal_tools` and `activate_tools` to enable extra capabilities on demand.
+`list_tools` and `activate_tools` to enable extra capabilities on demand (`list_internal_tools` remains as a deprecated compatibility alias during migration).
 
 Built-in default baseline:
 
@@ -330,7 +330,7 @@ Built-in default baseline:
 - `edit`
 - `write`
 - `bash` on Linux/macOS, or `powershell` plus `bun_run` on Windows
-- `list_internal_tools`
+- `list_tools`
 - `activate_tools`
 - `reset_active_tools`
 - `attach_file`
