@@ -39,6 +39,12 @@ export interface AgentSessionManagerOptions {
  * Handles lifecycle operations for main and auxiliary AgentSession instances.
  */
 export class AgentSessionManager {
+  private readonly createInFlight = new Map<string, Promise<AgentSessionRuntime>>();
+  private readonly prewarmInFlight = new Set<string>();
+  private readonly queuedPrewarms = new Set<string>();
+  private readonly prewarmQueue: string[] = [];
+  private prewarmLoopActive = false;
+
   constructor(private readonly options: AgentSessionManagerOptions) {}
 
   async refreshRuntime(chatJid: string, runtime: AgentSessionRuntime): Promise<void> {
@@ -51,39 +57,56 @@ export class AgentSessionManager {
   }
 
   async getOrCreate(chatJid: string): Promise<AgentSessionRuntime> {
+    const pendingCreate = this.createInFlight.get(chatJid);
+    if (pendingCreate) {
+      return await pendingCreate;
+    }
+
     const existing = this.options.pool.get(chatJid);
     if (existing) {
       existing.lastUsed = Date.now();
       return existing.runtime;
     }
 
-    this.options.onInfo?.("Creating new session", {
-      operation: "get_or_create.create_main_session",
-      chatJid,
-    });
+    const task = (async () => {
+      this.options.onInfo?.("Creating new session", {
+        operation: "get_or_create.create_main_session",
+        chatJid,
+      });
 
-    const chatSessionDir = ensureSessionDir(chatJid);
+      const chatSessionDir = ensureSessionDir(chatJid);
 
-    const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
-    const runtime = this.options.createSession
-      ? await this.options.createSession(chatJid, chatSessionDir)
-      : await createDefaultSession(chatJid, {
-          authStorage: this.options.authStorage,
-          modelRegistry: this.options.modelRegistry,
-          settingsManager: this.options.settingsManager,
-          tools: this.options.createDefaultTools(),
-          extensionFactories,
+      const extensionFactories = await this.options.getSessionExtensionFactories?.(chatJid) ?? [];
+      const runtime = this.options.createSession
+        ? await this.options.createSession(chatJid, chatSessionDir)
+        : await createDefaultSession(chatJid, {
+            authStorage: this.options.authStorage,
+            modelRegistry: this.options.modelRegistry,
+            settingsManager: this.options.settingsManager,
+            tools: this.options.createDefaultTools(),
+            extensionFactories,
+          });
+
+      this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+      try {
+        await this.applyDefaultModel(runtime.session);
+        await this.refreshRuntime(chatJid, runtime);
+        this.options.onInfo?.("Session ready", {
+          operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
+          chatJid,
+          poolSize: this.options.pool.size,
         });
-
-    this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
-    await this.applyDefaultModel(runtime.session);
-    await this.refreshRuntime(chatJid, runtime);
-    this.options.onInfo?.("Session ready", {
-      operation: this.options.createSession ? "get_or_create.create_main_session" : "get_or_create.create_default_session",
-      chatJid,
-      poolSize: this.options.pool.size,
+        return runtime;
+      } catch (err) {
+        await this.disposeMainRuntimeAfterError(chatJid, runtime, "get_or_create.dispose_after_error");
+        throw err;
+      }
+    })().finally(() => {
+      this.createInFlight.delete(chatJid);
     });
-    return runtime;
+
+    this.createInFlight.set(chatJid, task);
+    return await task;
   }
 
   async getOrCreateSide(chatJid: string): Promise<AgentSessionRuntime> {
@@ -169,6 +192,22 @@ export class AgentSessionManager {
   async recreate(chatJid: string): Promise<void> {
     await this.disposeEntry(this.options.pool, chatJid, "recreate.dispose_main_session");
     await this.disposeEntry(this.options.sidePool, chatJid, "recreate.dispose_side_session", true);
+  }
+
+  prewarm(chatJid: string, options: { priority?: boolean } = {}): boolean {
+    const normalizedChatJid = String(chatJid || "").trim();
+    if (!normalizedChatJid) return false;
+    if (this.options.pool.has(normalizedChatJid)) return false;
+    if (this.prewarmInFlight.has(normalizedChatJid) || this.queuedPrewarms.has(normalizedChatJid)) return false;
+
+    this.queuedPrewarms.add(normalizedChatJid);
+    if (options.priority) {
+      this.prewarmQueue.unshift(normalizedChatJid);
+    } else {
+      this.prewarmQueue.push(normalizedChatJid);
+    }
+    this.drainPrewarmQueue();
+    return true;
   }
 
   async shutdown(): Promise<void> {
@@ -275,6 +314,59 @@ export class AgentSessionManager {
         operation: "apply_default_model",
         model: `${provider}/${modelId}`,
         err,
+      });
+    }
+  }
+
+  private drainPrewarmQueue(): void {
+    if (this.prewarmLoopActive) return;
+    this.prewarmLoopActive = true;
+
+    void (async () => {
+      try {
+        while (this.prewarmQueue.length > 0) {
+          const chatJid = this.prewarmQueue.shift();
+          if (!chatJid) continue;
+          this.queuedPrewarms.delete(chatJid);
+          if (this.prewarmInFlight.has(chatJid) || this.options.pool.has(chatJid)) continue;
+
+          this.prewarmInFlight.add(chatJid);
+          try {
+            await this.getOrCreate(chatJid);
+            this.options.onInfo?.("Prewarmed chat session", {
+              operation: "prewarm_session",
+              chatJid,
+            });
+          } catch (err) {
+            this.options.onWarn?.("Failed to prewarm chat session", {
+              operation: "prewarm_session",
+              chatJid,
+              err,
+            });
+          } finally {
+            this.prewarmInFlight.delete(chatJid);
+          }
+        }
+      } finally {
+        this.prewarmLoopActive = false;
+        if (this.prewarmQueue.length > 0) {
+          this.drainPrewarmQueue();
+        }
+      }
+    })();
+  }
+
+  private async disposeMainRuntimeAfterError(chatJid: string, runtime: AgentSessionRuntime, operation: string): Promise<void> {
+    if (this.options.pool.get(chatJid)?.runtime === runtime) {
+      this.options.pool.delete(chatJid);
+    }
+    try {
+      await runtime.dispose();
+    } catch (disposeErr) {
+      this.options.onWarn?.("Failed to dispose session after initialization error", {
+        operation,
+        chatJid,
+        err: disposeErr,
       });
     }
   }
