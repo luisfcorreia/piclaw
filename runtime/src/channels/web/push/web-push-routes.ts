@@ -7,6 +7,10 @@ import {
   removeStoredWebPushSubscription,
   upsertStoredWebPushSubscription,
 } from "./web-push-store.js";
+import {
+  webNotificationPresenceService,
+  type WebNotificationPresenceService,
+} from "./web-notification-presence-service.js";
 
 function resolveUserAgent(req: Request): string | null {
   const value = req.headers.get("user-agent");
@@ -52,4 +56,35 @@ export async function handleWebPushSubscriptionDelete(req: Request, options: { b
 
   const removed = removeStoredWebPushSubscription(endpoint, options.baseDir);
   return Response.json({ ok: true, removed });
+}
+
+export async function handleWebPushPresence(
+  req: Request,
+  options: { presenceService?: WebNotificationPresenceService } = {},
+): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => null);
+    const payload = body && typeof body === "object" ? body as Record<string, unknown> : null;
+    if (!payload) {
+      return Response.json({ error: "Invalid web notification presence payload." }, { status: 400 });
+    }
+
+    const presenceService = options.presenceService || webNotificationPresenceService;
+    if (payload.active === false) {
+      const removed = presenceService.remove(payload);
+      return Response.json({ ok: true, active: false, removed });
+    }
+
+    const stored = presenceService.upsert(payload, { userAgent: resolveUserAgent(req) });
+    return Response.json({
+      ok: true,
+      active: true,
+      device_id: stored.deviceId,
+      client_id: stored.clientId,
+      chat_jid: stored.chatJid,
+      visibility_state: stored.visibilityState,
+    });
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Invalid web notification presence payload." }, { status: 400 });
+  }
 }

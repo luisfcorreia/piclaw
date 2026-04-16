@@ -72,6 +72,7 @@ interface UseChatPaneRuntimeOrchestrationOptions {
   lastNotifiedIdRef: RefBox<string | number | null>;
   agentsRef: RefBox<Record<string, any>>;
   notify: (title: string, body: string) => void;
+  shouldNotifyLocallyForChat: (chatJid: string) => boolean;
 }
 
 export function useChatPaneRuntimeOrchestration(options: UseChatPaneRuntimeOrchestrationOptions) {
@@ -122,6 +123,7 @@ export function useChatPaneRuntimeOrchestration(options: UseChatPaneRuntimeOrche
     lastNotifiedIdRef,
     agentsRef,
     notify,
+    shouldNotifyLocallyForChat,
   } = options;
 
   const clearQueuedSteerStateIfStale = useCallback((remainingQueueCount: number) => {
@@ -285,14 +287,12 @@ export function useChatPaneRuntimeOrchestration(options: UseChatPaneRuntimeOrche
   }, [currentTurnIdRef, draftBufferRef, draftExpandedRef, lastAgentResponseRef, pendingRequestRef, setAgentDraft, setAgentPlan, setAgentThought, setCurrentTurnId, setPendingRequest, setSteerQueuedTurnId, silentRecoveryRef, steerQueuedTurnIdRef, thoughtBufferRef, thoughtExpandedRef]);
 
   const notifyForFinalResponse = useCallback((turnId: string | null | undefined) => {
-    if (typeof document !== 'undefined') {
-      const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
-      if (!document.hidden && hasFocus) return;
-    }
     const entry = lastAgentResponseRef.current;
     if (!entry || !entry.post) return;
     if (turnId && entry.turnId && entry.turnId !== turnId) return;
     const post = entry.post;
+    const chatJid = typeof post?.chat_jid === 'string' && post.chat_jid.trim() ? post.chat_jid.trim() : '';
+    if (!chatJid || !shouldNotifyLocallyForChat(chatJid)) return;
     if (post.id && lastNotifiedIdRef.current === post.id) return;
     const content = String(post?.data?.content || '').trim();
     if (!content) return;
@@ -302,8 +302,8 @@ export function useChatPaneRuntimeOrchestration(options: UseChatPaneRuntimeOrche
     const agentsMap = agentsRef.current || {};
     const agent = post?.data?.agent_id ? agentsMap[post.data.agent_id] : null;
     const title = agent?.name || 'Pi';
-    notify(title, body);
-  }, [agentsRef, lastAgentResponseRef, lastNotifiedIdRef, notify]);
+    notify(title, body, { sourceLabel: 'Local' });
+  }, [agentsRef, lastAgentResponseRef, lastNotifiedIdRef, notify, shouldNotifyLocallyForChat]);
 
   return {
     clearQueuedSteerStateIfStale,
