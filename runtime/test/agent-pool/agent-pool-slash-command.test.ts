@@ -75,6 +75,7 @@ test("executeSlashCommand runs known extension command outside prompt turn handl
   const result = await executeSlashCommand(session as any, "web:default", "/ext hello");
   expect(result.status).toBe("success");
   expect(result.message).toContain("Ext hello");
+  expect(result.refresh_runtime).toBe(true);
   expect(session.promptCalls).toHaveLength(0);
   expect(session.commandCalls).toEqual([{ name: "ext", args: "hello" }]);
 });

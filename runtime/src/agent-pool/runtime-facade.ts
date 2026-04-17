@@ -470,7 +470,7 @@ export class AgentRuntimeFacade {
     const channel = detectChannel(chatJid);
     const apply = this.options.applyControlCommandFn ?? applyControlCommand;
     const result = await withChatContext(chatJid, channel, () => apply(runtime, this.options.modelRegistry, command));
-    if (runtime.session !== session) {
+    if (result.refresh_runtime || runtime.session !== session) {
       await this.options.refreshRuntime(chatJid, runtime);
     }
     return result;
@@ -651,11 +651,21 @@ export class AgentRuntimeFacade {
         const cleared = session.clearQueue();
         const nextFollowups = cleared.followUp.filter((_, idx) => idx !== removeIndex);
 
-        for (const steer of cleared.steering) {
-          await session.prompt(steer, { streamingBehavior: "steer" });
-        }
-        for (const followup of nextFollowups) {
-          await session.prompt(followup, { streamingBehavior: "followUp" });
+        try {
+          await this.restoreQueuedMessages(session, cleared.steering, nextFollowups);
+        } catch (err) {
+          try {
+            session.clearQueue();
+            await this.restoreQueuedMessages(session, cleared.steering, cleared.followUp);
+          } catch (restoreErr) {
+            this.options.onWarn?.("Failed to restore queued follow-up after removal error", {
+              operation: "remove_queued_follow_up.restore",
+              chatJid,
+              err: restoreErr,
+              originalError: err,
+            });
+          }
+          throw err;
         }
 
         return true;
@@ -670,6 +680,19 @@ export class AgentRuntimeFacade {
     }
   }
 
+  private async restoreQueuedMessages(
+    session: { prompt: (text: string, options?: { streamingBehavior?: "steer" | "followUp" }) => Promise<unknown> },
+    steering: readonly string[],
+    followUp: readonly string[],
+  ): Promise<void> {
+    for (const steer of steering) {
+      await session.prompt(steer, { streamingBehavior: "steer" });
+    }
+    for (const queued of followUp) {
+      await session.prompt(queued, { streamingBehavior: "followUp" });
+    }
+  }
+
   async applySlashCommand(chatJid: string, rawText: string): Promise<AgentControlResult> {
     this.options.clearAttachments(chatJid);
     const runtime = await this.options.getOrCreateRuntime(chatJid);
@@ -677,7 +700,7 @@ export class AgentRuntimeFacade {
     const channel = detectChannel(chatJid);
     const exec = this.options.executeSlashCommandFn ?? executeSlashCommand;
     const result = await withChatContext(chatJid, channel, () => exec(session, chatJid, rawText));
-    if (runtime.session !== session) {
+    if (result.refresh_runtime || runtime.session !== session) {
       await this.options.refreshRuntime(chatJid, runtime);
     }
     this.options.clearAttachments(chatJid);

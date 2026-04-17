@@ -251,6 +251,7 @@ export interface AgentControlResult {
   status: "success" | "error";
   message: string;
   messages?: Array<{ role: string; text: string; customType?: string }>;
+  refresh_runtime?: boolean;
   queued_followup?: boolean;
   queued_steer?: boolean;
   model_label?: string | null;

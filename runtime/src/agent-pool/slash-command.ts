@@ -257,7 +257,12 @@ export async function executeSlashCommand(
       durationMs: Date.now() - startTime,
       outputChars: message.length,
     });
-    return { status: "success", message, messages: capturedMessages };
+    return {
+      status: "success",
+      message,
+      messages: capturedMessages,
+      ...(kind.kind === "extension" ? { refresh_runtime: true } : {}),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     log.error("Slash command failed", {

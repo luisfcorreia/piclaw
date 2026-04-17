@@ -111,6 +111,7 @@ export async function handleRestart(session: AgentSession, _command: RestartComm
   return {
     status: "success",
     message: `Agent restarted. Killed ${killedLabel}.`,
+    refresh_runtime: true,
   };
 }
 
