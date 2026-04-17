@@ -313,6 +313,86 @@ function handlePairInbox(pi: ExtensionAPI): void {
   });
 }
 
+// ─── Proposal Actions ────────────────────────────────────────────────────────
+
+async function runRejectProposalFlow(idOrReason: string, pi: ExtensionAPI): Promise<void> {
+  const spaceIdx = idOrReason.indexOf(" ");
+  const proposalId = spaceIdx === -1 ? idOrReason : idOrReason.slice(0, spaceIdx);
+  const reason = spaceIdx === -1 ? "" : idOrReason.slice(spaceIdx + 1).trim();
+
+  const proposal = getRemoteRequestById(proposalId);
+  if (!proposal) {
+    pi.sendMessage({ customType: "remote-pair", content: `Reject failed: no proposal found for \`${proposalId}\`.`, display: true });
+    return;
+  }
+  if (proposal.status !== "pending") {
+    pi.sendMessage({ customType: "remote-pair", content: `Proposal \`${proposalId}\` is already ${proposal.status}.`, display: true });
+    return;
+  }
+
+  updateRemoteRequestDecision(proposalId, "rejected", null, reason || null);
+
+  // Push rejection callback to the peer if possible.
+  const peer = getRemotePeer(proposal.peer_instance_id);
+  if (peer?.base_url) {
+    try {
+      const identity = loadOrCreateIdentity();
+      const endpoint = "/api/remote/result";
+      const body = JSON.stringify({
+        negotiation_id: proposalId,
+        decision: "deny",
+        reason: reason || "Rejected by operator.",
+      });
+      const bodyBytes = new TextEncoder().encode(body);
+      const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch);
+      await fetch(`${peer.base_url}${endpoint}`, { method: "POST", headers, body });
+    } catch (err) {
+      log.warn("Failed to push rejection callback", { operation: "remote-pair.reject-callback", err });
+    }
+  }
+
+  const peerLabel = peer?.display_name ?? formatFingerprint(proposal.peer_instance_id);
+  pi.sendMessage({
+    customType: "remote-pair",
+    content: `Proposal \`${proposalId}\` from **${peerLabel}** rejected.${reason ? ` Reason: ${reason}` : ""}`,
+    display: true,
+  });
+}
+
+function runApproveProposalFlow(proposalId: string, pi: ExtensionAPI): void {
+  const proposal = getRemoteRequestById(proposalId);
+  if (!proposal) {
+    pi.sendMessage({ customType: "remote-pair", content: `Approve failed: no proposal found for \`${proposalId}\`.`, display: true });
+    return;
+  }
+  if (proposal.status !== "pending") {
+    pi.sendMessage({ customType: "remote-pair", content: `Proposal \`${proposalId}\` is already ${proposal.status}.`, display: true });
+    return;
+  }
+
+  const peer = getRemotePeer(proposal.peer_instance_id);
+  const peerLabel = peer?.display_name ?? formatFingerprint(proposal.peer_instance_id);
+
+  // Show the full prompt for operator awareness before triggering execution.
+  pi.sendMessage({
+    customType: "remote-pair",
+    content: `Approving proposal \`${proposalId}\` from **${peerLabel}**:\n> ${proposal.prompt}\n\nExecution queued.`,
+    display: true,
+  });
+
+  // Write an IPC task file to trigger execution via agentPool (which the
+  // extension cannot access directly).
+  try {
+    const dir = join(DATA_DIR, "ipc", "tasks");
+    mkdirSync(dir, { recursive: true });
+    const payload = JSON.stringify({ type: "execute_proposal", proposal_id: proposalId });
+    writeFileSync(join(dir, `proposal-${proposalId}-${Date.now()}.json`), payload);
+  } catch (err) {
+    log.error("Failed to write execute_proposal IPC task", { operation: "remote-pair.approve", err });
+    pi.sendMessage({ customType: "remote-pair", content: `Approve failed: could not queue execution.`, display: true });
+  }
+}
+
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 /**
@@ -707,6 +787,28 @@ export const remotePair: ExtensionFactory = (pi: ExtensionAPI) => {
 
       if (sub === "inbox") {
         handlePairInbox(pi);
+        return;
+      }
+
+      if (sub === "approve") {
+        if (!rest) {
+          pi.sendMessage({ customType: "remote-pair", content: "Usage: /pair approve <proposal_id>", display: true });
+          return;
+        }
+        runApproveProposalFlow(rest, pi);
+        return;
+      }
+
+      if (sub === "reject") {
+        if (!rest) {
+          pi.sendMessage({ customType: "remote-pair", content: "Usage: /pair reject <proposal_id> [reason]", display: true });
+          return;
+        }
+        runRejectProposalFlow(rest, pi).catch((err) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          log.error("Reject flow error", { operation: "remote-pair.reject", err });
+          pi.sendMessage({ customType: "remote-pair", content: `Reject error: ${msg}`, display: true });
+        });
         return;
       }
 
