@@ -344,7 +344,7 @@ async function runRejectProposalFlow(idOrReason: string, pi: ExtensionAPI): Prom
         reason: reason || "Rejected by operator.",
       });
       const bodyBytes = new TextEncoder().encode(body);
-      const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch);
+      const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch ?? undefined);
       await fetch(`${peer.base_url}${endpoint}`, { method: "POST", headers, body });
     } catch (err) {
       log.warn("Failed to push rejection callback", { operation: "remote-pair.reject-callback", err });
@@ -679,7 +679,7 @@ export async function runAskFlow(idOrFingerprint: string, prompt: string, pi: Ex
   const endpoint = useExecute ? "/api/remote/execute" : "/api/remote/proposal";
   const bodyText = JSON.stringify({ prompt });
   const bodyBytes = new TextEncoder().encode(bodyText);
-  const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch);
+  const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch ?? undefined);
   headers["X-Request-Hop"] = "0";
   headers["X-Request-Chain-Id"] = randomUUID();
 

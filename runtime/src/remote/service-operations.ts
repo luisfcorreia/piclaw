@@ -294,12 +294,13 @@ export async function handleResult(req: Request, context: RemoteOperationHandler
   const payload = parseJsonBytes(bodyBytes, DEFAULT_MAX_RESPONSE_BYTES);
   if (payload.error) return jsonResponse({ error: payload.error }, 400);
 
-  const negotiationId = getTrimmedStringField(payload.data, "negotiation_id");
+  const data = payload.data!;
+  const negotiationId = getTrimmedStringField(data, "negotiation_id");
   if (!negotiationId) return jsonResponse({ error: "Missing negotiation_id." }, 400);
 
-  const decision = getTrimmedStringField(payload.data, "decision") || "unknown";
-  const result = typeof payload.data.result === "string" ? payload.data.result : null;
-  const reason = typeof payload.data.reason === "string" ? payload.data.reason : null;
+  const decision = getTrimmedStringField(data, "decision") || "unknown";
+  const result = typeof data.result === "string" ? data.result : null;
+  const reason = typeof data.reason === "string" ? data.reason : null;
 
   logAudit(peer, "/api/remote/result", decision, decision);
 
@@ -389,7 +390,7 @@ export async function executeApprovedProposal(
           usage: { duration_ms: duration },
         });
         const bodyBytes = new TextEncoder().encode(body);
-        const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch);
+        const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch ?? undefined);
         await fetch(`${peer.base_url}${endpoint}`, { method: "POST", headers, body });
       } catch (err) {
         log.warn("Failed to push result callback", { operation: "execute_proposal.callback", proposalId, err });
