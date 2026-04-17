@@ -1,8 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
 import { clearProviderUsageCache } from "../../src/agent-pool/provider-usage.js";
 import { AgentRuntimeFacade } from "../../src/agent-pool/runtime-facade.js";
+import { SESSIONS_DIR } from "../../src/core/config.js";
+import { sanitiseJid } from "../../src/agent-pool/session.js";
 
 function createRuntime(session: any): AgentSessionRuntime {
   return {
@@ -141,6 +145,55 @@ test("AgentRuntimeFacade returns registry-backed model options without hydrating
     supports_thinking: false,
     provider_usage: null,
   });
+});
+
+test("AgentRuntimeFacade restores persisted current model for a cold chat without hydrating a runtime", async () => {
+  const chatJid = "web:persisted-model-test";
+  const sessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
+  rmSync(sessionDir, { recursive: true, force: true });
+  mkdirSync(sessionDir, { recursive: true });
+  writeFileSync(join(sessionDir, "2026-04-17T18-00-00-000Z_test.jsonl"), [
+    JSON.stringify({ type: "session", version: 3, id: "test", timestamp: "2026-04-17T18:00:00.000Z", cwd: "/workspace" }),
+    JSON.stringify({ type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-17T18:00:00.100Z", provider: "azure-openai", modelId: "gpt-5-mini" }),
+    JSON.stringify({ type: "thinking_level_change", id: "t1", parentId: "m1", timestamp: "2026-04-17T18:00:00.200Z", thinkingLevel: "high" }),
+    "",
+  ].join("\n"));
+
+  try {
+    let refreshCalls = 0;
+    let getOrCreateCalls = 0;
+    const pool = new Map<string, { runtime: any; lastUsed: number }>();
+    const facade = new AgentRuntimeFacade({
+      pool,
+      getOrCreateRuntime: async () => {
+        getOrCreateCalls += 1;
+        throw new Error("cold model lookup should not hydrate a runtime");
+      },
+      modelRegistry: {
+        refresh: () => { refreshCalls += 1; },
+        getAvailable: () => [
+          { provider: "azure-openai", id: "gpt-5-mini", name: "GPT 5 Mini", contextWindow: 200000, reasoning: true },
+        ],
+        getAll: () => [],
+        registerProvider: () => {},
+      } as any,
+      authStorage: { get: () => null } as any,
+      clearAttachments: () => {},
+      refreshRuntime: async () => {},
+      onWarn: () => {},
+      onError: () => {},
+    });
+
+    const available = await facade.getAvailableModels(chatJid);
+    expect(getOrCreateCalls).toBe(0);
+    expect(refreshCalls).toBe(1);
+    expect(available.current).toBe("azure-openai/gpt-5-mini");
+    expect(available.thinking_level).toBe("high");
+    expect(available.thinking_level_label).toBe("high");
+    expect(available.supports_thinking).toBe(true);
+  } finally {
+    rmSync(sessionDir, { recursive: true, force: true });
+  }
 });
 
 test("AgentRuntimeFacade does not block getAvailableModels on a cold provider-usage refresh", async () => {

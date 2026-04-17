@@ -82,7 +82,7 @@ function buildAzureFoundryModels(modelIds: string[], modelNames: string[]): Prov
 export function registerOptionalProviders(agentPool: ProviderBootstrapAgentPool): void {
   const aoaiToken = process.env.AOAI_API_KEY;
   const aoaiBaseUrl = process.env.AOAI_BASE_URL;
-  if (aoaiToken && aoaiBaseUrl) {
+  if (aoaiBaseUrl) {
     const hasAzureModels = agentPool.hasProviderModels(AZURE_OPENAI_PROVIDER);
     const azureApiRegistered = isApiProviderRegistered(AZURE_OPENAI_API);
 
@@ -118,7 +118,7 @@ export function registerOptionalProviders(agentPool: ProviderBootstrapAgentPool)
 
   const foundryToken = process.env.FOUNDRY_API_KEY || process.env.AOAI_API_KEY;
   const foundryBaseUrl = process.env.FOUNDRY_BASE_URL;
-  if (foundryToken && foundryBaseUrl) {
+  if (foundryBaseUrl) {
     const hasFoundryModels = agentPool.hasProviderModels(AZURE_FOUNDRY_PROVIDER);
     const foundryApiRegistered = isApiProviderRegistered(AZURE_FOUNDRY_API);
 

@@ -5,19 +5,28 @@
  * and queued-message mutations so AgentPool can remain a thinner orchestrator.
  */
 
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { AgentSession, AgentSessionRuntime, ModelRegistry, AuthStorage } from "@mariozechner/pi-coding-agent";
 
 import { applyControlCommand, type AgentControlCommand, type AgentControlResult } from "../agent-control/index.js";
 import { formatThinkingLevelForDisplay } from "../agent-control/agent-control-helpers.js";
+import { SESSIONS_DIR } from "../core/config.js";
 import { detectChannel } from "../router.js";
 import { executeSlashCommand } from "./slash-command.js";
 import { peekProviderUsage, warmProviderUsage } from "./provider-usage.js";
 import { resolveModelLabel } from "../utils/model-utils.js";
 import { createLogger } from "../utils/logger.js";
 import { withChatContext } from "../core/chat-context.js";
+import { sanitiseJid } from "./session.js";
 import type { PoolEntry } from "./session-manager.js";
 
 const log = createLogger("agent-pool.runtime-facade");
+const persistedModelStateCache = new Map<string, {
+  signature: string;
+  current: string | null;
+  thinkingLevel: string | null;
+}>();
 
 function truncateText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -39,6 +48,71 @@ interface PromptEnvelopeMessage {
   sender: string;
   time: string;
   text: string;
+}
+
+function getPersistedSessionState(chatJid: string): { current: string | null; thinkingLevel: string | null } {
+  const sessionDir = join(SESSIONS_DIR, sanitiseJid(chatJid));
+  if (!existsSync(sessionDir)) {
+    persistedModelStateCache.delete(chatJid);
+    return { current: null, thinkingLevel: null };
+  }
+
+  const latestFile = readdirSync(sessionDir)
+    .filter((entry) => entry.endsWith(".jsonl"))
+    .sort()
+    .pop();
+  if (!latestFile) {
+    persistedModelStateCache.delete(chatJid);
+    return { current: null, thinkingLevel: null };
+  }
+
+  const fullPath = join(sessionDir, latestFile);
+  let signature = fullPath;
+  try {
+    const stat = statSync(fullPath);
+    signature = `${fullPath}:${stat.size}:${Math.round(stat.mtimeMs)}`;
+  } catch {
+    persistedModelStateCache.delete(chatJid);
+    return { current: null, thinkingLevel: null };
+  }
+
+  const cached = persistedModelStateCache.get(chatJid);
+  if (cached?.signature === signature) {
+    return { current: cached.current, thinkingLevel: cached.thinkingLevel };
+  }
+
+  let current: string | null = null;
+  let thinkingLevel: string | null = null;
+  try {
+    const lines = readFileSync(fullPath, "utf8").split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      let entry: any;
+      try {
+        entry = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      if (entry?.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
+        current = `${entry.provider}/${entry.modelId}`;
+        continue;
+      }
+      if (entry?.type === "thinking_level_change" && typeof entry.thinkingLevel === "string") {
+        thinkingLevel = entry.thinkingLevel;
+        continue;
+      }
+      if (entry?.type === "message" && entry.message?.role === "assistant" && typeof entry.message?.provider === "string" && typeof entry.message?.model === "string") {
+        current = `${entry.message.provider}/${entry.message.model}`;
+      }
+    }
+  } catch {
+    current = null;
+    thinkingLevel = null;
+  }
+
+  persistedModelStateCache.set(chatJid, { signature, current, thinkingLevel });
+  return { current, thinkingLevel };
 }
 
 function parseTranscriptPromptEnvelope(raw: string): PromptEnvelopeMessage[] | null {
@@ -412,6 +486,7 @@ export class AgentRuntimeFacade {
     // Passive UI refreshes should not hydrate a cold runtime just to render
     // model state for the picker.
     const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
+    const persistedState = session ? { current: null, thinkingLevel: null } : getPersistedSessionState(chatJid);
     const registry = (session as (AgentSession & { modelRegistry?: ModelRegistry }) | null)?.modelRegistry ?? this.options.modelRegistry;
     registry.refresh();
     const available = registry.getAvailable();
@@ -426,19 +501,21 @@ export class AgentRuntimeFacade {
       reasoning: Boolean(model.reasoning),
     }));
     const models = modelOptions.map((model) => model.label);
-    const currentModel = session?.model ? `${session.model.provider}/${session.model.id}` : null;
-    const thinkingLevel = session?.thinkingLevel ?? null;
+    const currentModel = session?.model ? `${session.model.provider}/${session.model.id}` : persistedState.current;
+    const currentModelOption = currentModel ? modelOptions.find((model) => model.label === currentModel) ?? null : null;
+    const thinkingLevel = session?.thinkingLevel ?? persistedState.thinkingLevel ?? null;
     const supportsThinking = session && typeof (session as AgentSession & { supportsThinking?: () => boolean }).supportsThinking === "function"
       ? (session as AgentSession & { supportsThinking: () => boolean }).supportsThinking()
-      : Boolean(session?.model?.reasoning);
+      : Boolean(session?.model?.reasoning ?? currentModelOption?.reasoning);
     const providerUsage = session?.model?.provider
       ? (peekProviderUsage(session.model.provider, { allowStale: true }) ?? null)
       : null;
     if (session?.model?.provider) {
       void warmProviderUsage(this.options.authStorage, session.model.provider);
     }
-    const thinkingLevelLabel = thinkingLevel && session?.model?.provider
-      ? formatThinkingLevelForDisplay(thinkingLevel, session.model.provider)
+    const thinkingProvider = session?.model?.provider ?? currentModelOption?.provider ?? null;
+    const thinkingLevelLabel = thinkingLevel && thinkingProvider
+      ? formatThinkingLevelForDisplay(thinkingLevel, thinkingProvider)
       : thinkingLevel;
     return {
       current: currentModel,

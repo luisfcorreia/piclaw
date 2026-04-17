@@ -43,6 +43,39 @@ describe("runtime provider bootstrap", () => {
 
     expect(registrations).toHaveLength(1);
     expect(registrations[0].provider).toBe("azure-openai");
+    expect(registrations[0].config.apiKey).toBe("token");
+    expect(registrations[0].config.models?.map((m) => m.id)).toEqual(["gpt-5", "gpt-5-mini"]);
+  });
+
+  test("registers azure-openai provider models immediately in managed-identity mode", () => {
+    restoreEnvStack.push(setEnv({
+      AOAI_API_KEY: undefined,
+      AOAI_BASE_URL: "https://aoai.example",
+      AOAI_MODEL_IDS: "gpt-5,gpt-5-mini",
+      AOAI_MODEL_NAMES: "GPT 5,GPT 5 Mini",
+      FOUNDRY_API_KEY: undefined,
+      FOUNDRY_BASE_URL: undefined,
+      FOUNDRY_MODEL_IDS: undefined,
+      FOUNDRY_MODEL_NAMES: undefined,
+    }));
+
+    const registrations: Array<{
+      provider: string;
+      config: Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1];
+    }> = [];
+
+    const pool: ProviderBootstrapAgentPool = {
+      hasProviderModels: () => false,
+      registerModelProvider: (provider, config) => {
+        registrations.push({ provider, config });
+      },
+    };
+
+    registerOptionalProviders(pool);
+
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0].provider).toBe("azure-openai");
+    expect(registrations[0].config.apiKey).toBeUndefined();
     expect(registrations[0].config.models?.map((m) => m.id)).toEqual(["gpt-5", "gpt-5-mini"]);
   });
 
@@ -74,6 +107,42 @@ describe("runtime provider bootstrap", () => {
 
     expect(registrations).toHaveLength(1);
     expect(registrations[0].provider).toBe("azure-foundry");
+    expect(registrations[0].config.apiKey).toBe("foundry-token");
+    expect(registrations[0].config.models?.map((m) => m.id)).toEqual([
+      "mistral-large-3",
+      "mistral-small-3",
+    ]);
+  });
+
+  test("registers azure-foundry provider models immediately in managed-identity mode", () => {
+    restoreEnvStack.push(setEnv({
+      AOAI_API_KEY: undefined,
+      AOAI_BASE_URL: undefined,
+      AOAI_MODEL_IDS: undefined,
+      AOAI_MODEL_NAMES: undefined,
+      FOUNDRY_API_KEY: undefined,
+      FOUNDRY_BASE_URL: "https://foundry.example",
+      FOUNDRY_MODEL_IDS: "mistral-large-3,mistral-small-3",
+      FOUNDRY_MODEL_NAMES: "Mistral Large 3,Mistral Small 3",
+    }));
+
+    const registrations: Array<{
+      provider: string;
+      config: Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1];
+    }> = [];
+
+    const pool: ProviderBootstrapAgentPool = {
+      hasProviderModels: () => false,
+      registerModelProvider: (provider, config) => {
+        registrations.push({ provider, config });
+      },
+    };
+
+    registerOptionalProviders(pool);
+
+    expect(registrations).toHaveLength(1);
+    expect(registrations[0].provider).toBe("azure-foundry");
+    expect(registrations[0].config.apiKey).toBeUndefined();
     expect(registrations[0].config.models?.map((m) => m.id)).toEqual([
       "mistral-large-3",
       "mistral-small-3",
