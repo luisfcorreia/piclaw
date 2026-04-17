@@ -17,6 +17,26 @@ import {
   primeProvisionalChatWindow,
 } from "../../web/src/ui/chat-window.js";
 
+function createFakeElement(tagName = "div") {
+  return {
+    tagName,
+    textContent: "",
+    attributes: {} as Record<string, string>,
+    children: [] as any[],
+    innerHTML: "",
+    setAttribute(name: string, value: string) {
+      this.attributes[name] = value;
+    },
+    appendChild(child: any) {
+      this.children.push(child);
+      return child;
+    },
+    replaceChildren(...children: any[]) {
+      this.children = [...children];
+    },
+  };
+}
+
 test("isStandaloneWebAppMode detects iOS standalone mode", () => {
   expect(isStandaloneWebAppMode({ navigator: { standalone: true } })).toBe(true);
 });
@@ -114,19 +134,39 @@ test("openProvisionalChatWindow opens about:blank in a new tab on mobile", () =>
 
 test("prime/navigate/close provisional chat window are safe helper operations", () => {
   const calls: string[] = [];
+  const body = createFakeElement("body");
   const handle: any = {
     location: { replace: (url: string) => calls.push(`replace:${url}`) },
-    document: { title: "", body: { innerHTML: "" } },
+    document: { title: "", body, createElement: (tag: string) => createFakeElement(tag) },
     close: () => calls.push("close"),
   };
 
   primeProvisionalChatWindow(handle, { title: "Opening branch…", message: "Preparing…" });
   expect(handle.document.title).toBe("Opening branch…");
-  expect(handle.document.body.innerHTML).toContain("Preparing…");
+  expect(body.children).toHaveLength(1);
+  expect(body.children[0].children[0].textContent).toBe("Opening branch…");
+  expect(body.children[0].children[1].textContent).toBe("Preparing…");
 
   navigateProvisionalChatWindow(handle, "https://example.com/chat");
   closeProvisionalChatWindow(handle);
   expect(calls).toEqual(["replace:https://example.com/chat", "close"]);
+});
+
+test("primeProvisionalChatWindow renders labels as text instead of parsing HTML", () => {
+  const body = createFakeElement("body");
+  const handle: any = {
+    document: { title: "", body, createElement: (tag: string) => createFakeElement(tag) },
+  };
+
+  primeProvisionalChatWindow(handle, {
+    title: 'Opening <img src=x onerror=alert(1)>…',
+    message: 'Preparing <script>alert(1)</script>',
+  });
+
+  expect(body.children).toHaveLength(1);
+  expect(body.children[0].children[0].textContent).toBe('Opening <img src=x onerror=alert(1)>…');
+  expect(body.children[0].children[1].textContent).toBe('Preparing <script>alert(1)</script>');
+  expect(body.innerHTML).toBe("");
 });
 
 test("prime/navigate/close provisional chat window tolerate disappearing popup handles", () => {

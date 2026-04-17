@@ -84,12 +84,33 @@ export function primeProvisionalChatWindow(handle, options = {}) {
         const title = String(options.title || 'Opening branch…');
         const message = String(options.message || 'Preparing a new branch window…');
         handle.document.title = title;
-        handle.document.body.innerHTML = `
-            <div style="font-family: system-ui, sans-serif; padding: 24px; color: #222;">
-                <h1 style="font-size: 18px; margin: 0 0 12px;">${title}</h1>
-                <p style="margin: 0; line-height: 1.5;">${message}</p>
-            </div>
-        `;
+        const body = handle.document.body;
+        if (!body) return;
+
+        if (typeof handle.document.createElement !== 'function') {
+            body.textContent = `${title}\n${message}`;
+            return;
+        }
+
+        const wrapper = handle.document.createElement('div');
+        wrapper.setAttribute('style', 'font-family: system-ui, sans-serif; padding: 24px; color: #222;');
+
+        const heading = handle.document.createElement('h1');
+        heading.setAttribute('style', 'font-size: 18px; margin: 0 0 12px;');
+        heading.textContent = title;
+
+        const paragraph = handle.document.createElement('p');
+        paragraph.setAttribute('style', 'margin: 0; line-height: 1.5;');
+        paragraph.textContent = message;
+
+        wrapper.appendChild(heading);
+        wrapper.appendChild(paragraph);
+        if (typeof body.replaceChildren === 'function') {
+            body.replaceChildren(wrapper);
+        } else {
+            body.innerHTML = '';
+            body.appendChild(wrapper);
+        }
     } catch {
         return;
     }
