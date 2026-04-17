@@ -722,6 +722,45 @@ describe("remote pair commands", () => {
     expect(pi.messages[0]).toContain("ECONNREFUSED");
   });
 
+  test("runAskFlow dispatches to /api/remote/execute for short-circuit+full peer", async () => {
+    const peerData = makePairedPeer({ mode: "short-circuit", profile: "full", base_url: TEST_REMOTE_BASE_URL });
+    upsertRemotePeer(peerData);
+
+    let capturedUrl = "";
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      return new Response(
+        JSON.stringify({ decision: "accept_execute", result: "ok" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    };
+
+    const pi = makeMockPi();
+    await runAskFlow(peerData.instance_id, "run something", pi);
+
+    expect(capturedUrl).toContain("/api/remote/execute");
+    expect(capturedUrl).not.toContain("/api/remote/proposal");
+  });
+
+  test("runAskFlow uses /api/remote/proposal for short-circuit+restricted peer", async () => {
+    const peerData = makePairedPeer({ mode: "short-circuit", profile: "restricted", base_url: TEST_REMOTE_BASE_URL });
+    upsertRemotePeer(peerData);
+
+    let capturedUrl = "";
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      return new Response(
+        JSON.stringify({ decision: "accept_execute", result: "ok" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    };
+
+    const pi = makeMockPi();
+    await runAskFlow(peerData.instance_id, "do something", pi);
+
+    expect(capturedUrl).toContain("/api/remote/proposal");
+  });
+
   // ─── trust_epoch + chain-id correctness ─────────────────────────────────────
 
   test("runAskFlow sends peer trust_epoch in X-Trust-Epoch header, not always 1", async () => {

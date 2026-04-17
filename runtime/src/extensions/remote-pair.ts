@@ -533,15 +533,17 @@ export async function runAskFlow(idOrFingerprint: string, prompt: string, pi: Ex
   }
 
   const identity = loadOrCreateIdentity();
+  const useExecute = peer.mode === "short-circuit" && peer.profile === "full";
+  const endpoint = useExecute ? "/api/remote/execute" : "/api/remote/proposal";
   const bodyText = JSON.stringify({ prompt });
   const bodyBytes = new TextEncoder().encode(bodyText);
-  const headers = buildSignedRequestHeaders(identity, "/api/remote/proposal", bodyBytes, peer.trust_epoch);
+  const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch);
   headers["X-Request-Hop"] = "0";
   headers["X-Request-Chain-Id"] = randomUUID();
 
   let res: Response;
   try {
-    res = await fetch(`${peer.base_url}/api/remote/proposal`, {
+    res = await fetch(`${peer.base_url}${endpoint}`, {
       method: "POST",
       headers,
       body: bodyText,
