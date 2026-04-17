@@ -454,6 +454,31 @@ Why last:
   - clean post-start sample: **218.3 MB RSS / 39.4 MB heap / 15.8 MB external / 0 active chats**
   - settled live sample: **217.7 MB RSS / 216.2 MB PSS / 44.8 MB heap / 14.0 MB external / 1 cached main / 1 active chat**
 - Updated `docs/performance/memory-footprint-history.md` with the new live-service snapshot for commit `49fae082`.
+- Re-ranked the remaining bundled cold-path cost and confirmed Azure is the next high-yield target.
+  - source-tree spot check with Azure session extension enabled: **~192 ms / ~31.4 MB RSS delta / 41 tools**
+  - same benchmark with Azure env effectively removed: **~151 ms / ~27.4 MB RSS delta / 41 tools**
+  - inferred Azure session-path cost before refactor: roughly **~41 ms / ~4 MB RSS**
+- Started the Azure cold-path tranche on `feature/optimize-azure-provider-cold-path`.
+- Moved Azure provider registration/refresh responsibility to **process bootstrap** in:
+  - `runtime/src/runtime/provider-bootstrap.ts`
+  - `runtime/src/runtime/bootstrap.ts`
+- Added a lightweight bundled session-path shim at:
+  - `runtime/extensions/integrations/azure-openai-session/index.ts`
+- Switched the bundled session path to that shim in:
+  - `runtime/src/agent-pool/session.ts`
+- Kept the heavy Azure extension compatible for direct-load/test use by routing its provider refresh through `session_start` / `session_shutdown`, while the production bundled session path now uses the shim.
+- Added focused regression coverage for the new shim and async process bootstrap path:
+  - `runtime/test/extensions/azure-openai-session.test.ts`
+  - updated `runtime/test/runtime/provider-bootstrap.test.ts`
+- Re-ran focused verification for the Azure tranche:
+  - `runtime/test/runtime/provider-bootstrap.test.ts`
+  - `runtime/test/extensions/session-shutdown-hooks.test.ts`
+  - `runtime/test/extensions/azure-openai-routing.test.ts`
+  - `runtime/test/extensions/azure-openai-retry-after.test.ts`
+  - `runtime/test/extensions/azure-openai-session.test.ts`
+  - `bunx tsc --noEmit -p runtime/tsconfig.json`
+- Fresh-process source-tree spot check after the Azure provider-bootstrap + session-shim split measured roughly **169 ms / 26.9 MB RSS delta / 41 active tools**.
+- This is the first clearly material post-viewer/post-office/CDP improvement in the recent source-tree cold-session series; the next likely cleanup is to split Azure image generation helpers out of the provider implementation file so process-start import cost falls further without re-coupling those commands to ordinary chat sessions.
 
 ## Notes
 
