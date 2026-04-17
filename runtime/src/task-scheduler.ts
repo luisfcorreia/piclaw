@@ -208,27 +208,36 @@ async function runShellTask(task: ScheduledTask): Promise<{ result: string | nul
 
   const exec = createTrackedBashOperations();
   let output = "";
-  let outputBytes = 0;
+  let outputChars = 0;
+  let previewChars = 0;
   let truncated = false;
+  const decoder = new TextDecoder();
+
+  const appendDecodedText = (text: string) => {
+    for (const char of text) {
+      outputChars += 1;
+      if (previewChars < MAX_SHELL_OUTPUT_CHARS) {
+        output += char;
+        previewChars += 1;
+      } else {
+        truncated = true;
+      }
+    }
+  };
 
   try {
     const res = await exec.exec(validated.command!, cwdResult.cwd || WORKSPACE_DIR, {
       onData: (chunk: Buffer) => {
-        outputBytes += chunk.length;
-        if (output.length < MAX_SHELL_OUTPUT_CHARS) {
-          const text = chunk.toString("utf8");
-          output += text.slice(0, MAX_SHELL_OUTPUT_CHARS - output.length);
-        } else {
-          truncated = true;
-        }
+        appendDecodedText(decoder.decode(chunk, { stream: true }));
       },
       timeout: task.timeout_sec ?? undefined,
       env: undefined,
     });
+    appendDecodedText(decoder.decode());
 
     const trimmed = output.trim();
     const summary = trimmed ? trimmed : "(no output)";
-    const suffix = truncated ? `\n…(truncated; ${outputBytes} bytes total)` : "";
+    const suffix = truncated ? `\n…(truncated; ${outputChars} characters total)` : "";
     const formatted = `\`\`\`\n${summary}${suffix}\n\`\`\``;
 
     if (res.exitCode && res.exitCode !== 0) {

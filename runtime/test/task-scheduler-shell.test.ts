@@ -92,3 +92,35 @@ test("runScheduledTask keeps empty shell output silent", async () => {
   expect(sentMessages.length).toBe(0);
   expect(db!.getTaskById(taskId)?.last_result).toBe("```\n(no output)\n```");
 });
+
+test("runScheduledTask truncates shell output on code-point boundaries", async () => {
+  const taskId = `task-shell-unicode-${Date.now()}`;
+  db!.createTask({
+    id: taskId,
+    chat_jid: "web:default",
+    prompt: "unicode",
+    model: null,
+    task_kind: "shell",
+    command: "bun -e 'process.stdout.write(\"🙂\".repeat(9000))'",
+    cwd: ".",
+    timeout_sec: 10,
+    schedule_type: "once",
+    schedule_value: new Date().toISOString(),
+    next_run: new Date().toISOString(),
+    status: "active",
+    created_at: new Date().toISOString(),
+  });
+
+  const task = db!.getTaskById(taskId);
+  expect(task?.task_kind).toBe("shell");
+
+  await scheduler!.runScheduledTask(task!, {
+    queue: {} as any,
+    agentPool: {} as any,
+    sendMessage: async (jid, text) => { sentMessages.push({ jid, text }); },
+  });
+
+  expect(sentMessages.length).toBe(1);
+  expect(sentMessages[0].text).toContain("…(truncated; 9000 characters total)");
+  expect(sentMessages[0].text).not.toContain("\uFFFD");
+});
