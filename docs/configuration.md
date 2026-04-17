@@ -662,6 +662,7 @@ Optional settings for multi-instance communication. See [cross-instance-ipc.md](
 |----------|---------|---------|
 | `PICLAW_REMOTE_INTEROP_ENABLED` | `0` | Enable cross-instance interop endpoints |
 | `PICLAW_REMOTE_INTEROP_ALLOW_HTTP` | `0` | Allow `http://` callback URLs (not just `https://`) |
+| `PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK` | `0` | Skip private/loopback IP checks on callback URLs (Docker/LAN dev use) |
 | `PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED` | `0` | Enable short-circuit execution mode |
 | `PICLAW_REMOTE_INSTANCE_NAME` | _(empty)_ | Display name for this instance in interop metadata |
 | `PICLAW_REMOTE_INTEROP_DECISION_MODEL` | _(empty)_ | Model label for interop mediation (metadata only) |

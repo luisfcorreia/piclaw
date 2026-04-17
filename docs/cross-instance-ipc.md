@@ -36,6 +36,8 @@ remote interop routes.
 Optional configuration:
 
 - `PICLAW_REMOTE_INTEROP_ALLOW_HTTP=1` – allow `http://` callback URLs (testing only).
+- `PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK=1` – skip private/loopback IP checks on callback
+  URLs (Docker/LAN development only).
 - `PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED=1` – allow short-circuit execution if the peer
   is configured with `mode=short-circuit` and `profile=full`.
 - `PICLAW_REMOTE_INSTANCE_NAME` – display name in metadata.
