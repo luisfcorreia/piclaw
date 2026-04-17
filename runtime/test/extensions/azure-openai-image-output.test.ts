@@ -5,7 +5,7 @@ import {
   formatGeneratedImageMessage,
   formatImageGenerationError,
   type SavedImageFile,
-} from "../../extensions/integrations/azure-openai.ts";
+} from "../../extensions/integrations/azure-openai-images.ts";
 
 test("formatGeneratedImageMessage renders workspace file pills instead of download links", () => {
   const files: SavedImageFile[] = [

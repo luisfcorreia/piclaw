@@ -3,12 +3,12 @@
  */
 
 import type { ModelRegistry } from "@mariozechner/pi-coding-agent";
-import {
-  getApiProvider,
-  streamSimpleAzureOpenAIResponses,
-  streamSimpleOpenAICompletions,
-} from "@mariozechner/pi-ai";
 import { createLogger } from "../utils/logger.js";
+
+export type AzureProviderBootstrapHandle = { stop: () => void; refresh: () => Promise<void> };
+export type AzureProviderBootstrapModule = {
+  startAzureProviderBootstrap: (register: (name: string, config: any) => void) => AzureProviderBootstrapHandle;
+};
 
 const log = createLogger("runtime.provider-bootstrap");
 
@@ -21,133 +21,46 @@ export interface ProviderBootstrapAgentPool {
   ): void;
 }
 
-type ProviderModelConfig = NonNullable<
-  Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1]["models"]
->[number];
-
-type ProviderApi = Exclude<ProviderModelConfig["api"], undefined>;
-
 const AZURE_OPENAI_PROVIDER = "azure-openai";
-const AZURE_OPENAI_API: ProviderApi = "azure-openai-responses-mi";
-
 const AZURE_FOUNDRY_PROVIDER = "azure-foundry";
-const AZURE_FOUNDRY_API: ProviderApi = "azure-foundry-openai-completions-mi";
 
-function splitCsv(value: string | undefined): string[] {
-  return (value ?? "")
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => v.length > 0);
-}
+const AZURE_BOOTSTRAP_MODULE_URL = new URL("../../extensions/integrations/azure-openai.ts", import.meta.url).href;
 
-function isApiProviderRegistered(api: ProviderApi): boolean {
-  return Boolean(getApiProvider(api));
-}
+let activeAzureBootstrap: AzureProviderBootstrapHandle | null = null;
+let loadAzureBootstrapModuleImpl: () => Promise<AzureProviderBootstrapModule> = async () =>
+  await import(AZURE_BOOTSTRAP_MODULE_URL) as AzureProviderBootstrapModule;
 
-function toProviderStreamSimple(
-  fn: typeof streamSimpleAzureOpenAIResponses | typeof streamSimpleOpenAICompletions
-): NonNullable<Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1]["streamSimple"]> {
-  return fn as unknown as NonNullable<
-    Parameters<ProviderBootstrapAgentPool["registerModelProvider"]>[1]["streamSimple"]
-  >;
-}
-
-function buildAzureOpenAiModels(modelIds: string[], modelNames: string[]): ProviderModelConfig[] {
-  return modelIds.map((id: string, idx: number) => ({
-    id,
-    name: modelNames[idx] || `Azure ${id}`,
-    api: AZURE_OPENAI_API,
-    reasoning: true,
-    input: ["text"],
-    contextWindow: 200000,
-    maxTokens: 64000,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  }));
-}
-
-function buildAzureFoundryModels(modelIds: string[], modelNames: string[]): ProviderModelConfig[] {
-  return modelIds.map((id: string, idx: number) => ({
-    id,
-    name: modelNames[idx] || `Azure Foundry ${id}`,
-    api: AZURE_FOUNDRY_API,
-    reasoning: false,
-    input: ["text"],
-    contextWindow: 200000,
-    maxTokens: 64000,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  }));
+function hasAzureBootstrapEnv(): boolean {
+  return Boolean(process.env.AOAI_BASE_URL || process.env.FOUNDRY_BASE_URL || process.env.AOAI2_BASE_URL);
 }
 
 /** Ensure optional Azure providers are discoverable in /model at startup. */
-export function registerOptionalProviders(agentPool: ProviderBootstrapAgentPool): void {
-  const aoaiToken = process.env.AOAI_API_KEY;
-  const aoaiBaseUrl = process.env.AOAI_BASE_URL;
-  if (aoaiBaseUrl) {
-    const hasAzureModels = agentPool.hasProviderModels(AZURE_OPENAI_PROVIDER);
-    const azureApiRegistered = isApiProviderRegistered(AZURE_OPENAI_API);
+export async function registerOptionalProviders(agentPool: ProviderBootstrapAgentPool): Promise<void> {
+  if (!hasAzureBootstrapEnv()) return;
+  if (activeAzureBootstrap) return;
 
-    if (!hasAzureModels) {
-      const ids = splitCsv(process.env.AOAI_MODEL_IDS);
-      const names = splitCsv(process.env.AOAI_MODEL_NAMES);
-      const defaultIds = ["gpt-5-2-codex", "gpt-5-3-codex", "gpt-5-1-codex-mini", "gpt-5-1", "gpt-5-mini"];
-      const modelIds = ids.length > 0 ? ids : defaultIds;
+  const mod = await loadAzureBootstrapModuleImpl();
+  activeAzureBootstrap = mod.startAzureProviderBootstrap((name: string, config: any) => {
+    agentPool.registerModelProvider(name, config);
+  });
 
-      agentPool.registerModelProvider(AZURE_OPENAI_PROVIDER, {
-        baseUrl: aoaiBaseUrl,
-        api: AZURE_OPENAI_API,
-        apiKey: aoaiToken,
-        streamSimple: toProviderStreamSimple(streamSimpleAzureOpenAIResponses),
-        models: buildAzureOpenAiModels(modelIds, names),
-      });
-      log.info("Registered Azure OpenAI provider models", {
-        operation: "register_optional_providers.azure_openai",
-        modelCount: modelIds.length,
-      });
-    } else if (!azureApiRegistered) {
-      agentPool.registerModelProvider(AZURE_OPENAI_PROVIDER, {
-        baseUrl: aoaiBaseUrl,
-        api: AZURE_OPENAI_API,
-        apiKey: aoaiToken,
-        streamSimple: toProviderStreamSimple(streamSimpleAzureOpenAIResponses),
-      });
-      log.info("Registered Azure OpenAI transport for existing provider models", {
-        operation: "register_optional_providers.azure_openai_transport",
-      });
-    }
-  }
+  await activeAzureBootstrap.refresh();
 
-  const foundryToken = process.env.FOUNDRY_API_KEY || process.env.AOAI_API_KEY;
-  const foundryBaseUrl = process.env.FOUNDRY_BASE_URL;
-  if (foundryBaseUrl) {
-    const hasFoundryModels = agentPool.hasProviderModels(AZURE_FOUNDRY_PROVIDER);
-    const foundryApiRegistered = isApiProviderRegistered(AZURE_FOUNDRY_API);
+  log.info("Registered Azure optional providers via process bootstrap", {
+    operation: "register_optional_providers.azure",
+    hasAzureOpenAiModels: agentPool.hasProviderModels(AZURE_OPENAI_PROVIDER),
+    hasAzureFoundryModels: agentPool.hasProviderModels(AZURE_FOUNDRY_PROVIDER),
+  });
+}
 
-    if (!hasFoundryModels) {
-      const ids = splitCsv(process.env.FOUNDRY_MODEL_IDS);
-      const names = splitCsv(process.env.FOUNDRY_MODEL_NAMES);
-      const modelIds = ids.length > 0 ? ids : ["mistral-large-3"];
+export function setProviderBootstrapLoaderForTests(
+  loader: null | (() => Promise<AzureProviderBootstrapModule>),
+): void {
+  loadAzureBootstrapModuleImpl = loader ?? (async () => await import(AZURE_BOOTSTRAP_MODULE_URL) as AzureProviderBootstrapModule);
+}
 
-      agentPool.registerModelProvider(AZURE_FOUNDRY_PROVIDER, {
-        baseUrl: foundryBaseUrl,
-        api: AZURE_FOUNDRY_API,
-        apiKey: foundryToken,
-        streamSimple: toProviderStreamSimple(streamSimpleOpenAICompletions),
-        models: buildAzureFoundryModels(modelIds, names),
-      });
-      log.info("Registered Azure Foundry provider models", {
-        operation: "register_optional_providers.azure_foundry",
-        modelCount: modelIds.length,
-      });
-    } else if (!foundryApiRegistered) {
-      agentPool.registerModelProvider(AZURE_FOUNDRY_PROVIDER, {
-        baseUrl: foundryBaseUrl,
-        api: AZURE_FOUNDRY_API,
-        apiKey: foundryToken,
-        streamSimple: toProviderStreamSimple(streamSimpleOpenAICompletions),
-      });
-      log.info("Registered Azure Foundry transport for existing provider models", {
-        operation: "register_optional_providers.azure_foundry_transport",
-      });
-    }
-  }
+export function resetProviderBootstrapForTests(): void {
+  activeAzureBootstrap?.stop();
+  activeAzureBootstrap = null;
+  loadAzureBootstrapModuleImpl = async () => await import(AZURE_BOOTSTRAP_MODULE_URL) as AzureProviderBootstrapModule;
 }

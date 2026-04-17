@@ -479,6 +479,19 @@ Why last:
   - `bunx tsc --noEmit -p runtime/tsconfig.json`
 - Fresh-process source-tree spot check after the Azure provider-bootstrap + session-shim split measured roughly **169 ms / 26.9 MB RSS delta / 41 active tools**.
 - This is the first clearly material post-viewer/post-office/CDP improvement in the recent source-tree cold-session series; the next likely cleanup is to split Azure image generation helpers out of the provider implementation file so process-start import cost falls further without re-coupling those commands to ordinary chat sessions.
+- Split Azure image generation out of the provider file into:
+  - `runtime/extensions/integrations/azure-openai-images.ts`
+- Updated the Azure session shim so `/image` and `/flux` now lazy-import the image module directly, while the provider shim path remains focused on context repair.
+- Re-ran focused verification after the image split:
+  - `runtime/test/extensions/azure-openai-image-output.test.ts`
+  - `runtime/test/extensions/azure-openai-session.test.ts`
+  - `runtime/test/runtime/provider-bootstrap.test.ts`
+  - `runtime/test/extensions/session-shutdown-hooks.test.ts`
+  - `runtime/test/extensions/azure-openai-routing.test.ts`
+  - `runtime/test/extensions/azure-openai-retry-after.test.ts`
+  - `bunx tsc --noEmit -p runtime/tsconfig.json`
+- Fresh-process source-tree spot check after splitting the Azure image helpers out of the provider measured roughly **175 ms / 26.3 MB RSS delta / 41 active tools**.
+- Interpretation: RSS improved a bit further while elapsed time stayed within the same noise band as the prior **169 ms / 26.9 MB** run, so this part of the Azure cleanup is best treated as a structural/provider-import optimization rather than a clear additional latency win.
 
 ## Notes
 

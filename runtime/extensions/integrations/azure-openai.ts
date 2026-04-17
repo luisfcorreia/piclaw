@@ -38,7 +38,6 @@ import {
 import { estimateAzureRequestTokens } from "../../src/utils/azure-tool-call-limit.js";
 import { streamSimpleOpenAICompletions } from "@mariozechner/pi-ai";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 
 const PROVIDER = "azure-openai";
 const FOUNDRY_PROVIDER = "azure-foundry";
@@ -68,7 +67,6 @@ const MODEL_NAMES = (process.env.AOAI_MODEL_NAMES || "")
   .split(",")
   .map((entry) => entry.trim());
 const BASE_URL = process.env.AOAI_BASE_URL || "https://{RESOURCE_NAME}.openai.azure.com/openai/v1";
-const AOAI_IMAGE_MODEL_ID = process.env.AOAI_IMAGE_MODEL_ID || "gpt-image-1-5";
 // API version for direct Azure OpenAI access. The proxy ignores this, but it must
 // be settable locally so the extension works against Azure endpoints without a proxy.
 const AOAI_API_VERSION = process.env.AOAI_API_VERSION || process.env.OPENAI_API_VERSION || "2024-02-15-preview";
@@ -98,8 +96,6 @@ const FOUNDRY_IMAGE_MODEL_ID = process.env.FOUNDRY_IMAGE_MODEL_ID || "flux-2-pro
 // Even when running through a proxy, these env vars should be settable locally
 // so the extension can be pointed at Azure endpoints directly without code changes.
 const FOUNDRY_API_VERSION = process.env.FOUNDRY_API_VERSION || AOAI_API_VERSION;
-const FOUNDRY_IMAGE_API_VERSION = process.env.FOUNDRY_IMAGE_API_VERSION || "preview";
-const FOUNDRY_IMAGE_BASE_URL = process.env.FOUNDRY_IMAGE_BASE_URL || "";
 const FOUNDRY_TEXT_MODEL_IDS = FOUNDRY_MODEL_IDS.filter(
   (id) => id !== FOUNDRY_IMAGE_MODEL_ID && !id.startsWith("flux-")
 );
@@ -933,7 +929,7 @@ async function ensureToken(force = false): Promise<TokenCache> {
   }
 }
 
-async function getAccessToken(): Promise<string> {
+export async function getAzureAccessToken(): Promise<string> {
   // When a static API key is configured (proxy mode), skip IMDS entirely.
   if (STATIC_API_KEY) return STATIC_API_KEY;
 
@@ -951,134 +947,6 @@ function isAuthError(error: unknown): boolean {
   return /unauthorized|forbidden|401|403/i.test(message);
 }
 
-/**
- * Parse the lightweight /image and /flux command syntax.
- *
- * This intentionally stays simple and shell-like rather than introducing a
- * shared CLI parser. The command surface is small, stable, and easier to debug
- * when implemented explicitly here.
- */
-function parseArgs(input: string): ImageArgs | null {
-  const tokens = input.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return null;
-
-  const args: ImageArgs = { prompt: "" };
-  const promptParts: string[] = [];
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i];
-    if (token === "--size" && tokens[i + 1]) {
-      args.size = tokens[i + 1];
-      i += 1;
-      continue;
-    }
-    if (token === "--count" && tokens[i + 1]) {
-      const count = Number(tokens[i + 1]);
-      if (Number.isFinite(count)) args.count = Math.min(4, Math.max(1, Math.floor(count)));
-      i += 1;
-      continue;
-    }
-    if (token === "--quality" && tokens[i + 1]) {
-      const quality = tokens[i + 1] as ImageArgs["quality"];
-      if (["low", "medium", "high"].includes(quality)) args.quality = quality;
-      i += 1;
-      continue;
-    }
-    if (token === "--style" && tokens[i + 1]) {
-      const style = tokens[i + 1] as ImageArgs["style"];
-      if (["natural", "vivid"].includes(style)) args.style = style;
-      i += 1;
-      continue;
-    }
-    if (token === "--transparent") {
-      args.transparent = true;
-      continue;
-    }
-    promptParts.push(token);
-  }
-
-  let prompt = promptParts.join(" ").trim();
-  if (!prompt) return null;
-
-  // Convenience: if the last prompt token looks like "WxH" (e.g. 1280x720),
-  // treat it as size and remove it from the prompt.
-  if (!args.size) {
-    const trailing = prompt.match(/\s+(\d{2,5}\s*x\s*\d{2,5})$/i) || prompt.match(/^(\d{2,5}\s*x\s*\d{2,5})$/i);
-    if (trailing && trailing[1]) {
-      const normalized = trailing[1].replace(/\s+/g, "").toLowerCase();
-      const stripped = prompt.slice(0, prompt.length - trailing[0].length).trim();
-      if (stripped) {
-        args.size = normalized;
-        prompt = stripped;
-      }
-    }
-  }
-
-  args.prompt = prompt;
-  return args;
-}
-
-// Supported sizes for gpt-image models. Snap user-specified WxH to the
-// nearest proportionally matching size.
-const AOAI_IMAGE_SIZES = ["1024x1024", "1024x1536", "1536x1024"] as const;
-
-function snapToSupportedSize(size: string | undefined): string {
-  if (!size || size === "auto") return "auto";
-  const m = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
-  if (!m) return "1024x1024";
-  const w = Number(m[1]);
-  const h = Number(m[2]);
-  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return "1024x1024";
-  const ratio = w / h;
-  // Pick the supported size whose aspect ratio is closest
-  let best = AOAI_IMAGE_SIZES[0];
-  let bestDiff = Infinity;
-  for (const candidate of AOAI_IMAGE_SIZES) {
-    const [cw, ch] = candidate.split("x").map(Number);
-    const diff = Math.abs(ratio - cw / ch);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-export function buildAzureImageGeneratePayload(model: string, args: ImageArgs, includeStyle: boolean): Record<string, any> {
-  const payload: Record<string, any> = {
-    model,
-    prompt: args.prompt,
-    size: snapToSupportedSize(args.size),
-    quality: args.quality || "high",
-    n: args.count || 1,
-  };
-  if (includeStyle && args.style) payload.style = args.style;
-  if (args.transparent) {
-    payload.background = "transparent";
-    payload.output_format = "png";
-  }
-  return payload;
-}
-
-async function generateImage(baseUrl: string, model: string, args: ImageArgs, includeStyle: boolean) {
-  await getAccessToken();
-  const client = createAzureClient(baseUrl, {});
-
-  const payload = buildAzureImageGeneratePayload(model, args, includeStyle);
-
-  const response = await client.images.generate(payload);
-  const images = response.data || [];
-  if (images.length === 0) {
-    throw new Error("Image API returned no images.");
-  }
-  return images;
-}
-
-function getAzureEndpoint(baseUrl: string): string {
-
-  return baseUrl.replace(/\/openai\/v1\/?$/, "").replace(/\/openai\/?$/, "");
-}
-
-
 // Build an OpenAI SDK client for Azure-style endpoints.
 //
 // Important: the SDK itself owns the Authorization header construction, so we
@@ -1087,242 +955,12 @@ function getAzureEndpoint(baseUrl: string): string {
 // Azure/Copilot compatibility.
 function createAzureClient(baseUrl: string, headers: Record<string, string>) {
   return new OpenAI({
-    apiKey: async () => await getAccessToken(),
+    apiKey: async () => await getAzureAccessToken(),
     baseURL: baseUrl,
     defaultHeaders: headers,
     dangerouslyAllowBrowser: true,
   });
 }
-
-function getFoundryImageEndpoint(): string {
-  if (FOUNDRY_IMAGE_BASE_URL) return FOUNDRY_IMAGE_BASE_URL.replace(/\/+$/, "");
-
-  // When using a proxy (STATIC_API_KEY / AOAI_API_KEY set), rewrite the
-  // FOUNDRY_BASE_URL to use the /bfl/ route which forwards to the AI Foundry
-  // services endpoint (not the OpenAI endpoint).
-  // e.g. http://proxy:3100/foundry/v1 → http://proxy:3100/bfl
-  if (STATIC_API_KEY) {
-    try {
-      const u = new URL(FOUNDRY_BASE_URL);
-      // Strip /foundry/v1 or /foundry path and replace with /bfl
-      u.pathname = u.pathname.replace(/\/foundry(\/v\d+)?\/?$/, "/bfl");
-      if (!u.pathname.endsWith("/bfl")) {
-        // Fallback: just append /bfl to the proxy origin
-        u.pathname = "/bfl";
-      }
-      return u.toString().replace(/\/+$/, "");
-    } catch (error) {
-      console.error("[azure-openai] Failed to rewrite proxy Foundry base URL to /bfl:", error);
-      // Fall through to hostname-based rewrite
-    }
-  }
-
-  const base = getAzureEndpoint(FOUNDRY_BASE_URL);
-  try {
-    const url = new URL(base);
-    // Strip /openai/v1 path for direct access
-    url.pathname = url.pathname.replace(/\/openai(\/v\d+)?\/?$/, "");
-    if (url.hostname.endsWith(".cognitiveservices.azure.com")) {
-      url.hostname = url.hostname.replace(".cognitiveservices.azure.com", ".services.ai.azure.com");
-      return url.toString().replace(/\/+$/, "");
-    }
-    if (url.hostname.endsWith(".openai.azure.com")) {
-      url.hostname = url.hostname.replace(".openai.azure.com", ".services.ai.azure.com");
-      return url.toString().replace(/\/+$/, "");
-    }
-    return url.toString().replace(/\/+$/, "");
-  } catch (error) {
-    console.error("[azure-openai] Failed to derive Foundry services endpoint:", error);
-    return base;
-  }
-}
-
-function parseSize(size?: string): { width: number; height: number } {
-  if (!size) return { width: 1024, height: 1024 };
-  const match = size.toLowerCase().match(/(\d+)\s*x\s*(\d+)/);
-  if (!match) return { width: 1024, height: 1024 };
-  const width = Number(match[1]);
-  const height = Number(match[2]);
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return { width: 1024, height: 1024 };
-  return { width, height };
-}
-
-async function generateFoundryImage(model: string, args: ImageArgs) {
-  const accessToken = await getAccessToken();
-
-  const endpoint = getFoundryImageEndpoint();
-  const url = `${endpoint}/providers/blackforestlabs/v1/${encodeURIComponent(model)}?api-version=${encodeURIComponent(FOUNDRY_IMAGE_API_VERSION)}`;
-  const size = parseSize(args.size);
-  const payload: Record<string, any> = {
-    prompt: args.prompt,
-    width: size.width,
-    height: size.height,
-    n: args.count || 1,
-    model,
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Accept-Encoding": "identity",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`${res.status} ${body}`.trim());
-  }
-  const data = (await res.json()) as { data?: Array<{ b64_json?: string }> };
-  const images = data.data || [];
-  if (images.length === 0) {
-    throw new Error("Image API returned no images.");
-  }
-  return images;
-}
-
-export type SavedImageFile = {
-  absPath: string;
-  relPath: string;
-  rawUrl: string;
-  alt: string;
-};
-
-function saveImages(prefix: string, prompt: string, images: Array<{ b64_json?: string }>): SavedImageFile[] {
-  const outDir = join("/workspace", "exports", "images");
-  mkdirSync(outDir, { recursive: true });
-
-  const files: SavedImageFile[] = [];
-  images.forEach((image, idx) => {
-    const b64 = image.b64_json;
-    if (!b64) return;
-    const buffer = Buffer.from(b64, "base64");
-    const filename = `${prefix}-${Date.now()}-${idx + 1}.png`;
-    const relPath = join("exports", "images", filename).replace(/\\/g, "/");
-    const absPath = join("/workspace", relPath);
-    writeFileSync(absPath, buffer);
-    files.push({
-      absPath,
-      relPath,
-      rawUrl: `/workspace/raw?path=${encodeURIComponent(relPath)}`,
-      alt: prompt,
-    });
-  });
-  return files;
-}
-
-export function formatGeneratedImageMessage(caption: string, files: SavedImageFile[]): string {
-  const lines: string[] = [caption];
-  if (files.length > 0) lines.push("");
-  for (const file of files) {
-    lines.push(`![${file.alt}](${file.rawUrl})`);
-  }
-  if (files.length > 0) {
-    lines.push("", "Files:");
-    for (const file of files) {
-      lines.push(`- ${file.absPath}`);
-    }
-  }
-  return lines.join("\n").trim();
-}
-
-export function formatImageGenerationError(providerLabel: string, error: unknown): string {
-  const prefix = `❌ Image generation failed (${providerLabel})`;
-  if (error instanceof Error) {
-    const raw = error.message || String(error);
-    if (/(^|\b)(connection error|unable to connect|fetch failed|econnrefused|econnreset|enotfound|etimedout|timed out|timeout)(\b|$)/i.test(raw)) {
-      return `${prefix}: Unable to connect to the configured proxy or upstream endpoint.`;
-    }
-    // Try to extract structured API error details
-    const jsonMatch = raw.match(/\{[\s\S]*"error"[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        const err = parsed.error || parsed;
-        const code = err.code || err.statusCode || "";
-        const msg = err.message || err.error || raw;
-        return `${prefix}: ${code ? `[${code}] ` : ""}${msg}`;
-      } catch (error) {
-        console.error("[azure-openai] Failed to parse structured image error payload:", error);
-      }
-    }
-    // Extract HTTP status prefix like "400 ..." or "500 ..."
-    const httpMatch = raw.match(/^(\d{3})\s+(.+)/s);
-    if (httpMatch) {
-      const [, status, body] = httpMatch;
-      // Try parsing body as JSON
-      try {
-        const parsed = JSON.parse(body);
-        const err = parsed.error || parsed;
-        const code = err.code || status;
-        const msg = err.message || body;
-        return `${prefix}: [${code}] ${msg}`;
-      } catch (error) {
-        console.error("[azure-openai] Failed to parse HTTP image error body as JSON:", error);
-      }
-      return `${prefix}: HTTP ${status} — ${body.slice(0, 300)}`;
-    }
-    // ZlibError or other named errors
-    if (raw.includes("ZlibError")) {
-      return `${prefix}: Response decompression failed (ZlibError). The upstream response may be too large or corrupt.`;
-    }
-    return `${prefix}: ${raw.slice(0, 500)}`;
-  }
-  return `${prefix}: ${String(error).slice(0, 500)}`;
-}
-
-const PICLAW_PORT = process.env.PICLAW_WEB_PORT || process.env.PICLAW_PORT || "8080";
-const PICLAW_BASE = `http://localhost:${PICLAW_PORT}`;
-const INTERNAL_SECRET =
-  process.env.PICLAW_INTERNAL_SECRET ||
-  process.env.PICLAW_WEB_INTERNAL_SECRET ||
-  process.env.WEB_INTERNAL_SECRET ||
-  "";
-
-// Timeline placeholder helpers used by the image commands.
-// These write normal piclaw timeline messages through the local HTTP surface so
-// generated media can appear incrementally without inventing a second delivery
-// path inside the extension.
-async function postPlaceholder(content: string, threadId?: number): Promise<number | string | null> {
-  try {
-    const body: Record<string, unknown> = { content };
-    if (threadId) body.thread_id = threadId;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (INTERNAL_SECRET) headers["x-piclaw-internal-secret"] = INTERNAL_SECRET;
-    const res = await fetch(`${PICLAW_BASE}/internal/post`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { id?: number | string };
-    return data.id ?? null;
-  } catch (error) {
-    console.error("[azure-openai] Failed to post placeholder message:", error);
-    return null;
-  }
-}
-
-async function updatePost(id: number, content: string, threadId?: number): Promise<boolean> {
-  try {
-    const body: Record<string, unknown> = { content };
-    if (threadId) body.thread_id = threadId;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (INTERNAL_SECRET) headers["x-piclaw-internal-secret"] = INTERNAL_SECRET;
-    const res = await fetch(`${PICLAW_BASE}/post/${id}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(body),
-    });
-    return res.ok;
-  } catch (error) {
-    console.error(`[azure-openai] Failed to update placeholder post ${id}:`, error);
-    return false;
-  }
-}
-
 
 /**
  * Main Azure Responses stream wrapper.
@@ -1552,7 +1190,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
         );
       };
 
-      await getAccessToken();
+      await getAzureAccessToken();
 
       // Retry strategy:
       //   - MAX_RETRIES controls total retry attempts for transient errors.
@@ -1855,168 +1493,75 @@ function registerProvider(pi: ExtensionAPI, token: string) {
   registerAzureProviders((name, config) => pi.registerProvider(name, config), token);
 }
 
-export default function (pi: ExtensionAPI) {
-  // Extension bootstrap:
-  // - log the effective configuration once
-  // - repair cross-model tool-call artifacts during context replay
-  // - register providers immediately when using static-key mode
-  // - otherwise fetch/cache managed-identity tokens and then register
-  logExtensionLoaded();
+export async function repairAzureContext(event: { messages: any[] }, ctx: { model?: any }): Promise<{ messages: any[] } | void> {
+  const currentModel = ctx.model;
+  if (!currentModel) return;
 
-  // Cross-model replay repair:
-  // Different providers encode tool-call IDs differently. When switching back
-  // into Azure/OpenAI-style models, replayed assistant/toolResult pairs can
-  // carry composite IDs that no longer match. Normalize those IDs before the
-  // next request is built so tool results still pair with the right calls.
-  pi.on("context", async (event, ctx) => {
-    const currentModel = ctx.model;
-    if (!currentModel) return;
+  const idMap = new Map<string, string>();
+  let modified = false;
 
-    const idMap = new Map<string, string>();
-    let modified = false;
+  const messages = event.messages.map((message) => {
+    if (message.role === "assistant") {
+      const assistant = message as AssistantMessage;
+      if (isSameModel(assistant, currentModel)) return message;
 
-    const messages = event.messages.map((message) => {
-      if (message.role === "assistant") {
-        const assistant = message as AssistantMessage;
-        if (isSameModel(assistant, currentModel)) return message;
+      let contentChanged = false;
+      const content = assistant.content.map((block) => {
+        if (block.type !== "toolCall") return block;
+        const toolCall = block as ToolCall;
+        const { id, changed } = stripToolCallItemId(toolCall.id);
+        if (!changed) return toolCall;
+        idMap.set(toolCall.id, id);
+        contentChanged = true;
+        return { ...toolCall, id };
+      });
 
-        let contentChanged = false;
-        const content = assistant.content.map((block) => {
-          if (block.type !== "toolCall") return block;
-          const toolCall = block as ToolCall;
-          const { id, changed } = stripToolCallItemId(toolCall.id);
-          if (!changed) return toolCall;
-          idMap.set(toolCall.id, id);
-          contentChanged = true;
-          return { ...toolCall, id };
-        });
-
-        if (!contentChanged) return message;
-        modified = true;
-        return { ...assistant, content };
-      }
-
-      if (message.role === "toolResult") {
-        const toolResult = message as ToolResultMessage;
-        const mapped = idMap.get(toolResult.toolCallId);
-        if (!mapped || mapped === toolResult.toolCallId) return message;
-        modified = true;
-        return { ...toolResult, toolCallId: mapped };
-      }
-
-      return message;
-    });
-
-    if (!modified) return;
-    return { messages };
-  });
-
-  // ── Delivery helper: update placeholder or post new message ──────────
-  // Shared image-command delivery path.
-  // Prefer updating the placeholder so the timeline stays tidy; fall back to a
-  // new post or sendMessage if the local HTTP write path is unavailable.
-  async function deliver(
-    customType: "image" | "flux",
-    placeholderId: number | string | null,
-    content: string,
-  ): Promise<void> {
-    // Try updating the placeholder post first
-    if (typeof placeholderId === "number" && Number.isFinite(placeholderId)) {
-      if (await updatePost(placeholderId, content)) return;
+      if (!contentChanged) return message;
+      modified = true;
+      return { ...assistant, content };
     }
-    // Fallback: create a new post or use pi.sendMessage
-    const posted = await postPlaceholder(content);
-    if (!posted) {
-      await pi.sendMessage({ customType, content, display: true });
+
+    if (message.role === "toolResult") {
+      const toolResult = message as ToolResultMessage;
+      const mapped = idMap.get(toolResult.toolCallId);
+      if (!mapped || mapped === toolResult.toolCallId) return message;
+      modified = true;
+      return { ...toolResult, toolCallId: mapped };
     }
-  }
 
-
-  // Azure OpenAI image command. This stays intentionally thin: parse args,
-  // show immediate progress, run generation asynchronously, then swap the
-  // placeholder with the final rendered workspace-backed message.
-  pi.registerCommand("image", {
-    description: "Generate an image with Azure OpenAI",
-    handler: async (input, _ctx) => {
-      const parsed = parseArgs(input || "");
-      if (!parsed) {
-        pi.sendMessage({
-          customType: "image",
-          content:
-            "Usage: /image <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high] [--style natural|vivid] [--transparent]",
-          display: true,
-        });
-        return;
-      }
-
-      const snappedSize = snapToSupportedSize(parsed.size);
-      const sizeNote = parsed.size && parsed.size !== snappedSize ? ` (${parsed.size} → ${snappedSize})` : "";
-      const transparencyNote = parsed.transparent ? ", transparent background" : "";
-      const statusText = `⏳ Generating image… (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}${sizeNote}${transparencyNote})`;
-      const placeholderId = await postPlaceholder(statusText);
-      if (!placeholderId) {
-        pi.sendMessage({ customType: "image", content: statusText, display: true });
-      }
-
-      void (async () => {
-        try {
-          const images = await generateImage(BASE_URL, AOAI_IMAGE_MODEL_ID, parsed, true);
-          const files = saveImages("azure-image", parsed.prompt, images);
-          const caption = `Azure image (${AOAI_IMAGE_MODEL_ID}, ${snappedSize}) — ${parsed.prompt}`;
-          await deliver("image", placeholderId, formatGeneratedImageMessage(caption, files));
-        } catch (error) {
-          await deliver("image", placeholderId, formatImageGenerationError("Azure OpenAI", error));
-        }
-      })();
-    },
+    return message;
   });
 
-  // Foundry/FLUX image command. Similar UX to /image, but uses the Foundry
-  // image endpoint and currently rejects transparent-background requests.
-  pi.registerCommand("flux", {
-    description: "Generate an image with Azure Foundry (FLUX.2-pro)",
-    handler: async (input, _ctx) => {
-      const parsed = parseArgs(input || "");
-      if (!parsed) {
-        pi.sendMessage({
-          customType: "flux",
-          content:
-            "Usage: /flux <prompt> [--size 1024x1024] [--count 1] [--quality low|medium|high]",
-          display: true,
-        });
-        return;
-      }
+  if (!modified) return;
+  return { messages };
+}
 
-      if (parsed.transparent) {
-        pi.sendMessage({
-          customType: "flux",
-          content: "❌ Image generation failed (Azure Foundry): Transparent background is not supported for /flux yet.",
-          display: true,
-        });
-        return;
-      }
+let cachedAzureImagesModule: Promise<typeof import("./azure-openai-images.ts")> | null = null;
 
-      const size = parseSize(parsed.size);
-      const statusText = `⏳ Generating Foundry image… (${FOUNDRY_IMAGE_MODEL_ID}, ${size.width}×${size.height})`;
-      const placeholderId = await postPlaceholder(statusText);
-      if (!placeholderId) {
-        pi.sendMessage({ customType: "flux", content: statusText, display: true });
-      }
+async function loadAzureImagesModule(): Promise<typeof import("./azure-openai-images.ts")> {
+  if (!cachedAzureImagesModule) cachedAzureImagesModule = import("./azure-openai-images.ts");
+  return await cachedAzureImagesModule;
+}
 
-      void (async () => {
-        try {
-          const images = await generateFoundryImage(FOUNDRY_IMAGE_MODEL_ID, parsed);
-          const files = saveImages("foundry-image", parsed.prompt, images);
-          const caption = `Foundry image (${FOUNDRY_IMAGE_MODEL_ID}, ${size.width}×${size.height}) — ${parsed.prompt}`;
-          await deliver("flux", placeholderId, formatGeneratedImageMessage(caption, files));
-        } catch (error) {
-          await deliver("flux", placeholderId, formatImageGenerationError("Azure Foundry", error));
-        }
-      })();
-    },
-  });
+export async function executeAzureImageCommand(
+  pi: Pick<ExtensionAPI, "sendMessage">,
+  input: string,
+): Promise<void> {
+  const mod = await loadAzureImagesModule();
+  await mod.executeAzureImageCommand(pi, input);
+}
 
+export async function executeAzureFluxCommand(
+  pi: Pick<ExtensionAPI, "sendMessage">,
+  input: string,
+): Promise<void> {
+  const mod = await loadAzureImagesModule();
+  await mod.executeAzureFluxCommand(pi, input);
+}
+
+export function startAzureProviderBootstrap(register: (name: string, config: any) => void): { stop: () => void; refresh: () => Promise<void> } {
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let stopped = false;
 
   const scheduleNext = (expiresOnEpoch?: number) => {
     if (timer) clearTimeout(timer);
@@ -2028,24 +1573,65 @@ export default function (pi: ExtensionAPI) {
   };
 
   const refresh = async () => {
+    if (stopped) return;
     logExtensionLoaded();
-    // In proxy/api-key mode, register once with the static key and don't
-    // schedule periodic refreshes — the remote proxy handles MI tokens.
     if (STATIC_API_KEY) {
-      registerProvider(pi, STATIC_API_KEY);
+      registerAzureProviders(register, STATIC_API_KEY);
       return;
     }
     const cache = await ensureToken();
     if (cache.accessToken) {
       await ensureAzureModelCaps();
-      registerProvider(pi, cache.accessToken);
+      registerAzureProviders(register, cache.accessToken);
     }
-    scheduleNext(cache.expiresOnEpoch);
+    if (!stopped) scheduleNext(cache.expiresOnEpoch);
   };
 
-  pi.on("session_shutdown", () => {
-    if (timer) clearTimeout(timer);
+  void refresh();
+
+  return {
+    stop: () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    },
+    refresh,
+  };
+}
+
+export default function (pi: ExtensionAPI) {
+  // Extension bootstrap:
+  // - log the effective configuration once
+  // - repair cross-model tool-call artifacts during context replay
+  // - register providers immediately when using static-key mode
+  // - otherwise fetch/cache managed-identity tokens and then register
+  logExtensionLoaded();
+
+  pi.on("context", async (event, ctx) => await repairAzureContext(event as { messages: any[] }, ctx as { model?: any }));
+
+  pi.registerCommand("image", {
+    description: "Generate an image with Azure OpenAI",
+    handler: async (input) => {
+      await executeAzureImageCommand(pi, input || "");
+    },
   });
 
-  void refresh();
+  pi.registerCommand("flux", {
+    description: "Generate an image with Azure Foundry (FLUX.2-pro)",
+    handler: async (input) => {
+      await executeAzureFluxCommand(pi, input || "");
+    },
+  });
+
+  let bootstrap: ReturnType<typeof startAzureProviderBootstrap> | null = null;
+
+  pi.on("session_start", async () => {
+    bootstrap?.stop();
+    bootstrap = startAzureProviderBootstrap((name, config) => pi.registerProvider(name, config));
+    await bootstrap.refresh();
+  });
+
+  pi.on("session_shutdown", () => {
+    bootstrap?.stop();
+    bootstrap = null;
+  });
 }

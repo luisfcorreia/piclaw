@@ -87,7 +87,7 @@ export interface RuntimeBootstrapDeps {
   pollIntervalMs: number;
   signalRegistrar: RuntimeSignalRegistrar;
   initializeRuntimeEnvironment(state: RuntimeBootstrapState): void;
-  registerOptionalProviders(agentPool: RuntimeBootstrapAgentPool): void;
+  registerOptionalProviders(agentPool: RuntimeBootstrapAgentPool): void | Promise<void>;
   startWebChannel(queue: RuntimeBootstrapQueue, agentPool: RuntimeBootstrapAgentPool): Promise<RuntimeBootstrapWeb>;
   startOptionalPushoverChannel(): Promise<RuntimeBootstrapPushover | null>;
   createWhatsAppChannel(state: RuntimeBootstrapState): RuntimeBootstrapWhatsApp;
@@ -148,7 +148,7 @@ export async function bootstrapRuntime(deps: RuntimeBootstrapDeps): Promise<void
   const { queue, agentPool, state } = deps.core;
 
   deps.initializeRuntimeEnvironment(state);
-  deps.registerOptionalProviders(agentPool);
+  await deps.registerOptionalProviders(agentPool);
   deps.log("=== Piclaw - Pi Coding Agent Assistant ===");
 
   const web = await deps.startWebChannel(queue, agentPool);
