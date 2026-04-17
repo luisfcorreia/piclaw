@@ -20,3 +20,19 @@ test("rememberWebOrigin suppresses invalid request URLs without clobbering state
 
   expect(getWebOrigin("chat:origin-stable")).toBe("https://stable.example.com");
 });
+
+test("rememberWebOrigin prunes stale origins after the TTL window", () => {
+  const originalNow = Date.now;
+  try {
+    Date.now = () => 0;
+    rememberWebOrigin("chat:origin-stale", new Request("https://stale.example.com/path"));
+
+    Date.now = () => 24 * 60 * 60 * 1000 + 1;
+    rememberWebOrigin("chat:origin-fresh", new Request("https://fresh.example.com/path"));
+
+    expect(getWebOrigin("chat:origin-stale")).toBeNull();
+    expect(getWebOrigin("chat:origin-fresh")).toBe("https://fresh.example.com");
+  } finally {
+    Date.now = originalNow;
+  }
+});
