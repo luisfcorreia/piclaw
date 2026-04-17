@@ -66,10 +66,7 @@ interface TerminalSessionRecord {
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
 const TERMINAL_FONT_FAMILY = "FiraCode Nerd Font Mono";
-const FALLBACK_TERMINAL_OWNER: TerminalSessionOwner = {
-  token: "web-terminal-local-default",
-  userId: DEFAULT_WEB_USER_ID,
-};
+const TERMINAL_ANON_CLIENT_HEADER = "x-piclaw-terminal-client";
 
 const IS_LINUX = process.platform === "linux";
 const DEFAULT_TERMINAL_HANDOFF_TTL_MS = 5 * 60 * 1000;
@@ -97,6 +94,17 @@ function createTerminalSessionId(): string {
   } catch (error) {
     debugSuppressedError(log, "crypto.randomUUID unavailable for terminal session id", error);
     return `terminal-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function readAnonymousTerminalClientToken(req: Request): string | null {
+  try {
+    const urlToken = new URL(req.url).searchParams.get("client")?.trim() || "";
+    const headerToken = req.headers.get(TERMINAL_ANON_CLIENT_HEADER)?.trim() || "";
+    const token = urlToken || headerToken;
+    return /^[a-zA-Z0-9._:-]{8,128}$/.test(token) ? token : null;
+  } catch {
+    return null;
   }
 }
 
@@ -270,7 +278,15 @@ export class TerminalSessionService {
         return { kind: "terminal", token, userId: session.user_id, handoffToken: null };
       }
     }
-    return allowUnauthenticated ? { kind: "terminal", ...FALLBACK_TERMINAL_OWNER, handoffToken: null } : null;
+    if (!allowUnauthenticated) return null;
+    const anonymousClientToken = readAnonymousTerminalClientToken(req);
+    if (!anonymousClientToken) return null;
+    return {
+      kind: "terminal",
+      token: `web-terminal-anon:${anonymousClientToken}`,
+      userId: DEFAULT_WEB_USER_ID,
+      handoffToken: null,
+    };
   }
 
   getSessionInfo(owner: TerminalSessionOwner) {
@@ -334,6 +350,7 @@ export class TerminalSessionService {
   handleMessage(ws: ServerWebSocket<TerminalSocketData>, rawMessage: string | Buffer | Uint8Array): void {
     const session = this.sessions.get(ws.data.token);
     if (!session) return;
+    if (!session.clients.has(ws)) return;
 
     const messageText = typeof rawMessage === "string" ? rawMessage : Buffer.from(rawMessage).toString("utf8");
     const payload = this.parseClientMessage(messageText);

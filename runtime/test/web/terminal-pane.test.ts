@@ -5,7 +5,7 @@
 import { describe, expect, test, beforeEach } from "bun:test";
 import { tryRun } from "../helpers.js";
 
-import { buildTerminalTheme, relocateTerminalPaneRoot } from '../../web/src/panes/terminal-pane.js';
+import { buildTerminalTheme, getOrCreateAnonymousTerminalClientToken, relocateTerminalPaneRoot } from '../../web/src/panes/terminal-pane.js';
 
 // --- Inline types (same as pane-types.ts, for Bun test runner) ---
 
@@ -209,6 +209,29 @@ test('relocateTerminalPaneRoot moves the existing terminal shell into a new host
     expect(host.innerHTML).toBe('');
     expect(children).toEqual([root]);
     expect(relocateTerminalPaneRoot(root, null as any)).toBe(false);
+});
+
+test('getOrCreateAnonymousTerminalClientToken persists a stable client token', () => {
+    const storage = new Map<string, string>();
+    const runtimeWindow = {
+        localStorage: {
+            getItem(key: string) {
+                return storage.has(key) ? storage.get(key)! : null;
+            },
+            setItem(key: string, value: string) {
+                storage.set(key, value);
+            },
+        },
+        crypto: {
+            randomUUID: () => 'terminal-client-fixed',
+        },
+    } as any;
+
+    const first = getOrCreateAnonymousTerminalClientToken(runtimeWindow);
+    const second = getOrCreateAnonymousTerminalClientToken(runtimeWindow);
+
+    expect(first).toBe('terminal-client-fixed');
+    expect(second).toBe('terminal-client-fixed');
 });
 
 describe('Terminal pane extension', () => {

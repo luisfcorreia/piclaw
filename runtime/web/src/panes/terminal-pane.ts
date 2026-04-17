@@ -22,6 +22,8 @@ export const TERMINAL_TAB_PATH = 'piclaw://terminal';
 const TERMINAL_FONT_FAMILY = 'FiraCode Nerd Font Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
 const TERMINAL_FONT_LOAD_SPEC = '400 13px "FiraCode Nerd Font Mono"';
 const TERMINAL_FONT_LOAD_SPEC_BOLD = '700 13px "FiraCode Nerd Font Mono"';
+const TERMINAL_ANON_CLIENT_HEADER = 'x-piclaw-terminal-client';
+const TERMINAL_ANON_CLIENT_STORAGE_KEY = 'piclaw_terminal_client';
 const LIGHT_TERMINAL_PALETTE = {
     yellow: '#9a6700',
     magenta: '#8250df',
@@ -110,10 +112,38 @@ async function ensureTerminalFontsReady() {
     await terminalFontsReadyPromise;
 }
 
-async function fetchTerminalSession() {
+function createTerminalClientToken(runtimeWindow = typeof window !== 'undefined' ? window : null) {
+    try {
+        if (typeof runtimeWindow?.crypto?.randomUUID === 'function') {
+            return runtimeWindow.crypto.randomUUID();
+        }
+    } catch (_error) {
+        // Fall back to a timestamp/random token below.
+    }
+    return `terminal-client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function getOrCreateAnonymousTerminalClientToken(runtimeWindow = typeof window !== 'undefined' ? window : null) {
+    if (!runtimeWindow) return null;
+    try {
+        const storage = runtimeWindow.localStorage;
+        const existing = typeof storage?.getItem === 'function'
+            ? String(storage.getItem(TERMINAL_ANON_CLIENT_STORAGE_KEY) || '').trim()
+            : '';
+        if (existing) return existing;
+        const created = createTerminalClientToken(runtimeWindow);
+        storage?.setItem?.(TERMINAL_ANON_CLIENT_STORAGE_KEY, created);
+        return created;
+    } catch (_error) {
+        return createTerminalClientToken(runtimeWindow);
+    }
+}
+
+async function fetchTerminalSession(clientToken = getOrCreateAnonymousTerminalClientToken()) {
     const response = await fetch('/terminal/session', {
         method: 'GET',
         credentials: 'same-origin',
+        headers: clientToken ? { [TERMINAL_ANON_CLIENT_HEADER]: clientToken } : undefined,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -122,10 +152,11 @@ async function fetchTerminalSession() {
     return body;
 }
 
-async function requestTerminalHandoff() {
+async function requestTerminalHandoff(clientToken = getOrCreateAnonymousTerminalClientToken()) {
     const response = await fetch('/terminal/handoff', {
         method: 'POST',
         credentials: 'same-origin',
+        headers: clientToken ? { [TERMINAL_ANON_CLIENT_HEADER]: clientToken } : undefined,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -136,11 +167,14 @@ async function requestTerminalHandoff() {
         : null;
 }
 
-function buildTerminalWebSocketUrl(path, handoffToken = null) {
+function buildTerminalWebSocketUrl(path, handoffToken = null, clientToken = getOrCreateAnonymousTerminalClientToken()) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = new URL(`${protocol}//${window.location.host}${path}`);
     if (handoffToken) {
         url.searchParams.set('handoff', String(handoffToken));
+    }
+    if (clientToken) {
+        url.searchParams.set('client', String(clientToken));
     }
     return url.toString();
 }
