@@ -59,6 +59,11 @@ export interface WebTerminalVncHttpChannel extends JsonResponder {
   vncService: VncServiceLike;
 }
 
+export type WebTerminalVncHttpServiceSurface = Pick<
+  WebTerminalVncHttpService,
+  "handleTerminalSession" | "handleTerminalHandoff" | "handleVncSession" | "handleVncHandoff"
+>;
+
 export function createWebTerminalVncHttpService(
   channel: WebTerminalVncHttpChannel,
   configs: Pick<WebTerminalVncHttpServiceDeps, "webRuntimeConfig">

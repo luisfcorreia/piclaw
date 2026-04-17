@@ -37,9 +37,13 @@ export function isRateLimitedForClient(clientKey, bucket, windowMs, limit, now =
     const cutoff = now - windowMs;
     const entries = rateBuckets.get(key) || [];
     const trimmed = entries.filter((ts) => ts > cutoff);
+    if (trimmed.length >= limit) {
+        rateBuckets.set(key, trimmed);
+        return true;
+    }
     trimmed.push(now);
     rateBuckets.set(key, trimmed);
-    return trimmed.length > limit;
+    return false;
 }
 /**
  * Request-scoped rate-limit helper that derives client identity from the request.

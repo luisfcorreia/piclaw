@@ -4,7 +4,7 @@
 
 import type { AuthStorage, ExtensionFactory, ModelRegistry, SettingsManager } from "@mariozechner/pi-coding-agent";
 
-import { AttachmentRegistry } from "./attachments.js";
+import { getAttachmentRegistry } from "./attachments.js";
 import { getSshConfig } from "../db.js";
 import { createChatSshCoreExtension, resolveSshCoreConfigFromChatConfig } from "../extensions/ssh-core.js";
 import { AgentBranchManager } from "./branch-manager.js";
@@ -13,6 +13,7 @@ import { AgentSessionBinder } from "./session-binder.js";
 import { AgentSessionManager, type PoolEntry } from "./session-manager.js";
 import { AgentToolFactory } from "./tool-factory.js";
 import { AgentTurnCoordinator } from "./turn-coordinator.js";
+import { lightweightPrewarmSession } from "./session.js";
 import { recordMessageUsage } from "./usage.js";
 import type { AgentPoolOptions } from "./contracts.js";
 import type { AgentBashOperations } from "./tool-factory.js";
@@ -33,6 +34,7 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
   modelRegistry: ModelRegistry;
   settingsManager: SettingsManager;
   workspaceDir: string;
+  mainSessionMaxSize?: number | null;
   bashOperations?: AgentBashOperations;
   createSession?: AgentPoolOptions["createSession"];
   createSideSession?: AgentPoolOptions["createSideSession"];
@@ -40,7 +42,7 @@ export interface AgentPoolServiceFactoryOptions extends AgentPoolLogHooks {
 
 /** Concrete helper instances composed into AgentPool. */
 export interface AgentPoolServices {
-  attachments: AttachmentRegistry;
+  attachments: ReturnType<typeof getAttachmentRegistry>;
   sessionBinder: AgentSessionBinder;
   toolFactory: AgentToolFactory;
   turnCoordinator: AgentTurnCoordinator;
@@ -49,9 +51,7 @@ export interface AgentPoolServices {
   branchManager: AgentBranchManager;
 }
 
-async function resolveSessionExtensionFactories(
-  chatJid: string,
-): Promise<ExtensionFactory[]> {
+async function resolveSessionExtensionFactories(chatJid: string): Promise<ExtensionFactory[]> {
   let sshConfig: ReturnType<typeof getSshConfig> | undefined;
   try {
     sshConfig = getSshConfig(chatJid);
@@ -71,7 +71,7 @@ async function resolveSessionExtensionFactories(
  * Keeps constructor wiring in one place so AgentPool itself remains a thin façade.
  */
 export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions): AgentPoolServices {
-  const attachments = new AttachmentRegistry();
+  const attachments = getAttachmentRegistry();
   const sessionBinder = new AgentSessionBinder({
     pool: options.pool,
     onError: options.onError,
@@ -122,7 +122,10 @@ export function createAgentPoolServices(options: AgentPoolServiceFactoryOptions)
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     settingsManager: options.settingsManager,
-    attachmentRegistry: attachments,
+    mainSessionMaxSize: options.mainSessionMaxSize,
+    lightweightPrewarmSession: (chatJid) => lightweightPrewarmSession(chatJid, {
+      getSessionExtensionFactories: (targetChatJid) => resolveSessionExtensionFactories(targetChatJid),
+    }),
     createDefaultTools: () => toolFactory.createDefaultTools(),
     createCustomToolOverrides: () => toolFactory.createCustomToolOverrides(),
     getSessionExtensionFactories: (chatJid) => resolveSessionExtensionFactories(chatJid),

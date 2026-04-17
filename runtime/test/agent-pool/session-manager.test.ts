@@ -173,7 +173,7 @@ test("AgentSessionManager evicts idle sessions and shuts down remaining sessions
   fixture.pool.set("web:old", { runtime: createRuntime(oldSession), lastUsed: Date.now() - 10_000 });
   fixture.pool.set("web:active", { runtime: createRuntime(activeSession), lastUsed: Date.now() - 10_000 });
 
-  fixture.manager.evictIdle(1_000);
+  fixture.manager.evictIdle({ mainIdleTtlMs: 1_000, sideIdleTtlMs: 1_000 });
 
   expect(fixture.pool.has("web:old")).toBe(false);
   expect(fixture.pool.has("web:active")).toBe(true);
@@ -183,6 +183,97 @@ test("AgentSessionManager evicts idle sessions and shuts down remaining sessions
   expect(fixture.pool.size).toBe(0);
   expect(fixture.sidePool.size).toBe(0);
   expect(disposed).toBe(2);
+});
+
+test("AgentSessionManager evicts idle side sessions more aggressively than main sessions", async () => {
+  let disposed = 0;
+  const mainSession = {
+    isStreaming: false,
+    isBashRunning: false,
+    isCompacting: false,
+    dispose() {
+      disposed += 1;
+    },
+  };
+  const sideSession = {
+    isStreaming: false,
+    isBashRunning: false,
+    isCompacting: false,
+    dispose() {
+      disposed += 1;
+    },
+  };
+
+  const fixture = createManager();
+  const lastUsed = Date.now() - 2_000;
+  fixture.pool.set("web:main", { runtime: createRuntime(mainSession), lastUsed });
+  fixture.sidePool.set("web:main", { runtime: createRuntime(sideSession), lastUsed });
+
+  fixture.manager.evictIdle({ mainIdleTtlMs: 10_000, sideIdleTtlMs: 1_000 });
+
+  expect(fixture.pool.has("web:main")).toBe(true);
+  expect(fixture.sidePool.has("web:main")).toBe(false);
+  expect(disposed).toBe(1);
+
+  await fixture.manager.shutdown();
+});
+
+test("AgentSessionManager caps cached main sessions by evicting the oldest idle runtimes", async () => {
+  let disposed = 0;
+  const fixture = createManager({
+    mainSessionMaxSize: 2,
+    createSession: async (chatJid: string) => {
+      const session = {
+        chatJid,
+        isStreaming: chatJid === "web:one",
+        isBashRunning: false,
+        isCompacting: false,
+        dispose() {
+          disposed += 1;
+        },
+      };
+      return createRuntime(session) as any;
+    },
+  });
+
+  await fixture.manager.getOrCreate("web:one");
+  await Bun.sleep(2);
+  await fixture.manager.getOrCreate("web:two");
+  await Bun.sleep(2);
+  await fixture.manager.getOrCreate("web:three");
+
+  await Bun.sleep(10);
+
+  expect(fixture.pool.has("web:one")).toBe(true);
+  expect(fixture.pool.has("web:two")).toBe(false);
+  expect(fixture.pool.has("web:three")).toBe(true);
+  expect(fixture.pool.size).toBe(2);
+  expect(disposed).toBe(1);
+
+  await fixture.manager.shutdown();
+});
+
+test("AgentSessionManager lightweight prewarm primes caches without creating a runtime", async () => {
+  const lightweight: string[] = [];
+  let createCalls = 0;
+  const fixture = createManager({
+    lightweightPrewarmSession: async (chatJid: string) => {
+      lightweight.push(chatJid);
+    },
+    createSession: async () => {
+      createCalls += 1;
+      return createRuntime({ dispose() {} }) as any;
+    },
+  });
+
+  expect(fixture.manager.prewarm("web:recent", { mode: "lightweight" })).toBe(true);
+  await Bun.sleep(20);
+
+  expect(lightweight).toEqual(["web:recent"]);
+  expect(createCalls).toBe(0);
+  expect(fixture.pool.size).toBe(0);
+
+  await fixture.manager.shutdown();
 });
 
 test("AgentSessionManager serializes queued prewarms and honors priority ordering", async () => {

@@ -113,7 +113,7 @@ export function broadcastEvent(channel, eventType, data) {
     const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
     const bytes = encoder.encode(payload);
     for (const client of channel.clients) {
-        if (eventChatJid && client.chatJid && client.chatJid !== eventChatJid) {
+        if (eventChatJid && client.chatJid !== eventChatJid) {
             continue;
         }
         try {

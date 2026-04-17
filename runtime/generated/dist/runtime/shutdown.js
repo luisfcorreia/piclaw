@@ -41,7 +41,7 @@ export function createShutdownHandler(deps) {
             log.warn("Forcing shutdown after timeout", { operation: "force_exit", timeoutMs: 15000 });
             process.exit(0);
         }, 15000);
-        deps.stopIpcWatcher();
+        await withTimeout(deps.stopIpcWatcher(), 4000, "ipc watcher stop");
         deps.stopSchedulerLoop();
         await withTimeout(deps.queue.shutdown(5000), 7000, "queue shutdown");
         await withTimeout(deps.agentPool.shutdown(), 8000, "agent pool shutdown");

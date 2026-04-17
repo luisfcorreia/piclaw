@@ -15,19 +15,13 @@ export class AgentSessionBinder {
         if (!binder)
             return;
         for (const [jid, entry] of this.options.pool) {
-            try {
-                void binder(entry.runtime, jid);
-            }
-            catch (err) {
-                this.options.onError?.("Failed to bind session", {
-                    operation: "set_session_binder.bind_existing_session",
-                    chatJid: jid,
-                    err,
-                });
-            }
+            void this.runBinder(entry.runtime, jid, "set_session_binder.bind_existing_session");
         }
     }
     async bindSession(runtime, chatJid) {
+        await this.runBinder(runtime, chatJid, "bind_session");
+    }
+    async runBinder(runtime, chatJid, operation) {
         if (!this.binder)
             return;
         try {
@@ -35,7 +29,7 @@ export class AgentSessionBinder {
         }
         catch (err) {
             this.options.onError?.("Failed to bind session", {
-                operation: "bind_session",
+                operation,
                 chatJid,
                 err,
             });

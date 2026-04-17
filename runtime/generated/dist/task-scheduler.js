@@ -300,7 +300,9 @@ export async function runScheduledTask(task, deps) {
         error,
     });
     // Compute and persist the next execution time (null for one-shot tasks).
-    const nextRun = computeNextRun(task.schedule_type, task.schedule_value);
+    const nextRun = computeNextRun(task.schedule_type, task.schedule_value, {
+        currentDate: task.next_run,
+    });
     updateTaskAfterRun(task.id, nextRun, error ? `Error: ${error}` : (result?.slice(0, 200) || "Completed"));
 }
 /** Guard to prevent starting the loop more than once. */

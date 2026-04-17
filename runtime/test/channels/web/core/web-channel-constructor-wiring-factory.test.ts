@@ -60,7 +60,9 @@ describe("web channel constructor wiring factory", () => {
       sse: { clients: { size: 0 } },
       uiBridge: { stop: () => {} },
     } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createSessionBroadcast"]>;
-    const remoteInterop = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRemoteInterop"]>>("remote-interop");
+    const remoteInterop = {
+      handleRequest: async (_req: Request) => new Response("remote-interop"),
+    } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createRemoteInterop"]>;
     const runtimeState = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createRuntimeState"]>>("runtime-state");
     const interactionBroadcaster = {
       broadcastAgentResponse: () => {
@@ -81,7 +83,12 @@ describe("web channel constructor wiring factory", () => {
     const endpointFacade = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createEndpointFacade"]>>("endpoint-facade");
     const controlPlaneService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createControlPlaneService"]>>("control-plane");
     const serverLifecycleGateway = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createServerLifecycleGateway"]>>("server-lifecycle");
-    const terminalVncHttpService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createTerminalVncHttpService"]>>("terminal-vnc");
+    const terminalVncHttpService = {
+      handleTerminalSession: (_req: Request) => new Response("terminal-session"),
+      handleTerminalHandoff: async (_req: Request) => new Response("terminal-handoff"),
+      handleVncSession: (_req: Request) => new Response("vnc-session"),
+      handleVncHandoff: async (_req: Request) => new Response("vnc-handoff"),
+    } as unknown as ReturnType<WebChannelConstructorFactoryDeps["createTerminalVncHttpService"]>;
     const adaptiveCardSidePromptService = sentinel<ReturnType<WebChannelConstructorFactoryDeps["createAdaptiveCardSidePromptService"]>>(
       "adaptive-card-side-prompt",
     );
@@ -301,7 +308,6 @@ describe("web channel constructor wiring factory", () => {
 
     expect(creationOrder).toEqual([
       "sessionBroadcast",
-      "remoteInterop",
       "runtimeState",
       "interactionBroadcaster",
       "authGateway",
@@ -313,13 +319,12 @@ describe("web channel constructor wiring factory", () => {
       "endpointFacade",
       "controlPlaneService",
       "serverLifecycleGateway",
-      "terminalVncHttpService",
       "adaptiveCardSidePromptService",
       "peerMessageRelayService",
     ]);
 
     expect(result.sessionBroadcast).toBe(sessionBroadcast);
-    expect(result.remoteInterop).toBe(remoteInterop);
+    expect(result.remoteInterop).not.toBe(remoteInterop);
     expect(result.runtimeState).toBe(runtimeState);
     expect(result.interactionBroadcaster).toBe(interactionBroadcaster);
     expect(result.authGateway).toBe(authGateway);
@@ -331,7 +336,7 @@ describe("web channel constructor wiring factory", () => {
     expect(result.endpointFacade).toBe(endpointFacade);
     expect(result.controlPlaneService).toBe(controlPlaneService);
     expect(result.serverLifecycleGateway).toBe(serverLifecycleGateway);
-    expect(result.terminalVncHttpService).toBe(terminalVncHttpService);
+    expect(result.terminalVncHttpService).not.toBe(terminalVncHttpService);
     expect(result.adaptiveCardSidePromptService).toBe(adaptiveCardSidePromptService);
     expect(result.peerMessageRelayService).toBe(peerMessageRelayService);
 
@@ -414,6 +419,14 @@ describe("web channel constructor wiring factory", () => {
     expect(postRequestCalls).toEqual([
       { isReply: false, chatJid: "web:branch", url: "https://example.com/post" },
     ]);
+
+    expect(creationOrder).not.toContain("terminalVncHttpService");
+    expect(await result.terminalVncHttpService.handleTerminalSession(new Request("https://example.com/terminal/session")).text()).toBe("terminal-session");
+    expect(creationOrder.filter((entry) => entry === "terminalVncHttpService")).toEqual(["terminalVncHttpService"]);
+
+    expect(creationOrder).not.toContain("remoteInterop");
+    expect(await (await result.remoteInterop.handleRequest(new Request("https://example.com/api/remote/ping"))).text()).toBe("remote-interop");
+    expect(creationOrder.filter((entry) => entry === "remoteInterop")).toEqual(["remoteInterop"]);
 
     identity = {
       assistantName: "Nova",

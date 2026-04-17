@@ -78,7 +78,7 @@ function buildExportPath(id, filename) {
     return resolve("/workspace/tmp", `${id}-${safeName}`);
 }
 // ── Tool execute ──────────────────────────────────────────
-async function execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+async function execute(registry, _toolCallId, params, _signal, _onUpdate, _ctx) {
     const resolved = resolveWorkspacePath(params.path);
     if (!resolved) {
         return { content: [{ type: "text", text: "Attachment path must be inside the workspace." }], details: {} };
@@ -93,7 +93,6 @@ async function execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
     const size = file.size;
     const kind = params.kind || (contentType.startsWith("image/") ? "image" : "file");
     const mediaId = createMedia(filename, contentType, data, null, { size, source_path: resolved, kind });
-    const registry = getAttachmentRegistry();
     registry.register(getChatJid("web:default"), {
         id: mediaId,
         name: filename,
@@ -256,92 +255,96 @@ async function validateAndNormalizeImage(rawData, claimedMime) {
         return { ok: false, reason: error instanceof Error ? error.message : "image validation failed" };
     }
 }
-/** Extension factory that registers the attach_file tool. */
-export const fileAttachments = (pi) => {
-    pi.on("before_agent_start", async (event) => {
-        return { systemPrompt: `${event.systemPrompt}\n\n${ATTACHMENT_HINT}` };
-    });
-    // Sanitize session context before each API call: strip image blocks with
-    // invalid MIME types that would cause permanent 400 errors. This recovers
-    // poisoned sessions automatically without manual JSONL editing.
-    pi.on("context", async (event) => {
-        let modified = false;
-        const sanitizeBlocks = (blocks) => {
-            let blockModified = false;
-            const cleaned = blocks.map((block) => {
-                if (block?.type === "image") {
-                    const mime = block.mimeType || block.source?.media_type || "";
-                    if (typeof mime === "string" && mime && !VALID_IMAGE_MIMES.has(mime)) {
-                        blockModified = true;
-                        return { type: "text", text: `[Invalid image block removed: unsupported MIME ${mime}]` };
-                    }
-                    // Light sync validation: check that base64 data decodes to something
-                    // with recognizable image magic bytes. Heavy validation via sharp
-                    // happens at ingest (read_attachment); this catches corruption that
-                    // slipped through or was introduced by manual session edits.
-                    const b64 = typeof block.data === "string" ? block.data : (typeof block.source?.data === "string" ? block.source.data : null);
-                    if (b64) {
-                        try {
-                            const buf = Buffer.from(b64, "base64");
-                            if (buf.length < 4) {
+/** Build a file-attachments extension bound to a specific registry instance. */
+export function createFileAttachmentsExtension(registry = getAttachmentRegistry()) {
+    return (pi) => {
+        pi.on("before_agent_start", async (event) => {
+            return { systemPrompt: `${event.systemPrompt}\n\n${ATTACHMENT_HINT}` };
+        });
+        // Sanitize session context before each API call: strip image blocks with
+        // invalid MIME types that would cause permanent 400 errors. This recovers
+        // poisoned sessions automatically without manual JSONL editing.
+        pi.on("context", async (event) => {
+            let modified = false;
+            const sanitizeBlocks = (blocks) => {
+                let blockModified = false;
+                const cleaned = blocks.map((block) => {
+                    if (block?.type === "image") {
+                        const mime = block.mimeType || block.source?.media_type || "";
+                        if (typeof mime === "string" && mime && !VALID_IMAGE_MIMES.has(mime)) {
+                            blockModified = true;
+                            return { type: "text", text: `[Invalid image block removed: unsupported MIME ${mime}]` };
+                        }
+                        // Light sync validation: check that base64 data decodes to something
+                        // with recognizable image magic bytes. Heavy validation via sharp
+                        // happens at ingest (read_attachment); this catches corruption that
+                        // slipped through or was introduced by manual session edits.
+                        const b64 = typeof block.data === "string" ? block.data : (typeof block.source?.data === "string" ? block.source.data : null);
+                        if (b64) {
+                            try {
+                                const buf = Buffer.from(b64, "base64");
+                                if (buf.length < 4) {
+                                    blockModified = true;
+                                    return { type: "text", text: "[Corrupt image block removed: data too short]" };
+                                }
+                            }
+                            catch {
                                 blockModified = true;
-                                return { type: "text", text: "[Corrupt image block removed: data too short]" };
+                                return { type: "text", text: "[Corrupt image block removed: invalid base64]" };
                             }
                         }
-                        catch {
+                    }
+                    if (block?.type === "tool_result" && Array.isArray(block.content)) {
+                        const nested = sanitizeBlocks(block.content);
+                        if (nested.modified) {
                             blockModified = true;
-                            return { type: "text", text: "[Corrupt image block removed: invalid base64]" };
+                            return { ...block, content: nested.blocks };
                         }
                     }
-                }
-                if (block?.type === "tool_result" && Array.isArray(block.content)) {
-                    const nested = sanitizeBlocks(block.content);
-                    if (nested.modified) {
-                        blockModified = true;
-                        return { ...block, content: nested.blocks };
-                    }
-                }
-                return block;
+                    return block;
+                });
+                return { blocks: cleaned, modified: blockModified };
+            };
+            const messages = event.messages.map((msg) => {
+                if (!Array.isArray(msg?.content))
+                    return msg;
+                const cleaned = sanitizeBlocks(msg.content);
+                if (!cleaned.modified)
+                    return msg;
+                modified = true;
+                return { ...msg, content: cleaned.blocks };
             });
-            return { blocks: cleaned, modified: blockModified };
-        };
-        const messages = event.messages.map((msg) => {
-            if (!Array.isArray(msg?.content))
-                return msg;
-            const cleaned = sanitizeBlocks(msg.content);
-            if (!cleaned.modified)
-                return msg;
-            modified = true;
-            return { ...msg, content: cleaned.blocks };
+            if (modified) {
+                log.warn("Stripped invalid image blocks from session context to prevent API errors");
+                return { messages };
+            }
+            return {};
         });
-        if (modified) {
-            log.warn("Stripped invalid image blocks from session context to prevent API errors");
-            return { messages };
-        }
-        return {};
-    });
-    pi.registerTool({
-        name: "attach_file",
-        label: "attach_file",
-        description: "Attach a file from the workspace so the user can download it in the web UI. Returns an attachment handle.",
-        promptSnippet: "attach_file: upload a workspace file so the user gets a download card.",
-        parameters: AttachmentSchema,
-        execute,
-    });
-    pi.registerTool({
-        name: "read_attachment",
-        label: "read_attachment",
-        description: "Load an attachment by id and return its contents (text/image/base64).",
-        promptSnippet: "read_attachment: load attachment bytes/text/image data by media id.",
-        parameters: ReadAttachmentSchema,
-        execute: executeReadAttachment,
-    });
-    pi.registerTool({
-        name: "export_attachment",
-        label: "export_attachment",
-        description: "Export an attachment by id to /workspace/tmp for shell tools.",
-        promptSnippet: "export_attachment: write attachment content to /workspace/tmp and return the file path.",
-        parameters: ExportAttachmentSchema,
-        execute: executeExportAttachment,
-    });
-};
+        pi.registerTool({
+            name: "attach_file",
+            label: "attach_file",
+            description: "Attach a file from the workspace so the user can download it in the web UI. Returns an attachment handle.",
+            promptSnippet: "attach_file: upload a workspace file so the user gets a download card.",
+            parameters: AttachmentSchema,
+            execute: (toolCallId, params, signal, onUpdate, ctx) => execute(registry, toolCallId, params, signal, onUpdate, ctx),
+        });
+        pi.registerTool({
+            name: "read_attachment",
+            label: "read_attachment",
+            description: "Load an attachment by id and return its contents (text/image/base64).",
+            promptSnippet: "read_attachment: load attachment bytes/text/image data by media id.",
+            parameters: ReadAttachmentSchema,
+            execute: executeReadAttachment,
+        });
+        pi.registerTool({
+            name: "export_attachment",
+            label: "export_attachment",
+            description: "Export an attachment by id to /workspace/tmp for shell tools.",
+            promptSnippet: "export_attachment: write attachment content to /workspace/tmp and return the file path.",
+            parameters: ExportAttachmentSchema,
+            execute: executeExportAttachment,
+        });
+    };
+}
+/** Extension factory that registers the attach_file tool. */
+export const fileAttachments = createFileAttachmentsExtension(getAttachmentRegistry());

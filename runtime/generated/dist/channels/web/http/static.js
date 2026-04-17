@@ -6,7 +6,7 @@
  *
  * Consumers: web/http/response-service.ts and web/request-router.ts.
  */
-import { extname, resolve } from "path";
+import { extname, isAbsolute, relative, resolve } from "path";
 import { statSync } from "fs";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 const STATIC_DIR = resolve(import.meta.dir, "..", "..", "..", "..", "web", "static");
@@ -64,6 +64,10 @@ function renderHtmlTemplate(relPath, html) {
     }
     return html;
 }
+function isPathWithin(baseDir, filePath) {
+    const rel = relative(baseDir, filePath);
+    return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
 /**
  * Serve a file from the web static asset directory.
  * @param relPath Relative path inside `web/static`.
@@ -72,7 +76,7 @@ function renderHtmlTemplate(relPath, html) {
  */
 export async function serveStatic(relPath, notFound) {
     const filePath = resolve(STATIC_DIR, relPath);
-    if (!filePath.startsWith(STATIC_DIR))
+    if (!isPathWithin(STATIC_DIR, filePath))
         return notFound();
     const file = Bun.file(filePath);
     if (!(await file.exists()))
@@ -113,7 +117,7 @@ export async function serveStatic(relPath, notFound) {
  */
 export async function serveDocsStatic(relPath, notFound) {
     const filePath = resolve(DOCS_DIR, relPath);
-    if (!filePath.startsWith(DOCS_DIR))
+    if (!isPathWithin(DOCS_DIR, filePath))
         return notFound();
     const file = Bun.file(filePath);
     if (!(await file.exists()))

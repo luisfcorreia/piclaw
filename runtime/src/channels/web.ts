@@ -30,7 +30,7 @@ import type { WebAgentControlPlaneService } from "./web/agent/agent-control-plan
 import type { InteractionBroadcaster } from "./web/interaction-broadcaster.js";
 import type { WebAuthGateway } from "./web/auth/auth-gateway.js";
 import type { WebServerLifecycleGatewayService } from "./web/server-lifecycle-gateway-service.js";
-import type { WebTerminalVncHttpService } from "./web/terminal-vnc-http-service.js";
+import type { WebTerminalVncHttpServiceSurface } from "./web/terminal-vnc-http-service.js";
 import type { WebAdaptiveCardSidePromptService } from "./web/cards/adaptive-card-side-prompt-service.js";
 import type { WebAgentPeerMessageRelayService } from "./web/agent/agent-peer-message-relay-service.js";
 import {
@@ -53,7 +53,9 @@ import {
   type WebChannelPrototypeMembers,
 } from "./web/core/web-channel-prototype.js";
 import { TerminalSessionService } from "./web/terminal/terminal-session-service.js";
+import type { TerminalSocketData } from "./web/terminal/terminal-session-service.js";
 import { VncSessionService } from "./web/vnc/vnc-session-service.js";
+import type { VncSocketData } from "./web/vnc/vnc-session-service.js";
 import type { RemoteInteropService } from "../remote/service.js";
 import type { WebMessageProcessingStorageService } from "./web/messaging/message-processing-storage-service.js";
 import type { WebChannelRuntimeFollowupFacadeService } from "./web/runtime/runtime-followup-facade-service.js";
@@ -62,6 +64,71 @@ import { initializeWebChannelConstructor } from "./web/core/web-channel-construc
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
+
+function createLazyTerminalService(factory: () => TerminalSessionService): TerminalSessionService {
+  let instance: TerminalSessionService | null = null;
+  const get = (): TerminalSessionService => {
+    instance ??= factory();
+    return instance;
+  };
+  return {
+    resolveOwnerFromRequest(req: Request, allowUnauthenticated = false) {
+      return get().resolveOwnerFromRequest(req, allowUnauthenticated);
+    },
+    getSessionInfo(owner: { token: string; userId: string }) {
+      return get().getSessionInfo(owner);
+    },
+    attachClient(ws: Bun.ServerWebSocket<TerminalSocketData>) {
+      return get().attachClient(ws);
+    },
+    handleMessage(ws: Bun.ServerWebSocket<TerminalSocketData>, rawMessage: string | Buffer | Uint8Array) {
+      return get().handleMessage(ws, rawMessage);
+    },
+    detachClient(ws: Bun.ServerWebSocket<TerminalSocketData>) {
+      return get().detachClient(ws);
+    },
+    createHandoffFromRequest(req: Request, allowUnauthenticated = false) {
+      return get().createHandoffFromRequest(req, allowUnauthenticated);
+    },
+    shutdown() {
+      return get().shutdown();
+    },
+  } as unknown as TerminalSessionService;
+}
+
+function createLazyVncService(factory: () => VncSessionService): VncSessionService {
+  let instance: VncSessionService | null = null;
+  const get = (): VncSessionService => {
+    instance ??= factory();
+    return instance;
+  };
+  return {
+    resolveTargetReference(targetRef: string) {
+      return get().resolveTargetReference(targetRef);
+    },
+    resolveOwnerFromRequest(req: Request, targetRef: string, allowUnauthenticated = false) {
+      return get().resolveOwnerFromRequest(req, targetRef, allowUnauthenticated);
+    },
+    createHandoffFromRequest(req: Request, targetRef: string, allowUnauthenticated = false) {
+      return get().createHandoffFromRequest(req, targetRef, allowUnauthenticated);
+    },
+    getSessionInfo(targetRef?: string | null) {
+      return get().getSessionInfo(targetRef);
+    },
+    attachClient(ws: Bun.ServerWebSocket<VncSocketData>) {
+      return get().attachClient(ws);
+    },
+    handleMessage(ws: Bun.ServerWebSocket<VncSocketData>, message: string | Buffer | Uint8Array) {
+      return get().handleMessage(ws, message);
+    },
+    detachClient(ws: Bun.ServerWebSocket<VncSocketData>) {
+      return get().detachClient(ws);
+    },
+    shutdown() {
+      return get().shutdown();
+    },
+  } as unknown as VncSessionService;
+}
 
 /** Construction options for WebChannel: queue and agentPool references. */
 export interface WebChannelOpts {
@@ -72,6 +139,9 @@ export interface WebChannelOpts {
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebChannel implements WebChannelLike {
+  private _terminalService: TerminalSessionService | null = null;
+  private _vncService: VncSessionService | null = null;
+
   queue!: AgentQueue;
   agentPool!: AgentPool;
   remoteInterop!: RemoteInteropService;
@@ -87,12 +157,18 @@ export class WebChannel implements WebChannelLike {
   webauthnChallenges = new WebauthnChallengeTracker();
   totpFailureTracker = new TotpFailureTracker();
   authGateway!: WebAuthGateway;
-  terminalService = new TerminalSessionService();
-  vncService = new VncSessionService();
+  terminalService = createLazyTerminalService(() => {
+    this._terminalService ??= new TerminalSessionService();
+    return this._terminalService;
+  });
+  vncService = createLazyVncService(() => {
+    this._vncService ??= new VncSessionService();
+    return this._vncService;
+  });
   private readonly sessionBroadcast!: WebSessionBroadcastService;
   private readonly runtimeState!: WebChannelRuntimeStateService;
   private readonly serverLifecycleGateway!: WebServerLifecycleGatewayService;
-  private readonly terminalVncHttpService!: WebTerminalVncHttpService;
+  private readonly terminalVncHttpService!: WebTerminalVncHttpServiceSurface;
   private readonly adaptiveCardSidePromptService!: WebAdaptiveCardSidePromptService;
   private readonly peerMessageRelayService!: WebAgentPeerMessageRelayService;
   private readonly httpSurfaceService!: WebChannelHttpSurfaceService;

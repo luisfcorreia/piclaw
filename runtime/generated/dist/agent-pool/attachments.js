@@ -1,8 +1,8 @@
 /**
- * Shared attachment registry – tracks pending file attachments per chat.
+ * Attachment registry – tracks pending file attachments per chat.
  *
- * The attach_file extension tool registers attachments here; AgentPool
- * reads them via take() after a prompt completes.
+ * AgentPool should construct one registry per pool so pending attachments
+ * cannot leak between independent pools that happen to use the same chat JID.
  */
 /** Per-session registry of file attachments created during agent runs. */
 export class AttachmentRegistry {
@@ -22,7 +22,7 @@ export class AttachmentRegistry {
     }
 }
 // ── Module-level singleton ────────────────────────────────
-// Shared between AgentPool and the file-attachments extension.
+// Retained for direct extension tests and legacy callers.
 let _instance = null;
 /** Get or create the AttachmentRegistry for the current chat context. */
 export function getAttachmentRegistry() {

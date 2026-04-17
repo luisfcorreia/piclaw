@@ -7,6 +7,7 @@ import { parseJsonObjectRequest } from "../json-body.js";
 import { hashTotpSecret, parseTotpCardToken } from "../auth/totp-card.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 const log = createLogger("web");
+const SIDE_PROMPT_STREAM_HEARTBEAT_MS = 30000;
 function failMissingDependency(name) {
     throw new Error(`Missing Web adaptive-card/side-prompt dependency: ${name}`);
 }
@@ -305,7 +306,8 @@ export class WebAdaptiveCardSidePromptService {
                 ? (() => {
                     setWebTotpSecret(parsedTotp.state.secret);
                     this.options.authGateway.setTotpSecret(parsedTotp.state.secret);
-                    return "TOTP setup confirmed. Secret saved. This browser is now TOTP-authenticated.";
+                    deleteAllWebSessions();
+                    return "TOTP setup confirmed. Secret saved. Existing web sessions were invalidated. This browser is now TOTP-authenticated.";
                 })()
                 : parsedTotp.state.flow === "reset"
                     ? (() => {
@@ -403,10 +405,15 @@ export class WebAdaptiveCardSidePromptService {
         const stream = new ReadableStream({
             start: (controller) => {
                 let closed = false;
+                let heartbeat = null;
                 const close = () => {
                     if (closed)
                         return;
                     closed = true;
+                    if (heartbeat) {
+                        clearInterval(heartbeat);
+                        heartbeat = null;
+                    }
                     try {
                         controller.close();
                     }
@@ -430,7 +437,22 @@ export class WebAdaptiveCardSidePromptService {
                         close();
                     }
                 };
+                const sendHeartbeat = () => {
+                    if (closed)
+                        return;
+                    try {
+                        controller.enqueue(encoder.encode(": heartbeat\n\n"));
+                        controller.enqueue(encoder.encode(formatSseEvent("heartbeat", { ts: Date.now(), chat_jid: chatJid })));
+                    }
+                    catch (error) {
+                        debugSuppressedError(log, "Adaptive-card side-prompt heartbeat enqueue raced a closed controller.", error, {
+                            chatJid,
+                        });
+                        close();
+                    }
+                };
                 req.signal.addEventListener("abort", close, { once: true });
+                heartbeat = setInterval(sendHeartbeat, SIDE_PROMPT_STREAM_HEARTBEAT_MS);
                 send("side_prompt_start", { chat_jid: chatJid });
                 void runSidePrompt(chatJid, prompt, {
                     ...(systemPrompt ? { systemPrompt } : {}),

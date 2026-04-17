@@ -18,12 +18,14 @@
 import { spawn } from "child_process";
 import { existsSync } from "fs";
 import { buildInjectedShellEnv, resolveKeychainPlaceholders } from "../secure/keychain.js";
-import { createKeychainOutputRedactor } from "../secure/shell-secrets.js";
+import { createKeychainOutputRedactor, createStreamingTextRedactor } from "../secure/shell-secrets.js";
 import { killProcessTree, registerProcess, unregisterProcess } from "../utils/process-tracker.js";
 import { shouldDetachChildProcess } from "../utils/process-spawn.js";
 const POWERSHELL_ARGS = ["-NoProfile", "-Command"];
 const POSIX_ARGS = ["-c"];
 const CMD_ARGS = ["/c"];
+export const TRACKED_BASH_OUTPUT_LIMIT_BYTES = 256 * 1024;
+export const TRACKED_BASH_OUTPUT_TRUNCATION_NOTICE = "\n[output truncated]\n";
 function pushUniqueShell(candidates, candidate) {
     if (!candidate.shell.trim())
         return;
@@ -79,14 +81,18 @@ function createTrackedShellOperations(resolveCandidates) {
                     }
                     let resolvedEnv;
                     let resolvedCommand;
-                    let outputRedactor;
+                    let stdoutRedactor;
+                    let stderrRedactor;
                     try {
                         resolvedEnv = await buildInjectedShellEnv({
                             explicitEnv: env,
                             includeProcessEnv: true,
+                            referencedTexts: [command],
                         });
                         resolvedCommand = await resolveKeychainPlaceholders(command);
-                        outputRedactor = await createKeychainOutputRedactor();
+                        const outputRedactor = await createKeychainOutputRedactor();
+                        stdoutRedactor = createStreamingTextRedactor(outputRedactor);
+                        stderrRedactor = createStreamingTextRedactor(outputRedactor);
                     }
                     catch (error) {
                         reject(error);
@@ -97,6 +103,8 @@ function createTrackedShellOperations(resolveCandidates) {
                     let child = null;
                     let settled = false;
                     let attemptedShells = [];
+                    let emittedBytes = 0;
+                    let outputTruncated = false;
                     let timeoutHandle;
                     const onAbort = () => {
                         aborted = true;
@@ -142,6 +150,26 @@ function createTrackedShellOperations(resolveCandidates) {
                         cleanup();
                         resolve({ exitCode });
                     };
+                    const emitChunk = (text) => {
+                        if (!text || outputTruncated || settled)
+                            return;
+                        const buffer = Buffer.from(text, "utf8");
+                        const remaining = TRACKED_BASH_OUTPUT_LIMIT_BYTES - emittedBytes;
+                        if (remaining <= 0) {
+                            onData(Buffer.from(TRACKED_BASH_OUTPUT_TRUNCATION_NOTICE, "utf8"));
+                            outputTruncated = true;
+                            return;
+                        }
+                        if (buffer.length <= remaining) {
+                            emittedBytes += buffer.length;
+                            onData(buffer);
+                            return;
+                        }
+                        onData(buffer.subarray(0, remaining));
+                        emittedBytes += remaining;
+                        onData(Buffer.from(TRACKED_BASH_OUTPUT_TRUNCATION_NOTICE, "utf8"));
+                        outputTruncated = true;
+                    };
                     const trySpawn = (candidateIndex) => {
                         if (settled)
                             return;
@@ -162,15 +190,14 @@ function createTrackedShellOperations(resolveCandidates) {
                         if (spawned.pid) {
                             registerProcess(spawned.pid);
                         }
-                        let capturedOutput = "";
                         if (spawned.stdout) {
                             spawned.stdout.on("data", (chunk) => {
-                                capturedOutput += chunk.toString("utf8");
+                                emitChunk(stdoutRedactor.push(chunk.toString("utf8")));
                             });
                         }
                         if (spawned.stderr) {
                             spawned.stderr.on("data", (chunk) => {
-                                capturedOutput += chunk.toString("utf8");
+                                emitChunk(stderrRedactor.push(chunk.toString("utf8")));
                             });
                         }
                         let shellUnavailable = false;
@@ -190,9 +217,8 @@ function createTrackedShellOperations(resolveCandidates) {
                                 unregisterProcess(spawned.pid);
                             if (shellUnavailable)
                                 return;
-                            const redactedOutput = outputRedactor.redact(capturedOutput);
-                            if (redactedOutput)
-                                onData(Buffer.from(redactedOutput, "utf8"));
+                            emitChunk(stdoutRedactor.flush());
+                            emitChunk(stderrRedactor.flush());
                             if (aborted || signal?.aborted) {
                                 settleError(new Error("aborted"));
                                 return;

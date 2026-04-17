@@ -7,7 +7,7 @@
  *
  * This keeps internal module boundaries hidden from the rest of the codebase.
  */
-export { initDatabase, getDb } from "./db/connection.js";
+export { initDatabase, getDb, closeDatabase } from "./db/connection.js";
 export { clampWebContent } from "./db/web-content.js";
 export { ensureChatBranch, getChatBranchByChatJid, getChatBranchByAgentName, listChatBranches, renameChatBranchIdentity, archiveChatBranch, restoreChatBranchIdentity, } from "./db/chat-branches.js";
 export { storeChatMetadata, listRecentChatJids, storeMessage, getMessageByRowId, getMessageByAnyRowId, getMessageRowIdById, getMessageThreadRootIdById, deleteMessageByRowId, deleteThreadByRowId, getTimeline, hasOlderMessages, getMessagesByHashtag, searchMessages, searchMessagesAcrossChats, getNewMessages, getMessagesSince, updateMessageLinkPreviews, replaceMessageContent, } from "./db/messages.js";

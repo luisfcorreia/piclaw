@@ -21,6 +21,8 @@ import { prepareFtsQuery } from "./utils/fts-query.js";
 import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
 const log = createLogger("workspace-search");
+const AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV = "PICLAW_AGGRESSIVE_WORKSPACE_INDEX_MEMORY";
+const AGGRESSIVE_WORKSPACE_INDEX_GC_EVERY_FILES = 8;
 
 /** Search scope: restrict to notes/, skills/, or search all indexed roots. */
 export type WorkspaceSearchScope = "notes" | "skills" | "all";
@@ -47,7 +49,7 @@ export type WorkspaceSearchParams = {
   limit?: number;
   /** Pagination offset (default 0). */
   offset?: number;
-  /** Whether to re-index before searching (default true). */
+  /** Whether to re-index before searching (default false; true forces blocking refresh). */
   refresh?: boolean;
   /** Maximum file size in KB to index (default 512). */
   max_kb?: number;
@@ -75,7 +77,7 @@ export type WorkspaceSearchResult = {
 
 type WorkspaceIndexStatusRow = {
   scope: WorkspaceSearchScope;
-  state: Exclude<WorkspaceIndexState, "never_indexed" | "indexing">;
+  state: Exclude<WorkspaceIndexState, "never_indexed">;
   last_indexed_at: string | null;
   last_error: string | null;
   indexed_file_count: number;
@@ -101,6 +103,25 @@ const DEFAULT_EXTS = new Set([
 ]);
 
 const activeIndexScopes = new Set<WorkspaceSearchScope>();
+
+type WorkspaceIndexBackgroundRefreshParams = {
+  scope?: WorkspaceSearchScope | string;
+  max_kb?: number;
+};
+
+let requestBackgroundWorkspaceIndexRefreshImpl = (params: WorkspaceIndexBackgroundRefreshParams = {}): void => {
+  void import("./workspace-index-process.js")
+    .then((mod) => {
+      mod.launchWorkspaceIndexProcess({ scope: params.scope, max_kb: params.max_kb });
+    })
+    .catch((error) => {
+      debugSuppressedError(log, "Failed to request background workspace index refresh.", error, {
+        operation: "workspace_search.background_refresh.import",
+        scope: params.scope,
+        maxKb: params.max_kb,
+      });
+    });
+};
 
 const clampNumber = (value: number | undefined, fallback: number, min: number, max: number): number => {
   if (!Number.isFinite(value)) return fallback;
@@ -171,6 +192,40 @@ const isTextFile = (filePath: string): boolean => {
   const ext = path.extname(filePath).toLowerCase();
   return getIndexedExtensions().has(ext);
 };
+
+function shouldAggressivelyReleaseWorkspaceIndexMemory(): boolean {
+  return process.env[AGGRESSIVE_WORKSPACE_INDEX_MEMORY_ENV] === "1";
+}
+
+function aggressivelyReleaseWorkspaceIndexMemory(): void {
+  if (!shouldAggressivelyReleaseWorkspaceIndexMemory()) return;
+
+  try {
+    getDb().exec("PRAGMA shrink_memory;");
+  } catch (error) {
+    debugSuppressedError(log, "Failed to shrink SQLite memory during aggressive workspace indexing.", error, {
+      operation: "workspace_search.refresh.shrink_memory",
+    });
+  }
+
+  try {
+    const gc = (globalThis as typeof globalThis & { gc?: () => void }).gc;
+    if (typeof gc === "function") gc();
+  } catch (error) {
+    debugSuppressedError(log, "Failed to trigger runtime GC during aggressive workspace indexing.", error, {
+      operation: "workspace_search.refresh.gc.global",
+    });
+  }
+
+  try {
+    const bunGc = (globalThis as typeof globalThis & { Bun?: { gc?: (force?: boolean) => void } }).Bun?.gc;
+    if (typeof bunGc === "function") bunGc(true);
+  } catch (error) {
+    debugSuppressedError(log, "Failed to trigger Bun GC during aggressive workspace indexing.", error, {
+      operation: "workspace_search.refresh.gc.bun",
+    });
+  }
+}
 
 async function walkFiles(root: string): Promise<string[]> {
   const files: string[] = [];
@@ -254,7 +309,7 @@ function buildStatusSnapshot(scope: WorkspaceSearchScope, roots: string[], row?:
 
 function upsertStatus(
   scope: WorkspaceSearchScope,
-  state: Exclude<WorkspaceIndexState, "never_indexed" | "indexing">,
+  state: Exclude<WorkspaceIndexState, "never_indexed">,
   roots: string[],
   options?: {
     lastIndexedAt?: string | null;
@@ -298,6 +353,7 @@ async function indexWorkspace(roots: string[], maxBytes: number): Promise<void> 
   const seen = new Set<string>();
   const now = new Date().toISOString();
   const rootPrefixes = rootsToPrefixes(roots);
+  let processedFileCount = 0;
 
   for (const root of roots) {
     const absRoot = path.resolve(root);
@@ -321,12 +377,17 @@ async function indexWorkspace(roots: string[], maxBytes: number): Promise<void> 
           continue;
         }
 
-        const content = await fs.readFile(file, "utf8");
+        let content = await fs.readFile(file, "utf8");
         db.prepare("DELETE FROM workspace_fts WHERE path = ?").run(rel);
         db.prepare("INSERT INTO workspace_fts (content, path, mtime_ms, size_bytes) VALUES (?, ?, ?, ?)").run(content, rel, mtimeMs, stat.size);
         db.prepare(
           "INSERT INTO workspace_files (path, mtime_ms, size_bytes, indexed_at) VALUES (?, ?, ?, ?) ON CONFLICT(path) DO UPDATE SET mtime_ms = excluded.mtime_ms, size_bytes = excluded.size_bytes, indexed_at = excluded.indexed_at",
         ).run(rel, mtimeMs, stat.size, now);
+        content = "";
+        processedFileCount += 1;
+        if (processedFileCount % AGGRESSIVE_WORKSPACE_INDEX_GC_EVERY_FILES === 0) {
+          aggressivelyReleaseWorkspaceIndexMemory();
+        }
       } catch (err) {
         debugSuppressedError(log, "Workspace index skipped an unreadable file.", err, {
           operation: "workspace_search.refresh.read_file",
@@ -346,6 +407,8 @@ async function indexWorkspace(roots: string[], maxBytes: number): Promise<void> 
       db.prepare("DELETE FROM workspace_files WHERE path = ?").run(row.path);
     }
   }
+
+  aggressivelyReleaseWorkspaceIndexMemory();
 }
 
 function getAffectedScopes(paths: string[]): WorkspaceSearchScope[] {
@@ -370,6 +433,28 @@ export function getWorkspaceIndexStatus(params?: { scope?: WorkspaceSearchScope 
   return buildStatusSnapshot(scope, roots, getStatusRow(scope));
 }
 
+export function requestBackgroundWorkspaceIndexRefresh(params?: WorkspaceIndexBackgroundRefreshParams): void {
+  requestBackgroundWorkspaceIndexRefreshImpl(params || {});
+}
+
+export function setBackgroundWorkspaceIndexRefreshRequesterForTests(
+  requester: ((params?: WorkspaceIndexBackgroundRefreshParams) => void) | null,
+): void {
+  requestBackgroundWorkspaceIndexRefreshImpl = requester ?? ((params: WorkspaceIndexBackgroundRefreshParams = {}) => {
+    void import("./workspace-index-process.js")
+      .then((mod) => {
+        mod.launchWorkspaceIndexProcess({ scope: params.scope, max_kb: params.max_kb });
+      })
+      .catch((error) => {
+        debugSuppressedError(log, "Failed to request background workspace index refresh.", error, {
+          operation: "workspace_search.background_refresh.import",
+          scope: params.scope,
+          maxKb: params.max_kb,
+        });
+      });
+  });
+}
+
 export function markWorkspaceIndexStale(params?: { scope?: WorkspaceSearchScope | string; paths?: string[] }): void {
   const explicitScope = params?.paths?.length ? null : normalizeScope(params?.scope);
   const scopes = explicitScope ? [explicitScope] : getAffectedScopes(params?.paths || []);
@@ -377,13 +462,15 @@ export function markWorkspaceIndexStale(params?: { scope?: WorkspaceSearchScope 
   for (const scope of scopes) {
     const roots = normalizeRoots(scope);
     const row = getStatusRow(scope);
-    if (!row) continue;
-    if (row.state === "failed") continue;
-    upsertStatus(scope, "stale", roots, {
-      lastIndexedAt: row.last_indexed_at,
-      lastError: row.last_error,
-      indexedFileCount: row.indexed_file_count,
-    });
+    if (row) {
+      if (row.state === "failed") continue;
+      upsertStatus(scope, "stale", roots, {
+        lastIndexedAt: row.last_indexed_at,
+        lastError: row.last_error,
+        indexedFileCount: row.indexed_file_count,
+      });
+    }
+    requestBackgroundWorkspaceIndexRefresh({ scope });
   }
 }
 
@@ -394,6 +481,11 @@ export async function refreshWorkspaceIndex(params?: { scope?: WorkspaceSearchSc
   const previous = getStatusRow(scope);
 
   activeIndexScopes.add(scope);
+  upsertStatus(scope, "indexing", roots, {
+    lastIndexedAt: previous?.last_indexed_at ?? null,
+    lastError: null,
+    indexedFileCount: previous?.indexed_file_count ?? 0,
+  });
   try {
     await indexWorkspace(roots, maxBytes);
     const indexedAt = new Date().toISOString();
@@ -421,15 +513,23 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
   const query = params.query.trim();
   const limit = clampNumber(params.limit, 10, 1, 50);
   const offset = clampNumber(params.offset, 0, 0, 1_000_000);
-  const refresh = params.refresh !== false;
+  const refresh = params.refresh === true;
+  const scope = normalizeScope(params.scope);
 
   if (!query) {
     return { rows: [], limit, offset, error: "Provide a query." };
   }
 
   if (refresh) {
-    await refreshWorkspaceIndex({ scope: params.scope, max_kb: params.max_kb });
+    await refreshWorkspaceIndex({ scope, max_kb: params.max_kb });
+  } else {
+    const status = getWorkspaceIndexStatus({ scope });
+    if (status.state !== "ready") {
+      requestBackgroundWorkspaceIndexRefresh({ scope, max_kb: params.max_kb });
+    }
   }
+
+  const effectiveScope = params.scope?.trim();
 
   const ftsQuery = prepareFtsQuery(query);
   if (!ftsQuery) {
@@ -438,8 +538,7 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
 
   const db = getDb();
   try {
-    const scope = params.scope?.trim();
-    const prefix = scope === "notes" ? "notes/%" : scope === "skills" ? ".pi/skills/%" : null;
+    const prefix = effectiveScope === "notes" ? "notes/%" : effectiveScope === "skills" ? ".pi/skills/%" : null;
 
     const stmt = prefix
       ? "SELECT path, size_bytes, mtime_ms, snippet(workspace_fts, 0, '[', ']', '…', 12) as snippet FROM workspace_fts WHERE workspace_fts MATCH ? AND path LIKE ? ORDER BY bm25(workspace_fts) LIMIT ? OFFSET ?"
@@ -453,8 +552,7 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
   } catch {
     // FTS query failed even after sanitization — fall back to LIKE
     try {
-      const scope = params.scope?.trim();
-      const prefix = scope === "notes" ? "notes/%" : scope === "skills" ? ".pi/skills/%" : null;
+      const prefix = effectiveScope === "notes" ? "notes/%" : effectiveScope === "skills" ? ".pi/skills/%" : null;
       const terms = query.split(/\s+/).filter(Boolean).map((t) => `%${t}%`);
       if (terms.length === 0) return { rows: [], limit, offset, error: "No searchable terms." };
 

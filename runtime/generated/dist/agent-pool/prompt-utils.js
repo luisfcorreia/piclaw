@@ -38,11 +38,17 @@ export function toSideReasoning(level) {
         : undefined;
 }
 export const DEFAULT_SESSION_IDLE_SETTLE_TICKS = 20;
+export const DEFAULT_SESSION_IDLE_MAX_WAIT_MS = 10_000;
 /** Wait until a session fully settles after a prompt completes. */
-export async function waitForSessionIdle(session, settleTicks = DEFAULT_SESSION_IDLE_SETTLE_TICKS, onSettled) {
+export async function waitForSessionIdle(session, settleTicks = DEFAULT_SESSION_IDLE_SETTLE_TICKS, onSettled, maxWaitMs = DEFAULT_SESSION_IDLE_MAX_WAIT_MS) {
     let idleTicks = 0;
     const startTime = Date.now();
     while (idleTicks < settleTicks) {
+        const totalWaitMs = Date.now() - startTime;
+        if (maxWaitMs > 0 && totalWaitMs >= maxWaitMs) {
+            throw new Error(`Timed out waiting for session idle after ${formatTimeoutDuration(maxWaitMs)} ` +
+                `(streaming=${Boolean(session.isStreaming)}, compacting=${Boolean(session.isCompacting)}, retrying=${Boolean(session.isRetrying)})`);
+        }
         if (!session.isStreaming && !session.isCompacting && !session.isRetrying) {
             idleTicks += 1;
         }

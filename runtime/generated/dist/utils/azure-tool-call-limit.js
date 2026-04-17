@@ -8,6 +8,7 @@
  * compact assistant summary so conversational continuity is preserved while
  * staying under the cap.
  */
+import { truncateWithEllipsis } from "./preview.js";
 function asToolCallMessage(value) {
     if (!value || typeof value !== "object")
         return null;
@@ -25,7 +26,7 @@ function formatToolCallSnippet(text, maxChars) {
         return "(no output)";
     if (collapsed.length <= maxChars)
         return collapsed;
-    return `${collapsed.slice(0, Math.max(1, maxChars - 1))}…`;
+    return truncateWithEllipsis(collapsed, Math.max(1, maxChars - 1));
 }
 function parseToolOutputSearchArgs(args) {
     if (!args)

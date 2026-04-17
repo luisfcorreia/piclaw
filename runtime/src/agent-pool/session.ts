@@ -30,15 +30,21 @@ import {
   type SettingsManager,
 } from "@mariozechner/pi-coding-agent";
 
-import type { AttachmentRegistry } from "./attachments.js";
 import { SESSIONS_DIR, WORKSPACE_DIR } from "../core/config.js";
 import { buildChannelSystemPromptAppendix } from "../channels/formatting.js";
 import { detectChannel } from "../router.js";
-import { createBuiltinExtensionFactories } from "../extensions/index.js";
+import { builtinExtensionFactories } from "../extensions/index.js";
 import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const AGENT_DIR = getAgentDir();
+const EMPTY_STRING_ARRAY: string[] = [];
+const BUNDLED_EXTENSION_PATHS_CACHE = new Map<string, string[]>();
+const CHANNEL_SYSTEM_PROMPT_APPENDIX_CACHE = new Map<string, string>();
+const APPEND_SYSTEM_PROMPT_OVERRIDE_CACHE = new Map<string, (base: string[]) => string[]>();
+let cachedExtensionNodeModulesDir: string | null | undefined;
+let ensuredExtensionNodeModulesLinkTarget: string | null | undefined;
 
 type AgentSessionCreateOptions = {
   tools: NonNullable<NonNullable<Parameters<typeof createAgentSessionFromServices>[0]>["tools"]>;
@@ -57,7 +63,14 @@ type AgentSessionCreateOptions = {
  */
 const EXTENSIONS_DIR = resolve(__dirname, "../../extensions");
 
-const OPTIONAL_EXTENSIONS: { path: string; envGate?: string }[] = [
+type OptionalBundledExtension = {
+  path: string;
+  envGate?: string;
+  platforms?: NodeJS.Platform[];
+  channels?: string[];
+};
+
+const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "azure-openai.ts"), envGate: "AOAI_BASE_URL" },
   { path: resolve(EXTENSIONS_DIR, "integrations", "context-mode.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
@@ -67,17 +80,31 @@ const OPTIONAL_EXTENSIONS: { path: string; envGate?: string }[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "portainer", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "mcp-status-hints", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer", "index.ts") },
+  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts"), platforms: ["win32"] },
+  { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts"), platforms: ["win32"] },
+  { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer", "index.ts"), channels: ["web"] },
   { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor", "index.ts") },
+  { path: resolve(EXTENSIONS_DIR, "viewers", "drawio-editor", "index.ts"), channels: ["web"] },
   { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 
 const PACKAGED_EXTENSION_ENTRIES = [
   { packageName: "pi-mcp-adapter", entry: "index.ts" },
 ] as const;
+
+function getBundledExtensionEnvSignature(chatJid?: string): string {
+  const channel = chatJid ? detectChannel(chatJid) ?? "" : "";
+  return [
+    `platform=${process.platform}`,
+    `channel=${channel}`,
+    ...OPTIONAL_EXTENSIONS.map(({ envGate, platforms, channels }) => {
+      const envPart = envGate ? `${envGate}=${process.env[envGate] ? "1" : "0"}` : "always=1";
+      const platformPart = platforms?.length ? `platforms=${platforms.join(",")}` : "platforms=all";
+      const channelPart = channels?.length ? `channels=${channels.join(",")}` : "channels=all";
+      return `${envPart};${platformPart};${channelPart}`;
+    }),
+  ].join("|");
+}
 
 /** Walk up from startDir looking for a node_modules that contains @mariozechner/pi-ai. */
 function findNodeModules(startDir: string): string | null {
@@ -93,7 +120,7 @@ function findNodeModules(startDir: string): string | null {
 }
 
 function resolvePackagedExtensionEntries(nodeModulesDir: string | null): string[] {
-  if (!nodeModulesDir) return [];
+  if (!nodeModulesDir) return EMPTY_STRING_ARRAY;
 
   const resolved: string[] = [];
   for (const candidate of PACKAGED_EXTENSION_ENTRIES) {
@@ -105,18 +132,65 @@ function resolvePackagedExtensionEntries(nodeModulesDir: string | null): string[
   return resolved;
 }
 
-function getBundledExtensionPaths(): string[] {
-  const nodeModulesDir = findNodeModules(EXTENSIONS_DIR);
+function getExtensionNodeModulesDir(): string | null {
+  if (cachedExtensionNodeModulesDir !== undefined) {
+    return cachedExtensionNodeModulesDir;
+  }
+  cachedExtensionNodeModulesDir = findNodeModules(EXTENSIONS_DIR);
+  return cachedExtensionNodeModulesDir;
+}
+
+function ensureBundledExtensionNodeModulesLink(nodeModulesDir: string | null): void {
+  if (!nodeModulesDir) return;
+  if (ensuredExtensionNodeModulesLinkTarget === nodeModulesDir) return;
+  ensureExtensionNodeModulesLink(EXTENSIONS_DIR, nodeModulesDir);
+  ensuredExtensionNodeModulesLinkTarget = nodeModulesDir;
+}
+
+function getBundledExtensionPaths(chatJid?: string): string[] {
+  const cacheKey = getBundledExtensionEnvSignature(chatJid);
+  const cached = BUNDLED_EXTENSION_PATHS_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const channel = chatJid ? detectChannel(chatJid) : undefined;
+  const nodeModulesDir = getExtensionNodeModulesDir();
   const paths = OPTIONAL_EXTENSIONS
     .filter(({ envGate }) => !envGate || !!process.env[envGate])
+    .filter(({ platforms }) => !platforms || platforms.includes(process.platform))
+    .filter(({ channels }) => !channels || !!channel && channels.includes(channel))
     .map(({ path }) => path);
   paths.push(...resolvePackagedExtensionEntries(nodeModulesDir));
-  if (paths.length === 0) return paths;
+  if (paths.length === 0) {
+    BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, EMPTY_STRING_ARRAY);
+    return EMPTY_STRING_ARRAY;
+  }
 
   // Ensure a node_modules symlink exists next to the extensions dir
   // so jiti can resolve deep package imports.
-  ensureExtensionNodeModulesLink(EXTENSIONS_DIR, nodeModulesDir);
+  ensureBundledExtensionNodeModulesLink(nodeModulesDir);
+  BUNDLED_EXTENSION_PATHS_CACHE.set(cacheKey, paths);
   return paths;
+}
+
+function getChannelSystemPromptAppendix(chatJid?: string): string {
+  const channel = chatJid ? detectChannel(chatJid) : undefined;
+  const cacheKey = channel ?? "";
+  const cached = CHANNEL_SYSTEM_PROMPT_APPENDIX_CACHE.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const appendix = buildChannelSystemPromptAppendix(channel) ?? "";
+  CHANNEL_SYSTEM_PROMPT_APPENDIX_CACHE.set(cacheKey, appendix);
+  return appendix;
+}
+
+function getAppendSystemPromptOverride(channelSystemPromptAppendix: string): ((base: string[]) => string[]) | undefined {
+  if (!channelSystemPromptAppendix) return undefined;
+  const cached = APPEND_SYSTEM_PROMPT_OVERRIDE_CACHE.get(channelSystemPromptAppendix);
+  if (cached) return cached;
+  const appendOverride = (base: string[]) => [...base, channelSystemPromptAppendix];
+  APPEND_SYSTEM_PROMPT_OVERRIDE_CACHE.set(channelSystemPromptAppendix, appendOverride);
+  return appendOverride;
 }
 
 /** Ensure the session directory exists for a chat and return its path. */
@@ -147,32 +221,26 @@ export async function createSessionInDir(
     tools: NonNullable<AgentSessionCreateOptions["tools"]>;
     customTools?: unknown[];
     extensionFactories?: ExtensionFactory[];
-    attachmentRegistry?: AttachmentRegistry;
     chatJid?: string;
   }
 ): Promise<AgentSessionRuntime> {
-  const channelSystemPromptAppendix = buildChannelSystemPromptAppendix(
-    options.chatJid ? detectChannel(options.chatJid) : null,
-  );
+  const channelSystemPromptAppendix = getChannelSystemPromptAppendix(options.chatJid);
+  const appendSystemPromptOverride = getAppendSystemPromptOverride(channelSystemPromptAppendix);
+  const additionalExtensionPaths = getBundledExtensionPaths(options.chatJid);
 
   const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {
     const services = await createAgentSessionServices({
       cwd,
-      agentDir: getAgentDir(),
+      agentDir: AGENT_DIR,
       authStorage: options.authStorage,
       modelRegistry: options.modelRegistry,
       settingsManager: options.settingsManager,
       resourceLoaderOptions: {
-        extensionFactories: [
-          ...createBuiltinExtensionFactories({ attachmentRegistry: options.attachmentRegistry }),
-          ...(options.extensionFactories ?? []),
-        ],
-        additionalExtensionPaths: getBundledExtensionPaths(),
-        ...(channelSystemPromptAppendix
-          ? {
-              appendSystemPromptOverride: (base: string[]) => [...base, channelSystemPromptAppendix],
-            }
-          : {}),
+        extensionFactories: options.extensionFactories?.length
+          ? [...builtinExtensionFactories, ...options.extensionFactories]
+          : builtinExtensionFactories,
+        additionalExtensionPaths,
+        ...(appendSystemPromptOverride ? { appendSystemPromptOverride } : {}),
       },
     });
 
@@ -191,7 +259,7 @@ export async function createSessionInDir(
 
   const runtime = await createAgentSessionRuntime(createRuntime, {
     cwd: WORKSPACE_DIR,
-    agentDir: getAgentDir(),
+    agentDir: AGENT_DIR,
     sessionManager: SessionManager.continueRecent(WORKSPACE_DIR, sessionDir),
   });
 
@@ -208,7 +276,6 @@ export async function createDefaultSession(
     tools: NonNullable<AgentSessionCreateOptions["tools"]>;
     customTools?: unknown[];
     extensionFactories?: ExtensionFactory[];
-    attachmentRegistry?: AttachmentRegistry;
   }
 ): Promise<AgentSessionRuntime> {
   const chatSessionDir = ensureSessionDir(chatJid);
@@ -216,6 +283,24 @@ export async function createDefaultSession(
     ...options,
     chatJid,
   });
+}
+
+/**
+ * Prime lightweight per-chat startup caches without creating a live runtime.
+ * This keeps recent-chat background prewarm cheap while still front-loading
+ * deterministic filesystem and extension-resolution work.
+ */
+export async function lightweightPrewarmSession(
+  chatJid: string,
+  options: {
+    getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
+  } = {},
+): Promise<void> {
+  ensureSessionDir(chatJid);
+  const appendix = getChannelSystemPromptAppendix(chatJid);
+  void getAppendSystemPromptOverride(appendix);
+  void getBundledExtensionPaths(chatJid);
+  await options.getSessionExtensionFactories?.(chatJid);
 }
 
 /** Replace characters that are unsafe for filesystem paths. */

@@ -26,9 +26,74 @@ import { initializeWebChannelConstructor } from "./web/core/web-channel-construc
 const DEFAULT_CHAT_JID = "web:default";
 const DEFAULT_AGENT_ID = "default";
 const STATE_KEY = "last_agent_timestamp_web";
+function createLazyTerminalService(factory) {
+    let instance = null;
+    const get = () => {
+        instance ??= factory();
+        return instance;
+    };
+    return {
+        resolveOwnerFromRequest(req, allowUnauthenticated = false) {
+            return get().resolveOwnerFromRequest(req, allowUnauthenticated);
+        },
+        getSessionInfo(owner) {
+            return get().getSessionInfo(owner);
+        },
+        attachClient(ws) {
+            return get().attachClient(ws);
+        },
+        handleMessage(ws, rawMessage) {
+            return get().handleMessage(ws, rawMessage);
+        },
+        detachClient(ws) {
+            return get().detachClient(ws);
+        },
+        createHandoffFromRequest(req, allowUnauthenticated = false) {
+            return get().createHandoffFromRequest(req, allowUnauthenticated);
+        },
+        shutdown() {
+            return get().shutdown();
+        },
+    };
+}
+function createLazyVncService(factory) {
+    let instance = null;
+    const get = () => {
+        instance ??= factory();
+        return instance;
+    };
+    return {
+        resolveTargetReference(targetRef) {
+            return get().resolveTargetReference(targetRef);
+        },
+        resolveOwnerFromRequest(req, targetRef, allowUnauthenticated = false) {
+            return get().resolveOwnerFromRequest(req, targetRef, allowUnauthenticated);
+        },
+        createHandoffFromRequest(req, targetRef, allowUnauthenticated = false) {
+            return get().createHandoffFromRequest(req, targetRef, allowUnauthenticated);
+        },
+        getSessionInfo(targetRef) {
+            return get().getSessionInfo(targetRef);
+        },
+        attachClient(ws) {
+            return get().attachClient(ws);
+        },
+        handleMessage(ws, message) {
+            return get().handleMessage(ws, message);
+        },
+        detachClient(ws) {
+            return get().detachClient(ws);
+        },
+        shutdown() {
+            return get().shutdown();
+        },
+    };
+}
 /** Web channel: HTTP/SSE server, API endpoints, and agent event bridge. */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebChannel {
+    _terminalService = null;
+    _vncService = null;
     queue;
     agentPool;
     remoteInterop;
@@ -44,8 +109,14 @@ export class WebChannel {
     webauthnChallenges = new WebauthnChallengeTracker();
     totpFailureTracker = new TotpFailureTracker();
     authGateway;
-    terminalService = new TerminalSessionService();
-    vncService = new VncSessionService();
+    terminalService = createLazyTerminalService(() => {
+        this._terminalService ??= new TerminalSessionService();
+        return this._terminalService;
+    });
+    vncService = createLazyVncService(() => {
+        this._vncService ??= new VncSessionService();
+        return this._vncService;
+    });
     sessionBroadcast;
     runtimeState;
     serverLifecycleGateway;

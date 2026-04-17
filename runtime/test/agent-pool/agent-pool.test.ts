@@ -290,7 +290,7 @@ test("agent pool evicts idle sessions and recreates them", async () => {
   await pool.shutdown();
 });
 
-test("agent pool schedules warmup for the most recent inactive chats", async () => {
+test("agent pool schedules lightweight warmup for the most recent inactive chats", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -326,7 +326,8 @@ test("agent pool schedules warmup for the most recent inactive chats", async () 
   expect(scheduled).toEqual(["web:newer", "web:older"]);
 
   await Bun.sleep(20);
-  expect(created).toEqual(["web:newer", "web:older"]);
+  expect(created).toEqual([]);
+  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(0);
 
   await pool.shutdown();
 });
@@ -355,6 +356,28 @@ test("agent pool keeps expanding recent-chat warmup past already-warm top rows",
 
   const scheduled = (pool as any).scheduleRecentChatWarmup({ limit: 1, excludeChatJids: ["web:default"] });
   expect(scheduled).toEqual(["web:chat-100"]);
+
+  await pool.shutdown();
+});
+
+test("agent pool explicit warmup still materializes a live runtime", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+  const created: string[] = [];
+  const pool = new AgentPool({
+    createSession: async (chatJid: string) => {
+      created.push(chatJid);
+      return createRuntime({ subscribe: () => () => {}, prompt: async () => {}, abort: async () => {}, dispose() {} }) as any;
+    },
+  });
+
+  expect(pool.scheduleChatWarmup("web:default", { priority: true })).toBe(true);
+  await Bun.sleep(20);
+
+  expect(created).toEqual(["web:default"]);
+  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
 
   await pool.shutdown();
 });

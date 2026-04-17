@@ -64,12 +64,12 @@ export function getTokenUsageByProvider(chatJid, limit = 5) {
     const db = getDb();
     return db.prepare(`SELECT
       provider,
-      SUM(input_tokens) AS input_tokens,
-      SUM(output_tokens) AS output_tokens,
-      SUM(cache_read_tokens) AS cache_read_tokens,
-      SUM(cache_write_tokens) AS cache_write_tokens,
-      SUM(total_tokens) AS total_tokens,
-      SUM(cost_total) AS cost_total,
+      COALESCE(SUM(input_tokens), 0) AS input_tokens,
+      COALESCE(SUM(output_tokens), 0) AS output_tokens,
+      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
+      COALESCE(SUM(total_tokens), 0) AS total_tokens,
+      COALESCE(SUM(cost_total), 0) AS cost_total,
       COUNT(*) AS runs
      FROM token_usage
      WHERE chat_jid = ?
@@ -82,12 +82,12 @@ export function getTokenUsageByModel(chatJid, limit = 5) {
     const db = getDb();
     return db.prepare(`SELECT
       model,
-      SUM(input_tokens) AS input_tokens,
-      SUM(output_tokens) AS output_tokens,
-      SUM(cache_read_tokens) AS cache_read_tokens,
-      SUM(cache_write_tokens) AS cache_write_tokens,
-      SUM(total_tokens) AS total_tokens,
-      SUM(cost_total) AS cost_total,
+      COALESCE(SUM(input_tokens), 0) AS input_tokens,
+      COALESCE(SUM(output_tokens), 0) AS output_tokens,
+      COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+      COALESCE(SUM(cache_write_tokens), 0) AS cache_write_tokens,
+      COALESCE(SUM(total_tokens), 0) AS total_tokens,
+      COALESCE(SUM(cost_total), 0) AS cost_total,
       COUNT(*) AS runs
      FROM token_usage
      WHERE chat_jid = ?

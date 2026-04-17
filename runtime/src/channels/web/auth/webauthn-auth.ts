@@ -2,16 +2,12 @@
  * channels/web/webauthn-auth.ts – WebAuthn login/registration endpoint orchestration.
  */
 
-import {
-  generateAuthenticationOptions,
-  generateRegistrationOptions,
-  verifyAuthenticationResponse,
-  verifyRegistrationResponse,
-  type AuthenticationResponseJSON,
-  type RegistrationResponseJSON,
-  type VerifiedAuthenticationResponse,
-  type VerifiedRegistrationResponse,
-  type WebAuthnCredential,
+import type {
+  AuthenticationResponseJSON,
+  RegistrationResponseJSON,
+  VerifiedAuthenticationResponse,
+  VerifiedRegistrationResponse,
+  WebAuthnCredential,
 } from "@simplewebauthn/server";
 import {
   createWebSession,
@@ -36,6 +32,17 @@ import { createLogger } from "../../../utils/logger.js";
 
 const log = createLogger("web.webauthn-auth");
 
+type WebauthnServerModule = typeof import("@simplewebauthn/server");
+
+let webauthnServerPromise: Promise<WebauthnServerModule> | null = null;
+
+async function loadWebauthnServer(): Promise<WebauthnServerModule> {
+  if (!webauthnServerPromise) {
+    webauthnServerPromise = import("@simplewebauthn/server");
+  }
+  return await webauthnServerPromise;
+}
+
 /** Context contract consumed by WebAuthn login/register endpoint handlers. */
 export interface WebauthnAuthContext {
   isPasskeyEnabled(): boolean;
@@ -57,6 +64,7 @@ function getTtlSeconds(): number {
 export async function handleWebauthnLoginStart(req: Request, ctx: WebauthnAuthContext): Promise<Response> {
   if (!ctx.isPasskeyEnabled()) return ctx.json({ error: "Passkeys disabled" }, 404);
 
+  const { generateAuthenticationOptions } = await loadWebauthnServer();
   const { rpId } = resolveWebauthnRpInfo(req);
   const options = await generateAuthenticationOptions({
     rpID: rpId,
@@ -115,6 +123,7 @@ export async function handleWebauthnLoginFinish(req: Request, ctx: WebauthnAuthC
     transports: stored.transports ? JSON.parse(stored.transports) : undefined,
   };
 
+  const { verifyAuthenticationResponse } = await loadWebauthnServer();
   const { origin } = resolveWebauthnRpInfo(req);
   let result: VerifiedAuthenticationResponse;
   try {
@@ -179,6 +188,7 @@ export async function handleWebauthnRegisterStart(req: Request, ctx: WebauthnAut
   const excludeCredentials = existing.map((cred) => ({ id: cred.credential_id }));
   const identity = getIdentityConfig();
 
+  const { generateRegistrationOptions } = await loadWebauthnServer();
   const options = await generateRegistrationOptions({
     rpName: identity.assistantName || "PiClaw",
     rpID: rpId,
@@ -237,6 +247,7 @@ export async function handleWebauthnRegisterFinish(req: Request, ctx: WebauthnAu
     return ctx.json({ error: "Enrollment mismatch" }, 400);
   }
 
+  const { verifyRegistrationResponse } = await loadWebauthnServer();
   const { origin } = resolveWebauthnRpInfo(req);
   let result: VerifiedRegistrationResponse;
   try {

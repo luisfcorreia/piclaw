@@ -1,6 +1,5 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join, relative, resolve } from "path";
-import { strToU8, zipSync } from "fflate";
 import { buildDreamPrompt } from "./agent-memory/dream-prompt.js";
 import { inspectDailyNoteSummaryBacklog, refreshDailyNotesFromMessages } from "./agent-memory/daily-notes.js";
 import { refreshAgentMemoryFromDailyNotes } from "./agent-memory/refresh.js";
@@ -26,6 +25,13 @@ const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
 const DREAM_BACKUP_KEEP = Math.max(1, Number.parseInt(process.env.PICLAW_DREAM_BACKUP_KEEP || "10", 10) || 10);
 const DREAM_MODEL = process.env.PICLAW_DREAM_MODEL?.trim() || null;
 const log = createLogger("dream");
+let fflatePromise = null;
+async function loadFflate() {
+    if (!fflatePromise) {
+        fflatePromise = import("fflate");
+    }
+    return await fflatePromise;
+}
 function refreshDailyNotes(_chatJid, days) {
     refreshDailyNotesFromMessages({ chatJid: DREAM_ALL_CHATS_SCOPE_ANCHOR, days });
     return true;
@@ -266,7 +272,7 @@ function pruneOldDreamBackups() {
         rmSync(join(DREAM_BACKUPS_DIR, entry), { recursive: true, force: true });
     }
 }
-function createDreamBackup(chatJid, mode, days) {
+async function createDreamBackup(chatJid, mode, days) {
     mkdirSync(DREAM_BACKUPS_DIR, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupPath = resolve(DREAM_BACKUPS_DIR, `${stamp}-${mode}-${sanitiseJid(chatJid)}.zip`);
@@ -281,6 +287,7 @@ function createDreamBackup(chatJid, mode, days) {
             memory: existsSync(DREAM_MEMORY_DIR) ? relative(WORKSPACE_DIR, DREAM_MEMORY_DIR) : null,
         },
     };
+    const { strToU8, zipSync } = await loadFflate();
     const entries = {
         "manifest.json": strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
     };
@@ -334,7 +341,7 @@ export async function runDreamAgentTurn(options) {
     try {
         lockFd = acquireDreamLock();
         reapDreamArtifacts(null);
-        const backupPath = createDreamBackup(chatJid, mode, days);
+        const backupPath = await createDreamBackup(chatJid, mode, days);
         const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
         const out = await options.agentPool.runAgent(buildDreamPrompt({ mode, days }), dreamChatJid);
         if (out.status === "error") {
@@ -403,7 +410,7 @@ export async function runDreamMaintenance(options) {
     let lockFd = null;
     try {
         lockFd = acquireDreamLock();
-        const backupPath = createDreamBackup(chatJid, mode, days);
+        const backupPath = await createDreamBackup(chatJid, mode, days);
         const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
         const refresh = refreshAgentMemoryFromDailyNotes({ recentDays: days });
         const workspaceIndexRefreshed = await refreshWorkspaceSearchIndex();

@@ -16,9 +16,8 @@ import {
   restoreClaimedDeferredBranchSeed,
   seedSessionManagerFromDeferredBranchSeed,
 } from "./branch-seeding.js";
-import type { AttachmentRegistry } from "./attachments.js";
 import { getChatBranchByChatJid } from "../db.js";
-import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir } from "./session.js";
+import { createDefaultSession, createSessionInDir, ensureNamedSessionDir, ensureSessionDir, lightweightPrewarmSession } from "./session.js";
 import { forcePersistSessionFile, seedRotatedSession } from "../session-rotation.js";
 
 /** Cached session entry stored for each chat JID. */
@@ -36,7 +35,8 @@ export interface AgentSessionManagerOptions {
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
   settingsManager: SettingsManager;
-  attachmentRegistry?: AttachmentRegistry;
+  mainSessionMaxSize?: number | null;
+  lightweightPrewarmSession?: (chatJid: string) => Promise<void>;
   createDefaultTools: () => NonNullable<Parameters<typeof createDefaultSession>[1]["tools"]>;
   createCustomToolOverrides?: () => unknown[];
   getSessionExtensionFactories?: (chatJid: string) => Promise<ExtensionFactory[]>;
@@ -50,6 +50,16 @@ export interface AgentSessionManagerOptions {
 /**
  * Handles lifecycle operations for main and auxiliary AgentSession instances.
  */
+export interface AgentSessionManagerInstrumentationSnapshot {
+  branchSeedRealizationsInFlight: number;
+  createInFlight: number;
+  invalidDeferredSeedErrors: number;
+  prewarmInFlight: number;
+  queuedPrewarms: number;
+  prewarmQueueLength: number;
+  prewarmCooldowns: number;
+}
+
 export class AgentSessionManager {
   private readonly branchSeedRealizationInFlight = new Map<string, Promise<boolean>>();
   private readonly createInFlight = new Map<string, Promise<AgentSessionRuntime>>();
@@ -57,7 +67,7 @@ export class AgentSessionManager {
   private readonly runtimeDisposeInFlight = new WeakMap<AgentSessionRuntime, Promise<void>>();
   private readonly prewarmInFlight = new Set<string>();
   private readonly queuedPrewarms = new Set<string>();
-  private readonly prewarmQueue: string[] = [];
+  private readonly prewarmQueue: Array<{ chatJid: string; mode: "full" | "lightweight" }> = [];
   private readonly prewarmCooldownByChat = new Map<string, number>();
   private prewarmLoopActive = false;
 
@@ -128,13 +138,13 @@ export class AgentSessionManager {
             authStorage: this.options.authStorage,
             modelRegistry: this.options.modelRegistry,
             settingsManager: this.options.settingsManager,
-            attachmentRegistry: this.options.attachmentRegistry,
             tools: this.options.createDefaultTools(),
             customTools: this.options.createCustomToolOverrides?.() ?? [],
             extensionFactories,
           });
 
       this.options.pool.set(chatJid, { runtime, lastUsed: Date.now() });
+      this.enforceMainSessionPoolLimit({ protectedChatJids: [chatJid] });
       try {
         const realizedDeferredSeed = await this.realizeDeferredBranchSeed(chatJid, runtime);
         if (!realizedDeferredSeed) {
@@ -179,7 +189,6 @@ export class AgentSessionManager {
           authStorage: this.options.authStorage,
           modelRegistry: this.options.modelRegistry,
           settingsManager: this.options.settingsManager,
-          attachmentRegistry: this.options.attachmentRegistry,
           tools: this.options.createDefaultTools(),
           customTools: this.options.createCustomToolOverrides?.() ?? [],
           extensionFactories,
@@ -255,11 +264,11 @@ export class AgentSessionManager {
     const normalized = String(chatJid || "").trim();
     if (!normalized) return;
     this.queuedPrewarms.delete(normalized);
-    const idx = this.prewarmQueue.indexOf(normalized);
+    const idx = this.prewarmQueue.findIndex((entry) => entry.chatJid === normalized);
     if (idx >= 0) this.prewarmQueue.splice(idx, 1);
   }
 
-  prewarm(chatJid: string, options: { priority?: boolean } = {}): boolean {
+  prewarm(chatJid: string, options: { priority?: boolean; mode?: "full" | "lightweight" } = {}): boolean {
     const normalizedChatJid = String(chatJid || "").trim();
     if (!normalizedChatJid) return false;
     if (this.getBlockingInvalidSeedError(normalizedChatJid)) return false;
@@ -270,15 +279,28 @@ export class AgentSessionManager {
     const lastQueuedAt = this.prewarmCooldownByChat.get(normalizedChatJid) ?? 0;
     if (!options.priority && now - lastQueuedAt < 30_000) return false;
 
+    const mode = options.mode === "lightweight" ? "lightweight" : "full";
     this.queuedPrewarms.add(normalizedChatJid);
     this.prewarmCooldownByChat.set(normalizedChatJid, now);
     if (options.priority) {
-      this.prewarmQueue.unshift(normalizedChatJid);
+      this.prewarmQueue.unshift({ chatJid: normalizedChatJid, mode });
     } else {
-      this.prewarmQueue.push(normalizedChatJid);
+      this.prewarmQueue.push({ chatJid: normalizedChatJid, mode });
     }
     this.drainPrewarmQueue();
     return true;
+  }
+
+  getInstrumentationSnapshot(): AgentSessionManagerInstrumentationSnapshot {
+    return {
+      branchSeedRealizationsInFlight: this.branchSeedRealizationInFlight.size,
+      createInFlight: this.createInFlight.size,
+      invalidDeferredSeedErrors: this.invalidDeferredBranchSeedErrors.size,
+      prewarmInFlight: this.prewarmInFlight.size,
+      queuedPrewarms: this.queuedPrewarms.size,
+      prewarmQueueLength: this.prewarmQueue.length,
+      prewarmCooldowns: this.prewarmCooldownByChat.size,
+    };
   }
 
   async shutdown(): Promise<void> {
@@ -317,50 +339,112 @@ export class AgentSessionManager {
     }
   }
 
-  evictIdle(idleTtlMs: number): void {
+  evictIdle(options: { mainIdleTtlMs: number; sideIdleTtlMs: number }): void {
     const now = Date.now();
+    const { mainIdleTtlMs, sideIdleTtlMs } = options;
+
     for (const [jid, entry] of this.options.pool) {
-      const session = entry.runtime.session;
-      if (session.isStreaming || session.isBashRunning || session.isCompacting) {
-        entry.lastUsed = now;
+      if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
         continue;
       }
-      if (now - entry.lastUsed > idleTtlMs) {
-        this.options.onInfo?.("Evicting idle session", {
-          operation: "evict_idle.main_session",
-          chatJid: jid,
-        });
-        Promise.resolve(entry.runtime.dispose()).catch((err) => {
-          this.options.onWarn?.("Failed to dispose evicted session", {
-            operation: "evict_idle.main_session",
-            chatJid: jid,
-            err,
-          });
-        });
-        this.options.pool.delete(jid);
+      if (now - entry.lastUsed > mainIdleTtlMs) {
+        this.disposeCachedMainRuntime(jid, entry.runtime, "evict_idle.main_session");
       }
     }
+
+    this.enforceMainSessionPoolLimit();
+
     for (const [jid, entry] of this.options.sidePool) {
-      const session = entry.runtime.session;
-      if (session.isStreaming || session.isBashRunning || session.isCompacting) {
-        entry.lastUsed = now;
+      if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
         continue;
       }
-      if (now - entry.lastUsed > idleTtlMs) {
+      if (now - entry.lastUsed > sideIdleTtlMs) {
         this.options.onInfo?.("Evicting idle side session", {
           operation: "evict_idle.side_session",
           chatJid: jid,
         });
-        Promise.resolve(entry.runtime.dispose()).catch((err) => {
-          this.options.onWarn?.("Failed to dispose evicted side session", {
-            operation: "evict_idle.side_session",
-            chatJid: jid,
-            err,
-          });
-        });
         this.options.sidePool.delete(jid);
+        this.disposeRuntimeOnce(entry.runtime, "Failed to dispose evicted side session", {
+          operation: "evict_idle.side_session",
+          chatJid: jid,
+        });
       }
     }
+  }
+
+  private shouldKeepSessionCached(
+    session: { isStreaming?: boolean; isBashRunning?: boolean; isCompacting?: boolean },
+    now: number,
+    entry: PoolEntry,
+  ): boolean {
+    if (session.isStreaming || session.isBashRunning || session.isCompacting) {
+      entry.lastUsed = now;
+      return true;
+    }
+    return false;
+  }
+
+  private enforceMainSessionPoolLimit(options: { protectedChatJids?: string[] } = {}): void {
+    const maxSize = this.options.mainSessionMaxSize ?? 0;
+    if (!Number.isFinite(maxSize) || maxSize <= 0 || this.options.pool.size <= maxSize) return;
+
+    const protectedChatJids = new Set(
+      Array.isArray(options.protectedChatJids)
+        ? options.protectedChatJids.map((chatJid) => String(chatJid || "").trim()).filter(Boolean)
+        : [],
+    );
+    const candidates = [...this.options.pool.entries()]
+      .filter(([chatJid, entry]) => !protectedChatJids.has(chatJid) && !this.shouldKeepSessionCached(entry.runtime.session, Date.now(), entry))
+      .sort((left, right) => left[1].lastUsed - right[1].lastUsed);
+
+    while (this.options.pool.size > maxSize && candidates.length > 0) {
+      const next = candidates.shift();
+      if (!next) break;
+      const [chatJid, entry] = next;
+      if (this.options.pool.get(chatJid)?.runtime !== entry.runtime) continue;
+      this.disposeCachedMainRuntime(chatJid, entry.runtime, "evict_idle.main_session_pool_limit");
+    }
+  }
+
+  private disposeCachedMainRuntime(chatJid: string, runtime: AgentSessionRuntime, operation: string): void {
+    if (this.options.pool.get(chatJid)?.runtime !== runtime) return;
+    this.options.onInfo?.("Evicting cached main session", {
+      operation,
+      chatJid,
+      poolSize: this.options.pool.size,
+      maxSize: this.options.mainSessionMaxSize ?? null,
+    });
+    this.options.pool.delete(chatJid);
+    this.disposeRuntimeOnce(runtime, "Failed to dispose evicted session", {
+      operation,
+      chatJid,
+    });
+  }
+
+  private disposeRuntimeOnce(
+    runtime: AgentSessionRuntime,
+    warnMessage: string,
+    details: Record<string, unknown>,
+  ): void {
+    const pendingDispose = this.runtimeDisposeInFlight.get(runtime);
+    if (pendingDispose) return;
+
+    const task = (async () => {
+      try {
+        await runtime.dispose();
+      } catch (err) {
+        this.options.onWarn?.(warnMessage, {
+          ...details,
+          err,
+        });
+      }
+    })();
+    this.runtimeDisposeInFlight.set(runtime, task);
+    void task.finally(() => {
+      if (this.runtimeDisposeInFlight.get(runtime) === task) {
+        this.runtimeDisposeInFlight.delete(runtime);
+      }
+    });
   }
 
   private async applyDefaultModel(session: AgentSession): Promise<void> {
@@ -483,22 +567,33 @@ export class AgentSessionManager {
     void (async () => {
       try {
         while (this.prewarmQueue.length > 0) {
-          const chatJid = this.prewarmQueue.shift();
-          if (!chatJid) continue;
+          const next = this.prewarmQueue.shift();
+          if (!next) continue;
+          const { chatJid, mode } = next;
           this.queuedPrewarms.delete(chatJid);
           if (this.prewarmInFlight.has(chatJid)) continue;
           if (this.options.pool.has(chatJid) && !hasDeferredBranchSeed(chatJid)) continue;
 
           this.prewarmInFlight.add(chatJid);
           try {
-            await this.getOrCreate(chatJid);
-            this.options.onInfo?.("Prewarmed chat session", {
-              operation: "prewarm_session",
-              chatJid,
-            });
+            if (mode === "lightweight" && !hasDeferredBranchSeed(chatJid)) {
+              await (this.options.lightweightPrewarmSession ?? ((jid: string) => lightweightPrewarmSession(jid, {
+                getSessionExtensionFactories: this.options.getSessionExtensionFactories,
+              })))(chatJid);
+              this.options.onInfo?.("Lightweight-prewarmed chat session", {
+                operation: "prewarm_session.lightweight",
+                chatJid,
+              });
+            } else {
+              await this.getOrCreate(chatJid);
+              this.options.onInfo?.("Prewarmed chat session", {
+                operation: "prewarm_session",
+                chatJid,
+              });
+            }
           } catch (err) {
             this.options.onWarn?.("Failed to prewarm chat session", {
-              operation: "prewarm_session",
+              operation: mode === "lightweight" ? "prewarm_session.lightweight" : "prewarm_session",
               chatJid,
               err,
             });
@@ -538,5 +633,8 @@ export class AgentSessionManager {
     })();
     this.runtimeDisposeInFlight.set(runtime, task);
     await task;
+    if (this.runtimeDisposeInFlight.get(runtime) === task) {
+      this.runtimeDisposeInFlight.delete(runtime);
+    }
   }
 }

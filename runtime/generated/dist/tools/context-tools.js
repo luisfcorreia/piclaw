@@ -150,15 +150,21 @@ export function createBatchExecTool(cwd, bashTool = createContextBashTool(cwd)) 
             commands: Type.Array(Type.String({ description: "Shell commands to execute" })),
             timeout: Type.Optional(Type.Number({ description: "Timeout in seconds per command" })),
         }),
-        execute: async (_toolCallId, params) => {
+        execute: async (toolCallId, params, signal, onUpdate) => {
             const outputs = [];
             for (const command of params.commands || []) {
+                if (signal?.aborted) {
+                    throw new Error("aborted");
+                }
                 try {
-                    const result = await base.execute("", { command, timeout: params.timeout }, undefined, undefined);
+                    const result = await base.execute(toolCallId, { command, timeout: params.timeout }, signal, onUpdate);
                     const text = extractTextContent(result.content).trim() || "(no output)";
                     outputs.push(`Command: ${command}\n${text}`);
                 }
                 catch (err) {
+                    if (signal?.aborted || (err instanceof Error && err.message === "aborted")) {
+                        throw err;
+                    }
                     const message = err instanceof Error ? err.message : String(err);
                     outputs.push(`Command: ${command}\nError: ${message}`);
                 }

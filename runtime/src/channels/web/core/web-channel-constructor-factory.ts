@@ -59,6 +59,7 @@ import {
   createWebTerminalVncHttpService,
   type WebTerminalVncHttpChannel,
   type WebTerminalVncHttpService,
+  type WebTerminalVncHttpServiceSurface,
 } from "../terminal-vnc-http-service.js";
 import { TotpFailureTracker } from "../auth/totp-failure-tracker.js";
 import { VncSessionService } from "../vnc/vnc-session-service.js";
@@ -145,7 +146,7 @@ export interface WebChannelConstructorFactoryResult {
   endpointFacade: WebChannelEndpointFacadeService;
   controlPlaneService: WebAgentControlPlaneService;
   serverLifecycleGateway: WebServerLifecycleGatewayService;
-  terminalVncHttpService: WebTerminalVncHttpService;
+  terminalVncHttpService: WebTerminalVncHttpServiceSurface;
   adaptiveCardSidePromptService: WebAdaptiveCardSidePromptService;
   peerMessageRelayService: WebAgentPeerMessageRelayService;
 }
@@ -275,7 +276,16 @@ export function createWebChannelConstructorFactory(
   deps: WebChannelConstructorFactoryDeps = defaultDeps,
 ): WebChannelConstructorFactoryResult {
   const sessionBroadcast = deps.createSessionBroadcast(channel.agentPool);
-  const remoteInterop = deps.createRemoteInterop(channel.agentPool);
+  let remoteInteropInstance: RemoteInteropService | null = null;
+  const getRemoteInterop = (): RemoteInteropService => {
+    remoteInteropInstance ??= deps.createRemoteInterop(channel.agentPool);
+    return remoteInteropInstance;
+  };
+  const remoteInterop: RemoteInteropService = {
+    async handleRequest(req: Request): Promise<Response> {
+      return await getRemoteInterop().handleRequest(req);
+    },
+  } as RemoteInteropService;
   const runtimeState = deps.createRuntimeState(
     {
       getAssistantName: () => deps.getIdentityConfig().assistantName,
@@ -397,17 +407,36 @@ export function createWebChannelConstructorFactory(
     },
   );
 
-  const terminalVncHttpService = deps.createTerminalVncHttpService(
-    {
-      json: (payload, status = 200) => channel.json(payload, status),
-      authGateway,
-      terminalService: channel.terminalService,
-      vncService: channel.vncService,
+  let terminalVncHttpServiceInstance: WebTerminalVncHttpService | null = null;
+  const getTerminalVncHttpService = (): WebTerminalVncHttpService => {
+    terminalVncHttpServiceInstance ??= deps.createTerminalVncHttpService(
+      {
+        json: (payload, status = 200) => channel.json(payload, status),
+        authGateway,
+        terminalService: channel.terminalService,
+        vncService: channel.vncService,
+      },
+      {
+        webRuntimeConfig: options.webRuntimeConfig,
+      },
+    );
+    return terminalVncHttpServiceInstance;
+  };
+
+  const terminalVncHttpService: WebTerminalVncHttpServiceSurface = {
+    handleTerminalSession(req: Request): Response {
+      return getTerminalVncHttpService().handleTerminalSession(req);
     },
-    {
-      webRuntimeConfig: options.webRuntimeConfig,
+    async handleTerminalHandoff(req: Request): Promise<Response> {
+      return await getTerminalVncHttpService().handleTerminalHandoff(req);
     },
-  );
+    handleVncSession(req: Request): Response {
+      return getTerminalVncHttpService().handleVncSession(req);
+    },
+    async handleVncHandoff(req: Request): Promise<Response> {
+      return await getTerminalVncHttpService().handleVncHandoff(req);
+    },
+  };
 
   const adaptiveCardSidePromptService = deps.createAdaptiveCardSidePromptService({
     defaultChatJid: options.defaultChatJid,

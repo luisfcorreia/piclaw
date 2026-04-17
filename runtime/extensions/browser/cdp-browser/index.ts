@@ -12,18 +12,12 @@ import { registerToolStatusHintProvider } from "../../../src/tool-status-hints.j
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
-import {
-  cdpSend,
-  ensureBrowser,
-  findBrowser,
-  findCdpPort,
-  getTargets,
-  httpGet,
-  httpPut,
-  printToPdf,
-  sleepWithSignal,
-  withConnectedTab,
-} from "./cdp.ts";
+let cachedCdpModule: Promise<typeof import("./cdp.ts")> | null = null;
+
+async function getCdpModule(): Promise<typeof import("./cdp.ts")> {
+  if (!cachedCdpModule) cachedCdpModule = import("./cdp.ts");
+  return await cachedCdpModule;
+}
 
 const CDP_BROWSER_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 20h8"></path><path d="M12 18v2"></path></svg>`;
 
@@ -103,18 +97,19 @@ export default function (pi: ExtensionAPI) {
       preferCSSPageSize: Type.Optional(Type.Boolean({ description: "Prefer CSS @page size for print_pdf (default true)" })),
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
+      const cdp = await getCdpModule();
       if (params.action === "sleep") {
         const ms = params.ms || 3000;
-        await sleepWithSignal(ms, signal);
+        await cdp.sleepWithSignal(ms, signal);
         return { content: [{ type: "text", text: `Slept ${ms}ms` }], details: { ms } };
       }
       if (params.action === "print_pdf" && !params.url && !params.match) {
         throw new Error("url or match is required for print_pdf action");
       }
 
-      const port = await findCdpPort(signal) ?? await ensureBrowser(signal);
+      const port = await cdp.findCdpPort(signal) ?? await cdp.ensureBrowser(signal);
       if (!port) {
-        const browser = findBrowser();
+        const browser = cdp.findBrowser();
         return {
           content: [{
             type: "text",
@@ -128,8 +123,8 @@ export default function (pi: ExtensionAPI) {
 
       switch (params.action) {
         case "tabs": {
-          const version = await httpGet(`http://localhost:${port}/json/version`, 3000, signal);
-          const pages = await getTargets(port, signal);
+          const version = await cdp.httpGet(`http://localhost:${port}/json/version`, 3000, signal);
+          const pages = await cdp.getTargets(port, signal);
           const lines = [`CDP: port ${port} | ${version.Browser}`, `Tabs: ${pages.length}`, ""];
           pages.forEach((page, index) => {
             lines.push(`${index + 1}. ${page.title}`);
@@ -140,8 +135,8 @@ export default function (pi: ExtensionAPI) {
 
         case "eval": {
           if (!params.expr) throw new Error("expr is required for eval action");
-          return withConnectedTab(port, params.match, async (ws) => {
-            const result = await cdpSend(ws, "Runtime.evaluate", {
+          return cdp.withConnectedTab(port, params.match, async (ws) => {
+            const result = await cdp.cdpSend(ws, "Runtime.evaluate", {
               expression: params.expr,
               returnByValue: true,
               awaitPromise: true,
@@ -156,26 +151,26 @@ export default function (pi: ExtensionAPI) {
 
         case "navigate": {
           if (!params.url) throw new Error("url is required for navigate action");
-          return withConnectedTab(port, params.match, async (ws) => {
-            await cdpSend(ws, "Page.enable", undefined, signal);
-            await cdpSend(ws, "Page.navigate", { url: params.url }, signal);
+          return cdp.withConnectedTab(port, params.match, async (ws) => {
+            await cdp.cdpSend(ws, "Page.enable", undefined, signal);
+            await cdp.cdpSend(ws, "Page.navigate", { url: params.url }, signal);
             return { content: [{ type: "text", text: `Navigated to: ${params.url}` }], details: {} };
           }, signal);
         }
 
         case "open": {
           if (!params.url) throw new Error("url is required for open action");
-          await httpPut(`http://localhost:${port}/json/new?${encodeURIComponent(params.url)}`, 5000, signal);
+          await cdp.httpPut(`http://localhost:${port}/json/new?${encodeURIComponent(params.url)}`, 5000, signal);
           return { content: [{ type: "text", text: `Opened new tab: ${params.url}` }], details: {} };
         }
 
         case "close": {
           if (!params.match) throw new Error("match is required for close action");
-          const pages = await getTargets(port, signal);
+          const pages = await cdp.getTargets(port, signal);
           const matching = pages.filter((page) => page.url?.includes(params.match!) || page.title?.toLowerCase().includes(params.match!.toLowerCase()));
           const closed: string[] = [];
           for (const page of matching) {
-            await httpPut(`http://localhost:${port}/json/close/${page.id}`, 5000, signal);
+            await cdp.httpPut(`http://localhost:${port}/json/close/${page.id}`, 5000, signal);
             closed.push(page.title);
           }
           return {
@@ -186,8 +181,8 @@ export default function (pi: ExtensionAPI) {
 
         case "click": {
           if (!params.selector) throw new Error("selector is required for click action");
-          return withConnectedTab(port, params.match, async (ws) => {
-            const result = await cdpSend(ws, "Runtime.evaluate", {
+          return cdp.withConnectedTab(port, params.match, async (ws) => {
+            const result = await cdp.cdpSend(ws, "Runtime.evaluate", {
               expression: buildClickExpression(params.selector),
               returnByValue: true,
             }, signal);
@@ -196,9 +191,9 @@ export default function (pi: ExtensionAPI) {
         }
 
         case "screenshot": {
-          return withConnectedTab(port, params.match, async (ws) => {
-            await cdpSend(ws, "Page.enable", undefined, signal);
-            const result = await cdpSend(ws, "Page.captureScreenshot", { format: "png" }, signal);
+          return cdp.withConnectedTab(port, params.match, async (ws) => {
+            await cdp.cdpSend(ws, "Page.enable", undefined, signal);
+            const result = await cdp.cdpSend(ws, "Page.captureScreenshot", { format: "png" }, signal);
             if (!result?.data) {
               return { content: [{ type: "text", text: "Failed to capture screenshot" }], details: {} };
             }
@@ -217,7 +212,7 @@ export default function (pi: ExtensionAPI) {
           const defaultDir = ctx?.cwd ? path.join(ctx.cwd, "tmp") : tmpdir();
           fs.mkdirSync(defaultDir, { recursive: true });
           const file = params.outPath || path.join(defaultDir, "cdp-print.pdf");
-          const result = await printToPdf({
+          const result = await cdp.printToPdf({
             port,
             outPath: file,
             url: params.url,
@@ -245,12 +240,13 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("cdp-tabs", {
     description: "List browser tabs via CDP",
     handler: async (_args, ctx) => {
-      const port = await findCdpPort();
+      const cdp = await getCdpModule();
+      const port = await cdp.findCdpPort();
       if (!port) {
         ctx.ui.notify("No CDP browser found", "warning");
         return;
       }
-      const pages = await getTargets(port);
+      const pages = await cdp.getTargets(port);
       ctx.ui.notify(`${pages.length} tabs: ${pages.map((page) => page.title).join(" | ")}`, "info");
     },
   });

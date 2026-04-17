@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
-import { queueStartupSessionWarmup } from "../../src/runtime/startup.js";
+import { queueStartupSessionWarmup, resolveStartupSessionWarmupOptions } from "../../src/runtime/startup.js";
 import { createTempWorkspace } from "../helpers.js";
 
 const TEST_SHELL = process.env.SHELL || "bash";
@@ -25,6 +25,7 @@ describe("runtime startup helpers", () => {
           PICLAW_STORE: ws.store,
           PICLAW_DATA: ws.data,
           PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
         },
       });
       expect(run.exitCode, run.stderr.toString() || run.stdout.toString()).toBe(0);
@@ -58,6 +59,7 @@ describe("runtime startup helpers", () => {
           PICLAW_STORE: ws.store,
           PICLAW_DATA: ws.data,
           PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
         },
       });
       expect(run.exitCode).toBe(0);
@@ -97,6 +99,7 @@ describe("runtime startup helpers", () => {
           PICLAW_STORE: ws.store,
           PICLAW_DATA: ws.data,
           PICLAW_DB_IN_MEMORY: "1",
+          PICLAW_DISABLE_BACKGROUND_WORKSPACE_INDEX: "1",
         },
       });
       expect(run.exitCode).toBe(0);
@@ -112,7 +115,7 @@ describe("runtime startup helpers", () => {
     }
   });
 
-  test("queueStartupSessionWarmup prioritizes the default chat and queues five recent chats by default", () => {
+  test("queueStartupSessionWarmup is disabled by default", () => {
     const scheduled: Array<{ chatJid: string; priority?: boolean }> = [];
     const recentCalls: Array<{ limit?: number; excludeChatJids?: string[] }> = [];
 
@@ -127,7 +130,44 @@ describe("runtime startup helpers", () => {
       },
     } as any);
 
+    expect(scheduled).toEqual([]);
+    expect(recentCalls).toEqual([]);
+  });
+
+  test("queueStartupSessionWarmup can explicitly warm the default chat and recent chats", () => {
+    const scheduled: Array<{ chatJid: string; priority?: boolean }> = [];
+    const recentCalls: Array<{ limit?: number; excludeChatJids?: string[] }> = [];
+
+    queueStartupSessionWarmup({
+      scheduleChatWarmup: (chatJid: string, options?: { priority?: boolean }) => {
+        scheduled.push({ chatJid, priority: options?.priority });
+        return true;
+      },
+      scheduleRecentChatWarmup: (options?: { limit?: number; excludeChatJids?: string[] }) => {
+        recentCalls.push(options || {});
+        return [];
+      },
+    } as any, { warmDefaultChat: true, recentLimit: 5 });
+
     expect(scheduled).toEqual([{ chatJid: "web:default", priority: true }]);
     expect(recentCalls).toEqual([{ limit: 5, excludeChatJids: ["web:default"] }]);
+  });
+
+  test("resolveStartupSessionWarmupOptions reads env-backed warmup controls", () => {
+    expect(resolveStartupSessionWarmupOptions({
+      PICLAW_STARTUP_WARM_DEFAULT_CHAT: "true",
+      PICLAW_STARTUP_WARMUP_RECENT_LIMIT: "3",
+    } as NodeJS.ProcessEnv)).toEqual({
+      warmDefaultChat: true,
+      recentLimit: 3,
+    });
+
+    expect(resolveStartupSessionWarmupOptions({
+      PICLAW_STARTUP_WARM_DEFAULT_CHAT: "off",
+      PICLAW_STARTUP_WARMUP_RECENT_LIMIT: "99",
+    } as NodeJS.ProcessEnv)).toEqual({
+      warmDefaultChat: false,
+      recentLimit: 8,
+    });
   });
 });

@@ -46,9 +46,9 @@ function shouldStoreOutput(text: string, lineCount: number): boolean {
 }
 
 export default function (pi: any) {
-  pi.on("session_start", () => {
-    startToolOutputCleanup(RETENTION_DAYS, CLEANUP_INTERVAL_MS);
-  });
+  // Process startup already calls startToolOutputCleanup(); do not repeat that
+  // work on every session bootstrap.
+  startToolOutputCleanup(RETENTION_DAYS, CLEANUP_INTERVAL_MS);
 
   pi.registerTool(createToolOutputSearchTool());
   pi.registerTool(createBatchExecTool(process.cwd()));

@@ -10,6 +10,7 @@ import { AgentSessionBinder } from "./session-binder.js";
 import { AgentSessionManager } from "./session-manager.js";
 import { AgentToolFactory } from "./tool-factory.js";
 import { AgentTurnCoordinator } from "./turn-coordinator.js";
+import { lightweightPrewarmSession } from "./session.js";
 import { recordMessageUsage } from "./usage.js";
 async function resolveSessionExtensionFactories(chatJid) {
     let sshConfig;
@@ -80,6 +81,10 @@ export function createAgentPoolServices(options) {
         authStorage: options.authStorage,
         modelRegistry: options.modelRegistry,
         settingsManager: options.settingsManager,
+        mainSessionMaxSize: options.mainSessionMaxSize,
+        lightweightPrewarmSession: (chatJid) => lightweightPrewarmSession(chatJid, {
+            getSessionExtensionFactories: (targetChatJid) => resolveSessionExtensionFactories(targetChatJid),
+        }),
         createDefaultTools: () => toolFactory.createDefaultTools(),
         createCustomToolOverrides: () => toolFactory.createCustomToolOverrides(),
         getSessionExtensionFactories: (chatJid) => resolveSessionExtensionFactories(chatJid),

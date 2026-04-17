@@ -981,6 +981,9 @@ export class ProxmoxClient {
             path: `/nodes/${encodeURIComponent(node)}/qemu/${vmid}/agent/exec`,
             body: {
                 command: [wrappedCommand.command, ...wrappedCommand.commandArgs],
+                ...(Object.keys(wrappedCommand.env).length > 0
+                    ? { env: Object.entries(wrappedCommand.env).map(([key, value]) => `${key}=${value}`) }
+                    : {}),
                 ...(typeof resolvedInputData === "string" && resolvedInputData.length > 0 ? { "input-data": resolvedInputData } : {}),
             },
             body_mode: "form",

@@ -10,13 +10,19 @@ import { existsSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSy
 import { readdir } from "fs/promises";
 import path from "path";
 import { gunzipSync } from "zlib";
-import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import { createMedia } from "../../../db.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { MAX_ATTACH_BYTES, MAX_EDIT_BYTES, MAX_PREVIEW_BYTES, MAX_UPLOAD_BYTES } from "./constants.js";
 import { contentTypeForPath, detectBinary, formatMtime, isImageFile, isTextFile } from "./file-utils.js";
 import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
 const log = createLogger("web.workspace.file-service");
+let fflatePromise = null;
+async function loadFflate() {
+    if (!fflatePromise) {
+        fflatePromise = import("fflate");
+    }
+    return await fflatePromise;
+}
 function parseZipEntries(buffer, maxEntries = 200) {
     const eocdSignature = 0x06054b50;
     const cdSignature = 0x02014b50;
@@ -622,6 +628,7 @@ export class WorkspaceFileService {
         const zipRoot = rootName.replace(/[\\/]+/g, "").trim() || "workspace";
         const stream = new ReadableStream({
             async start(controller) {
+                const { Zip, ZipDeflate, ZipPassThrough } = await loadFflate();
                 const zip = new Zip();
                 zip.ondata = (err, data, final) => {
                     if (err) {

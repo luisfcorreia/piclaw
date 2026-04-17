@@ -103,6 +103,7 @@ export class WebChannelEndpointFacadeService {
     handleSystemMetrics() {
         return handleSystemMetricsRequest({
             json: (payload, status = 200) => this.options.json(payload, status),
+            getRuntimeMemorySnapshot: () => this.options.agentPool.getMemoryInstrumentationSnapshot(),
         });
     }
     handleAgentActiveChats() {

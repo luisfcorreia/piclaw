@@ -16,7 +16,7 @@ const WorkspaceSearchSchema = Type.Object({
   ),
   limit: Type.Optional(Type.Integer({ description: "Max results (1-50).", minimum: 1, maximum: 50 })),
   offset: Type.Optional(Type.Integer({ description: "Offset for pagination.", minimum: 0 })),
-  refresh: Type.Optional(Type.Boolean({ description: "Re-index notes/skills before searching (default true)." })),
+  refresh: Type.Optional(Type.Boolean({ description: "Re-index notes/skills before searching (default false; true forces a blocking refresh)." })),
   max_kb: Type.Optional(Type.Integer({ description: "Max file size (KB) to index (default 512)." })),
 });
 
@@ -39,7 +39,7 @@ async function execute(
     scope: params.scope,
     limit: params.limit,
     offset: params.offset,
-    refresh: params.refresh,
+    refresh: params.refresh ?? false,
     max_kb: params.max_kb,
   });
 
@@ -59,15 +59,12 @@ async function execute(
 const WORKSPACE_SEARCH_HINT = [
   "## Workspace search",
   "Use `search_workspace` for note/skill lookups in the workspace.",
-  "Configured workspace-search roots are automatically FTS-indexed at session start and can be refreshed on demand per search.",
+  "Configured workspace-search roots are indexed by a background process.",
+  "Searches do not block on indexing by default; use `refresh_workspace_index` or `refresh: true` when you want a blocking rebuild.",
 ].join("\n");
 
 /** Extension factory that registers the search_workspace tool. */
 export const workspaceSearch: ExtensionFactory = (api) => {
-  api.on("session_start", async () => {
-    await refreshWorkspaceIndex({ scope: "all" });
-  });
-
   api.on("before_agent_start", async (event) => ({
     systemPrompt: `${event.systemPrompt}\n\n${WORKSPACE_SEARCH_HINT}`,
   }));

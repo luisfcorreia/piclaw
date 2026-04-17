@@ -745,3 +745,38 @@ export function getDb() {
     }
     return db;
 }
+export function closeDatabase(options) {
+    if (!db)
+        return;
+    const database = db;
+    db = null;
+    dbMode = null;
+    dbPathCache = null;
+    if (options?.shrinkMemory !== false) {
+        try {
+            database.exec("PRAGMA optimize;");
+        }
+        catch (error) {
+            debugSuppressedError(log, "Failed to optimize SQLite before closing the database.", error, {
+                operation: "close_database.optimize",
+            });
+        }
+        try {
+            database.exec("PRAGMA shrink_memory;");
+        }
+        catch (error) {
+            debugSuppressedError(log, "Failed to shrink SQLite page-cache memory before closing the database.", error, {
+                operation: "close_database.shrink_memory",
+            });
+        }
+    }
+    try {
+        database.close();
+    }
+    catch (error) {
+        log.warn("Failed to close database handle", {
+            operation: "close_database.close",
+            err: error,
+        });
+    }
+}

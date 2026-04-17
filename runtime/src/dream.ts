@@ -1,7 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join, relative, resolve } from "path";
 
-import { strToU8, zipSync, type Zippable } from "fflate";
+import type { Zippable } from "fflate";
 
 import type { AgentPool } from "./agent-pool.js";
 
@@ -54,6 +54,17 @@ const DREAM_MEMORY_PATH = resolve(DREAM_MEMORY_DIR, "MEMORY.md");
 const DREAM_BACKUP_KEEP = Math.max(1, Number.parseInt(process.env.PICLAW_DREAM_BACKUP_KEEP || "10", 10) || 10);
 const DREAM_MODEL = process.env.PICLAW_DREAM_MODEL?.trim() || null;
 const log = createLogger("dream");
+
+type FflateModule = typeof import("fflate");
+
+let fflatePromise: Promise<FflateModule> | null = null;
+
+async function loadFflate(): Promise<FflateModule> {
+  if (!fflatePromise) {
+    fflatePromise = import("fflate");
+  }
+  return await fflatePromise;
+}
 
 export interface DreamAgentTurnResult {
   mode: "manual" | "auto";
@@ -126,7 +137,7 @@ export function parseDreamPromptToken(prompt: string): { matched: boolean; mode:
   return {
     matched: true,
     mode,
-    days: match[2] ? Math.max(1, Number.parseInt(match[2], 10)) : fallbackDays,
+    days: match[2] ? Math.max(1, Number.parseInt(match[2], 10) || fallbackDays) : fallbackDays,
   };
 }
 
@@ -235,8 +246,7 @@ function canReapDreamLock(): boolean {
       return false;
     } catch (error) {
       debugSuppressedError(log, "Dream lock owner PID is stale or inaccessible", error, { pid });
-      const code = error instanceof Error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
-      return code === "ESRCH";
+      return true;
     }
   } catch (error) {
     debugSuppressedError(log, "failed to inspect Dream lock", error, { path: DREAM_LOCK_PATH });
@@ -307,7 +317,7 @@ function pruneOldDreamBackups(): void {
   }
 }
 
-function createDreamBackup(chatJid: string, mode: "manual" | "auto", days: number): string {
+async function createDreamBackup(chatJid: string, mode: "manual" | "auto", days: number): Promise<string> {
   mkdirSync(DREAM_BACKUPS_DIR, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupPath = resolve(DREAM_BACKUPS_DIR, `${stamp}-${mode}-${sanitiseJid(chatJid)}.zip`);
@@ -322,6 +332,7 @@ function createDreamBackup(chatJid: string, mode: "manual" | "auto", days: numbe
       memory: existsSync(DREAM_MEMORY_DIR) ? relative(WORKSPACE_DIR, DREAM_MEMORY_DIR) : null,
     },
   };
+  const { strToU8, zipSync } = await loadFflate();
   const entries: Zippable = {
     "manifest.json": strToU8(`${JSON.stringify(manifest, null, 2)}\n`),
   };
@@ -380,7 +391,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
   try {
     lockFd = acquireDreamLock();
     reapDreamArtifacts(null);
-    const backupPath = createDreamBackup(chatJid, mode, days);
+    const backupPath = await createDreamBackup(chatJid, mode, days);
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
     const out = await options.agentPool.runAgent(buildDreamPrompt({ mode, days }), dreamChatJid);
     if (out.status === "error") {
@@ -450,7 +461,7 @@ export async function runDreamMaintenance(options?: { chatJid?: string; days?: n
   let lockFd: number | null = null;
   try {
     lockFd = acquireDreamLock();
-    const backupPath = createDreamBackup(chatJid, mode, days);
+    const backupPath = await createDreamBackup(chatJid, mode, days);
     const dailyNotesRefreshed = refreshDailyNotes(chatJid, days);
     const refresh = refreshAgentMemoryFromDailyNotes({ recentDays: days });
     const workspaceIndexRefreshed = await refreshWorkspaceSearchIndex();

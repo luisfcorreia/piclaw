@@ -61,7 +61,16 @@ export function createDefaultWebChannelConstructorFactory(channel, defaults, dep
 }
 export function createWebChannelConstructorFactory(channel, options, deps = defaultDeps) {
     const sessionBroadcast = deps.createSessionBroadcast(channel.agentPool);
-    const remoteInterop = deps.createRemoteInterop(channel.agentPool);
+    let remoteInteropInstance = null;
+    const getRemoteInterop = () => {
+        remoteInteropInstance ??= deps.createRemoteInterop(channel.agentPool);
+        return remoteInteropInstance;
+    };
+    const remoteInterop = {
+        async handleRequest(req) {
+            return await getRemoteInterop().handleRequest(req);
+        },
+    };
     const runtimeState = deps.createRuntimeState({
         getAssistantName: () => deps.getIdentityConfig().assistantName,
         getChatCursor: (chatJid) => deps.getChatCursor(chatJid),
@@ -160,14 +169,32 @@ export function createWebChannelConstructorFactory(channel, options, deps = defa
         webServerConfig: options.webServerConfig,
         webRuntimeConfig: options.webRuntimeConfig,
     });
-    const terminalVncHttpService = deps.createTerminalVncHttpService({
-        json: (payload, status = 200) => channel.json(payload, status),
-        authGateway,
-        terminalService: channel.terminalService,
-        vncService: channel.vncService,
-    }, {
-        webRuntimeConfig: options.webRuntimeConfig,
-    });
+    let terminalVncHttpServiceInstance = null;
+    const getTerminalVncHttpService = () => {
+        terminalVncHttpServiceInstance ??= deps.createTerminalVncHttpService({
+            json: (payload, status = 200) => channel.json(payload, status),
+            authGateway,
+            terminalService: channel.terminalService,
+            vncService: channel.vncService,
+        }, {
+            webRuntimeConfig: options.webRuntimeConfig,
+        });
+        return terminalVncHttpServiceInstance;
+    };
+    const terminalVncHttpService = {
+        handleTerminalSession(req) {
+            return getTerminalVncHttpService().handleTerminalSession(req);
+        },
+        async handleTerminalHandoff(req) {
+            return await getTerminalVncHttpService().handleTerminalHandoff(req);
+        },
+        handleVncSession(req) {
+            return getTerminalVncHttpService().handleVncSession(req);
+        },
+        async handleVncHandoff(req) {
+            return await getTerminalVncHttpService().handleVncHandoff(req);
+        },
+    };
     const adaptiveCardSidePromptService = deps.createAdaptiveCardSidePromptService({
         defaultChatJid: options.defaultChatJid,
         defaultAgentId: options.defaultAgentId,

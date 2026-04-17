@@ -12,8 +12,6 @@ import { readdir } from "fs/promises";
 import path from "path";
 import { gunzipSync } from "zlib";
 
-import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
-
 import { createMedia } from "../../../db.js";
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
 import { MAX_ATTACH_BYTES, MAX_EDIT_BYTES, MAX_PREVIEW_BYTES, MAX_UPLOAD_BYTES } from "./constants.js";
@@ -21,6 +19,17 @@ import { contentTypeForPath, detectBinary, formatMtime, isImageFile, isTextFile 
 import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } from "./paths.js";
 
 const log = createLogger("web.workspace.file-service");
+
+type FflateModule = typeof import("fflate");
+
+let fflatePromise: Promise<FflateModule> | null = null;
+
+async function loadFflate(): Promise<FflateModule> {
+  if (!fflatePromise) {
+    fflatePromise = import("fflate");
+  }
+  return await fflatePromise;
+}
 
 interface ArchiveEntrySummary {
   name: string;
@@ -685,6 +694,7 @@ export class WorkspaceFileService {
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        const { Zip, ZipDeflate, ZipPassThrough } = await loadFflate();
         const zip = new Zip();
         zip.ondata = (err, data, final) => {
           if (err) {

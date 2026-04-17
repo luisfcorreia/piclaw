@@ -8,7 +8,7 @@
  * This keeps internal module boundaries hidden from the rest of the codebase.
  */
 
-export { initDatabase, getDb } from "./db/connection.js";
+export { initDatabase, getDb, closeDatabase } from "./db/connection.js";
 export { clampWebContent } from "./db/web-content.js";
 export {
   ensureChatBranch,

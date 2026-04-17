@@ -24,9 +24,24 @@ import { createUuid } from "../utils/ids.js";
 import { createLogger } from "../utils/logger.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import type { RuntimeState } from "./state.js";
+import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
 
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
+
+function parseStartupWarmupBoolean(value: string | undefined, fallback = false): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseStartupWarmupLimit(value: string | undefined, fallback = 0): number {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(8, parsed));
+}
 const WORKSPACE_BOOTSTRAP_ENTRIES = [
   "AGENTS.md",
   ".pi/skills",
@@ -74,10 +89,21 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
   bootstrapWorkspaceFromSkel();
 
   initDatabase();
+  launchWorkspaceIndexProcess({ scope: "all" });
   const toolOutputConfig = getToolOutputConfig();
   startToolOutputCleanup(toolOutputConfig.retentionDays, toolOutputConfig.cleanupIntervalMs);
   state.loadTimestamps();
   state.loadChats();
+}
+
+export function resolveStartupSessionWarmupOptions(env: NodeJS.ProcessEnv = process.env): {
+  warmDefaultChat: boolean;
+  recentLimit: number;
+} {
+  return {
+    warmDefaultChat: parseStartupWarmupBoolean(env.PICLAW_STARTUP_WARM_DEFAULT_CHAT, false),
+    recentLimit: parseStartupWarmupLimit(env.PICLAW_STARTUP_WARMUP_RECENT_LIMIT, 0),
+  };
 }
 
 export function queueStartupSessionWarmup(
@@ -85,18 +111,21 @@ export function queueStartupSessionWarmup(
     scheduleChatWarmup?: (chatJid: string, options?: { priority?: boolean }) => boolean;
     scheduleRecentChatWarmup?: (options?: { limit?: number; excludeChatJids?: string[] }) => string[];
   },
-  options: { defaultChatJid?: string; recentLimit?: number } = {},
+  options: { defaultChatJid?: string; recentLimit?: number; warmDefaultChat?: boolean } = {},
 ): void {
   const defaultChatJid = typeof options.defaultChatJid === "string" && options.defaultChatJid.trim()
     ? options.defaultChatJid.trim()
     : "web:default";
-  const recentLimit = Math.max(0, Math.min(8, Math.trunc(options.recentLimit ?? 5) || 5));
+  const warmDefaultChat = options.warmDefaultChat ?? false;
+  const recentLimit = Math.max(0, Math.min(8, Math.trunc(options.recentLimit ?? 0) || 0));
 
-  agentPool.scheduleChatWarmup?.(defaultChatJid, { priority: true });
+  if (warmDefaultChat) {
+    agentPool.scheduleChatWarmup?.(defaultChatJid, { priority: true });
+  }
   if (recentLimit > 0) {
     agentPool.scheduleRecentChatWarmup?.({
       limit: recentLimit,
-      excludeChatJids: [defaultChatJid],
+      excludeChatJids: warmDefaultChat ? [defaultChatJid] : [],
     });
   }
 }
@@ -105,7 +134,7 @@ export function queueStartupSessionWarmup(
 export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): Promise<WebChannel> {
   const web = new WebChannel({ queue, agentPool });
   await web.start();
-  queueStartupSessionWarmup(agentPool);
+  queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   web.recoverInflightRuns();
   // Run an immediate pending-resume scan at startup so deferred queued
   // follow-ups are picked up even before IPC workers process resume tasks.

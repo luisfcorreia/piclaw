@@ -47,7 +47,7 @@ import { runSidePrompt as runSidePromptInternal } from "./agent-pool/side-prompt
 import { runAgentPrompt } from "./agent-pool/run-agent-orchestrator.js";
 import { type AvailableModelsResult } from "./agent-pool/runtime-facade.js";
 import { createAgentPoolServices, type AgentPoolServices } from "./agent-pool/service-factory.js";
-import { type PoolEntry } from "./agent-pool/session-manager.js";
+import { type AgentSessionManagerInstrumentationSnapshot, type PoolEntry } from "./agent-pool/session-manager.js";
 import {
   type ChatBranchRecord,
   type SshConfig,
@@ -90,17 +90,44 @@ export type {
   TurnOutput,
 } from "./agent-pool/contracts.js";
 
-/** How long (ms) an idle session stays cached before being disposed. */
-const DEFAULT_IDLE_TTL = 15 * 60 * 1000; // 15 minutes
+export interface AgentPoolMemoryInstrumentationSnapshot {
+  cachedMainSessions: number;
+  cachedSideSessions: number;
+  activeForkBaseLeaves: number;
+  activeChats: number;
+  sessionManager: AgentSessionManagerInstrumentationSnapshot;
+}
+
+/** How long (ms) an idle main session stays cached before being disposed. */
+const DEFAULT_MAIN_IDLE_TTL = 3 * 60 * 1000; // 3 minutes
+/** How long (ms) an idle side session stays cached before being disposed. */
+const DEFAULT_SIDE_IDLE_TTL = 60 * 1000; // 1 minute
 const DEFAULT_CLEANUP_INTERVAL = 30 * 1000; // check every 30 seconds
+const DEFAULT_MAIN_SESSION_POOL_MAX_SIZE = 2;
 
 function parsePositiveMs(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-const IDLE_TTL = parsePositiveMs(process.env.PICLAW_SESSION_IDLE_TTL_MS, DEFAULT_IDLE_TTL);
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+const MAIN_IDLE_TTL = parsePositiveMs(
+  process.env.PICLAW_MAIN_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
+  DEFAULT_MAIN_IDLE_TTL,
+);
+const SIDE_IDLE_TTL = parsePositiveMs(
+  process.env.PICLAW_SIDE_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
+  DEFAULT_SIDE_IDLE_TTL,
+);
 const CLEANUP_INTERVAL = parsePositiveMs(process.env.PICLAW_SESSION_CLEANUP_INTERVAL_MS, DEFAULT_CLEANUP_INTERVAL);
+const MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(
+  process.env.PICLAW_MAIN_SESSION_POOL_MAX_SIZE ?? process.env.PICLAW_SESSION_POOL_MAX_SIZE,
+  DEFAULT_MAIN_SESSION_POOL_MAX_SIZE,
+);
 const DEFAULT_PROVIDER_RATE_LIMIT_MAX_RETRIES = 5;
 const DEFAULT_PROVIDER_RATE_LIMIT_BASE_DELAY_MS = 5000;
 
@@ -157,6 +184,7 @@ export class AgentPool {
       modelRegistry: this.modelRegistry,
       settingsManager: this.settingsManager,
       workspaceDir: WORKSPACE_DIR,
+      mainSessionMaxSize: MAIN_SESSION_POOL_MAX_SIZE,
       bashOperations: this.bashOperations,
       createSession: this.createSession,
       createSideSession: this.createSideSession,
@@ -186,7 +214,10 @@ export class AgentPool {
     });
     mkdirSync(SESSIONS_DIR, { recursive: true });
     mkdirSync(this.logsDir, { recursive: true });
-    this.cleanupTimer = setInterval(() => this.sessionManager.evictIdle(IDLE_TTL), CLEANUP_INTERVAL);
+    this.cleanupTimer = setInterval(
+      () => this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL }),
+      CLEANUP_INTERVAL,
+    );
   }
 
   private applyRateLimitRetryDefaults(): void {
@@ -311,7 +342,7 @@ export class AgentPool {
     // backfill for those.
     const actuallyScheduled: string[] = [];
     for (const chatJid of scheduled) {
-      if (this.sessionManager.prewarm(chatJid)) {
+      if (this.sessionManager.prewarm(chatJid, { mode: "lightweight" })) {
         cooldownByChat.set(chatJid, now);
         actuallyScheduled.push(chatJid);
       }
@@ -411,6 +442,16 @@ export class AgentPool {
     return this.branchManager.listKnownChats(rootChatJid, options);
   }
 
+  getMemoryInstrumentationSnapshot(): AgentPoolMemoryInstrumentationSnapshot {
+    return {
+      cachedMainSessions: this.pool.size,
+      cachedSideSessions: this.sidePool.size,
+      activeForkBaseLeaves: this.activeForkBaseLeafByChat.size,
+      activeChats: this.branchManager.listActiveChats().length,
+      sessionManager: this.sessionManager.getInstrumentationSnapshot(),
+    };
+  }
+
   findActiveChatByAgentName(agentName: string): ActiveChatAgent | null {
     return this.branchManager.findActiveChatByAgentName(agentName);
   }
@@ -500,6 +541,6 @@ export class AgentPool {
   }
 
   private evictIdle(): void {
-    this.sessionManager.evictIdle(IDLE_TTL);
+    this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL });
   }
 }

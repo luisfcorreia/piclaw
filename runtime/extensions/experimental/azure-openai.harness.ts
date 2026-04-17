@@ -1546,10 +1546,6 @@ export default function (pi: ExtensionAPI) {
     scheduleNext(cache.expiresOnEpoch);
   };
 
-  pi.on("session_start", () => {
-    void refresh();
-  });
-
   pi.on("session_shutdown", () => {
     if (timer) clearTimeout(timer);
   });

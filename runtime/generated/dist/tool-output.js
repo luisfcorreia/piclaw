@@ -44,13 +44,37 @@ export function buildPreview(text, maxLines = 12, maxLineLength = 200) {
  * Split text into line-aware chunks for FTS indexing.
  * Avoids splitting mid-line when possible.
  */
-function chunkText(text, chunkSize = DEFAULT_CHUNK_SIZE) {
-    const lines = text.replace(/\r\n/g, "\n").split("\n");
+export function chunkText(text, chunkSize = DEFAULT_CHUNK_SIZE) {
+    const normalized = text.replace(/\r\n/g, "\n");
+    if (!normalized)
+        return [];
+    const rawLines = normalized.split("\n");
+    const lines = rawLines.map((line, index) => {
+        const hasTrailingNewline = index < rawLines.length - 1;
+        return hasTrailingNewline ? `${line}\n` : line;
+    });
     const chunks = [];
     let buffer = "";
+    const flushChunk = (chunk) => {
+        for (let index = 0; index < chunk.length; index += chunkSize) {
+            chunks.push(chunk.slice(index, index + chunkSize));
+        }
+    };
     for (const line of lines) {
-        const next = buffer ? `${buffer}\n${line}` : line;
-        if (next.length > chunkSize && buffer) {
+        if (line.length > chunkSize) {
+            if (buffer) {
+                chunks.push(buffer);
+                buffer = "";
+            }
+            flushChunk(line);
+            continue;
+        }
+        if (!buffer) {
+            buffer = line;
+            continue;
+        }
+        const next = `${buffer}${line}`;
+        if (next.length > chunkSize) {
             chunks.push(buffer);
             buffer = line;
             continue;

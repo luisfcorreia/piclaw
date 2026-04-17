@@ -750,6 +750,9 @@ export class PortainerClient {
                 AttachStderr: true,
                 Tty: false,
                 Cmd: [wrappedCommand.command, ...wrappedCommand.commandArgs],
+                ...(Object.keys(wrappedCommand.env).length > 0
+                    ? { Env: Object.entries(wrappedCommand.env).map(([key, value]) => `${key}=${value}`) }
+                    : {}),
             },
             body_mode: "json",
         });

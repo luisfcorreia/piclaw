@@ -5,21 +5,45 @@ import { createRequire } from "node:module";
 import { dirname, extname, resolve, basename, join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-
-import { ensureBrowser, findBrowser, findCdpPort, printToPdf, type MaybeAbortSignal } from "../../browser/cdp-browser/cdp.ts";
+import type { MaybeAbortSignal } from "../../browser/cdp-browser/cdp.ts";
+import { decodeZipEntryText } from "./zip-entry-text.ts";
 
 const EXT_DIR = typeof import.meta.dir === "string" ? import.meta.dir : dirname(new URL(import.meta.url).pathname);
 const OFFICE_TOOLS_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 3h10l4 4v14H4z"></path><path d="M14 3v5h4"></path><path d="M7 13h10"></path><path d="M7 17h10"></path></svg>`;
 const require = createRequire(import.meta.url);
-const XLSX = require("xlsx");
-const PptxGenJS = require(resolve(EXT_DIR, "../../../vendor/pptxgenjs/pptxgen.cjs.js"));
 const ASSETS_DIR = resolve(EXT_DIR, "assets");
+const PPTXGEN_PATH = resolve(EXT_DIR, "../../../vendor/pptxgenjs/pptxgen.cjs.js");
+const XLSX_PACKAGE = "xlsx";
+
+let cachedXlsx: any | null = null;
+let cachedPptxGenJs: any | null = null;
+let cachedFflate: any | null = null;
+let cachedCdpModule: Promise<typeof import("../../browser/cdp-browser/cdp.ts")> | null = null;
 const DOCX_TEMPLATE_PATH = resolve(ASSETS_DIR, "docx-template.zip");
 const PDF_CSS_PATH = resolve(ASSETS_DIR, "md2pdf.css");
 
 const READABLE_FORMATS = new Set([".docx", ".xlsx", ".pptx"]);
 const WRITABLE_FORMATS = new Set([".docx", ".xlsx", ".pptx", ".pdf"]);
+
+function getXlsx(): any {
+  if (!cachedXlsx) cachedXlsx = require(XLSX_PACKAGE);
+  return cachedXlsx;
+}
+
+function getPptxGenJs(): any {
+  if (!cachedPptxGenJs) cachedPptxGenJs = require(PPTXGEN_PATH);
+  return cachedPptxGenJs;
+}
+
+function getFflate(): any {
+  if (!cachedFflate) cachedFflate = require("fflate");
+  return cachedFflate;
+}
+
+async function getCdpModule(): Promise<typeof import("../../browser/cdp-browser/cdp.ts")> {
+  if (!cachedCdpModule) cachedCdpModule = import("../../browser/cdp-browser/cdp.ts");
+  return await cachedCdpModule;
+}
 
 function readTrimmedString(...values: unknown[]): string | null {
   for (const value of values) {
@@ -57,9 +81,18 @@ function resolveWorkspacePath(baseDir: string, requestedPath: string): string {
 
 function readZipEntries(buf: Buffer): Map<string, string> {
   const entries = new Map<string, string>();
-  const archive = unzipSync(new Uint8Array(buf));
-  for (const [name, data] of Object.entries(archive)) {
-    entries.set(name, Buffer.from(data).toString("utf-8"));
+  let i = 0;
+  while (i + 30 <= buf.length) {
+    if (buf.readUInt32LE(i) !== 0x04034b50) break;
+    const method = buf.readUInt16LE(i + 8);
+    const cSize = buf.readUInt32LE(i + 18);
+    const nameLen = buf.readUInt16LE(i + 26);
+    const extraLen = buf.readUInt16LE(i + 28);
+    const name = buf.toString("utf-8", i + 30, i + 30 + nameLen);
+    const dataStart = i + 30 + nameLen + extraLen;
+    const text = decodeZipEntryText(name, method, buf.subarray(dataStart, dataStart + cSize));
+    if (text !== null) entries.set(name, text);
+    i = dataStart + cSize;
   }
   return entries;
 }
@@ -147,6 +180,7 @@ function docxTable(tblXml: string): string {
 }
 
 function xlsxToMarkdown(buf: Buffer): string {
+  const XLSX = getXlsx();
   const workbook = XLSX.read(buf, { type: "buffer" });
   const sections: string[] = [];
   for (const name of workbook.SheetNames) {
@@ -446,6 +480,7 @@ function markdownToDocxBodyXml(markdown: string): string {
 }
 
 async function mdToDocx(markdown: string): Promise<Buffer> {
+  const { unzipSync, strFromU8, strToU8, zipSync } = getFflate();
   if (!existsSync(DOCX_TEMPLATE_PATH)) throw new Error(`Template not found: ${DOCX_TEMPLATE_PATH}`);
   const templateEntries = unzipSync(readFileSync(DOCX_TEMPLATE_PATH));
   const templateDocXml = templateEntries["word/document.xml"] ? strFromU8(templateEntries["word/document.xml"]) : "";
@@ -499,6 +534,7 @@ function extractMarkdownTables(markdown: string): ExtractedSheet[] {
 }
 
 function mdToXlsx(markdown: string): Buffer {
+  const XLSX = getXlsx();
   const workbook = XLSX.utils.book_new();
   const tables = extractMarkdownTables(markdown);
 
@@ -527,6 +563,7 @@ function stripMdFmt(text: string): string {
 }
 
 async function mdToPptx(markdown: string): Promise<Buffer> {
+  const PptxGenJS = getPptxGenJs();
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
 
@@ -747,6 +784,7 @@ async function mdToPdf(markdown: string, outputPath: string, signal?: MaybeAbort
   writeFileSync(htmlPath, html, "utf-8");
 
   try {
+    const { findCdpPort, ensureBrowser, findBrowser, printToPdf } = await getCdpModule();
     const port = await findCdpPort(signal) ?? await ensureBrowser(signal);
     if (!port) {
       const browser = findBrowser();

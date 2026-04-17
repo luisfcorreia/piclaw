@@ -67,17 +67,11 @@ describe("workspace-search extension", () => {
     expect(refreshTool?.name).toBe("refresh_workspace_index");
   });
 
-  test("indexes notes automatically on session start", async () => {
+  test("does not register a blocking session_start indexing hook", async () => {
     await seedWorkspace();
     const fake = await getSearchExtension();
     const sessionStart = fake.handlers.find((entry) => entry.event === "session_start");
-    expect(sessionStart).toBeDefined();
-    await sessionStart!.handler();
-
-    const tool = fake.tools.get("search_workspace")!;
-    const result = await executeWithContext(tool, { query: "kittens", scope: "notes", refresh: false });
-    expect(result.details.count).toBe(1);
-    expect(result.content[0].text).toContain("notes/alpha.md");
+    expect(sessionStart).toBeUndefined();
   });
 
   test("indexes notes + skills and returns matches", async () => {
@@ -87,6 +81,24 @@ describe("workspace-search extension", () => {
     expect(result.details.count).toBe(2);
     expect(result.content[0].text).toContain("notes/alpha.md");
     expect(result.content[0].text).toContain(".pi/skills/demo/SKILL.md");
+  });
+
+  test("search_workspace does not block on indexing by default", async () => {
+    await seedWorkspace();
+    const workspaceSearchMod = await import("../../src/workspace-search.js") as typeof import("../../src/workspace-search.js");
+    const requests: Array<{ scope?: string; max_kb?: number }> = [];
+    workspaceSearchMod.setBackgroundWorkspaceIndexRefreshRequesterForTests((params) => {
+      requests.push({ scope: params?.scope as string | undefined, max_kb: params?.max_kb });
+    });
+
+    try {
+      const tool = await getSearchTool();
+      const result = await executeWithContext(tool, { query: "kittens", scope: "notes" });
+      expect(result.details.count).toBe(0);
+      expect(requests).toEqual([{ scope: "notes", max_kb: undefined }]);
+    } finally {
+      workspaceSearchMod.setBackgroundWorkspaceIndexRefreshRequesterForTests(null);
+    }
   });
 
   test("scope filters to notes or skills", async () => {

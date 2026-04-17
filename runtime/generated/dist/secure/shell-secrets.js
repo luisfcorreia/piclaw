@@ -42,6 +42,7 @@ export async function createKeychainOutputRedactor() {
                 redact: (text) => text,
                 maxNeedleLength: 0,
                 hasReplacements: false,
+                needles: [],
             };
         }
         return {
@@ -54,6 +55,7 @@ export async function createKeychainOutputRedactor() {
             },
             maxNeedleLength: replacements[0]?.secret.length ?? 0,
             hasReplacements: true,
+            needles: replacements.map((replacement) => replacement.secret),
         };
     }
     catch {
@@ -61,6 +63,7 @@ export async function createKeychainOutputRedactor() {
             redact: (text) => text,
             maxNeedleLength: 0,
             hasReplacements: false,
+            needles: [],
         };
     }
 }
@@ -71,15 +74,31 @@ export function createStreamingTextRedactor(redactor) {
             flush: () => "",
         };
     }
-    const tailKeep = redactor.maxNeedleLength - 1;
+    const needles = (redactor.needles ?? []).filter((needle) => needle.length > 1);
+    const prefixes = new Set();
+    for (const needle of needles) {
+        for (let length = 1; length < needle.length; length += 1) {
+            prefixes.add(needle.slice(0, length));
+        }
+    }
+    const maxTailLength = redactor.maxNeedleLength - 1;
     let tail = "";
+    const longestPotentialPrefixSuffixLength = (text) => {
+        if (prefixes.size === 0) {
+            return Math.min(text.length, maxTailLength);
+        }
+        const maxLength = Math.min(text.length, maxTailLength);
+        for (let length = maxLength; length > 0; length -= 1) {
+            if (prefixes.has(text.slice(text.length - length))) {
+                return length;
+            }
+        }
+        return 0;
+    };
     return {
         push(text) {
             const raw = `${tail}${text}`;
-            if (raw.length <= tailKeep) {
-                tail = raw;
-                return "";
-            }
+            const tailKeep = longestPotentialPrefixSuffixLength(raw);
             const emitRaw = raw.slice(0, raw.length - tailKeep);
             tail = raw.slice(raw.length - tailKeep);
             return redactor.redact(emitRaw);
@@ -113,31 +132,31 @@ export async function redactKeychainSecretsInValue(value) {
 async function resolveInjectedExecParts(command, args) {
     const resolvedCommand = await resolveKeychainPlaceholders(command);
     const resolvedArgs = await Promise.all(args.map((value) => resolveKeychainPlaceholders(value)));
-    const injectedEnv = await buildInjectedShellEnv({ includeProcessEnv: false });
+    const injectedEnv = await buildInjectedShellEnv({
+        includeProcessEnv: false,
+        referencedTexts: [command, ...args],
+    });
     return { resolvedCommand, resolvedArgs, injectedEnv };
 }
 export async function buildInjectedExecCommand(shellFamily, command, args = []) {
     const { resolvedCommand, resolvedArgs, injectedEnv } = await resolveInjectedExecParts(command, args);
-    const envEntries = Object.entries(injectedEnv);
     if (shellFamily === "powershell") {
         const lines = [
             "$ErrorActionPreference = 'Stop'",
-            ...envEntries.map(([key, value]) => `$env:${key} = ${powerShellQuote(value)}`),
             `& ${[resolvedCommand, ...resolvedArgs].map(powerShellQuote).join(" ")}`,
             "if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }",
         ];
         return {
             command: "powershell",
             commandArgs: ["-NoProfile", "-Command", lines.join("; ")],
+            env: injectedEnv,
         };
     }
     const execCommand = `exec ${[resolvedCommand, ...resolvedArgs].map(shellQuote).join(" ")}`;
-    const shellCommand = envEntries.length > 0
-        ? `${envEntries.map(([key, value]) => `${key}=${shellQuote(value)}`).join(" ")} ${execCommand}`
-        : execCommand;
     return {
         command: "sh",
-        commandArgs: ["-lc", shellCommand],
+        commandArgs: ["-lc", execCommand],
+        env: injectedEnv,
     };
 }
 export async function buildInjectedPosixCommand(command, args = []) {
