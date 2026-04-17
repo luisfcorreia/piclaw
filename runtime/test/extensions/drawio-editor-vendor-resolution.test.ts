@@ -8,6 +8,7 @@ import {
   getDrawioVendorDirCandidates,
   isBinaryDrawioSaveTarget,
   isExplicitDrawioExportRequest,
+  isTrustedDrawioMessageEvent,
   MINIMAL_DRAWIO_EXPORT_ACTIONS,
   MINIMAL_DRAWIO_FILE_MENU_ACTIONS,
   resolveDrawioSavePath,
@@ -58,6 +59,24 @@ test('stringified buildEmbeddedDrawioAppUrl still works in the browser wrapper c
   const revived = new Function(`return (${buildEmbeddedDrawioAppUrl.toString()});`)() as typeof buildEmbeddedDrawioAppUrl;
   expect(revived(false)).toBe('/drawio/index.html?embed=1&proto=json&spin=1&modified=0&noSaveBtn=1&noExitBtn=1&saveAndExit=0&libraries=0&ui=dark&dark=0');
   expect(revived(true, true)).toContain('chrome=0');
+});
+
+test('drawio wrapper only trusts same-origin messages from the embedded iframe', () => {
+  const frameWindow = {};
+
+  expect(isTrustedDrawioMessageEvent('https://piclaw.test', 'https://piclaw.test', frameWindow, frameWindow)).toBe(true);
+  expect(isTrustedDrawioMessageEvent('https://attacker.test', 'https://piclaw.test', frameWindow, frameWindow)).toBe(false);
+  expect(isTrustedDrawioMessageEvent('https://piclaw.test', 'https://piclaw.test', {}, frameWindow)).toBe(false);
+  expect(isTrustedDrawioMessageEvent('https://piclaw.test', 'https://piclaw.test', frameWindow, null)).toBe(false);
+});
+
+test('stringified drawio trust helper keeps the same iframe and origin checks', () => {
+  const revived = new Function(`return (${isTrustedDrawioMessageEvent.toString()});`)() as typeof isTrustedDrawioMessageEvent;
+  const frameWindow = {};
+
+  expect(revived('https://piclaw.test', 'https://piclaw.test', frameWindow, frameWindow)).toBe(true);
+  expect(revived('https://attacker.test', 'https://piclaw.test', frameWindow, frameWindow)).toBe(false);
+  expect(revived('https://piclaw.test', 'https://piclaw.test', {}, frameWindow)).toBe(false);
 });
 
 test('minimal drawio menu constants keep Save plus reduced export formats', () => {

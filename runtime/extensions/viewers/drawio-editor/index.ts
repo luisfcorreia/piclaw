@@ -95,6 +95,17 @@ export function buildEmbeddedDrawioAppUrl(isDark: boolean, readOnly = false, rou
   return editorUrl;
 }
 
+// Keep this helper self-contained too: the wrapper page stringifies it so the
+// runtime check and the TypeScript regression tests share the same trust rule.
+export function isTrustedDrawioMessageEvent(
+  eventOrigin: string,
+  expectedOrigin: string,
+  eventSource: unknown,
+  frameWindow: unknown,
+): boolean {
+  return Boolean(frameWindow) && eventSource === frameWindow && eventOrigin === expectedOrigin;
+}
+
 export function isExplicitDrawioExportRequest(mimeType?: string, filename?: string): boolean {
   const explicitMime = mimeType && !/^(application|text)\/xml$/i.test(mimeType)
     ? EXPORT_EXTENSIONS[mimeType || ""]
@@ -245,6 +256,7 @@ document.title = fileName + ' · Draw.io';
 var frame = document.getElementById('editor-frame');
 var loading = document.getElementById('loading');
 var readonlyLock = document.getElementById('readonly-lock');
+var expectedFrameOrigin = window.location.origin;
 if (readOnly && readonlyLock) readonlyLock.classList.add('active');
 var DEFAULT_DRAWIO_XML = ${JSON.stringify(DEFAULT_DRAWIO_XML)};
 var xmlData = DEFAULT_DRAWIO_XML;
@@ -492,10 +504,7 @@ function startEditor() {
 window.addEventListener('message', function(e) {
   var msg;
   try { msg = JSON.parse(e.data); } catch(_) { return; }
-
-  // Most messages must come from our iframe. workspace-export is emitted
-  // by our wrapper-installed patch, which can surface with a wrapper source.
-  if (msg.event !== 'workspace-export' && e.source !== frame.contentWindow) return;
+  if (!(${isTrustedDrawioMessageEvent.toString()})(e.origin, expectedFrameOrigin, e.source, frame.contentWindow)) return;
 
   switch (msg.event) {
     case 'init':
