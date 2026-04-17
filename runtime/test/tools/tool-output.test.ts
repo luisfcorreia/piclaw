@@ -56,3 +56,29 @@ test("prune removes old outputs", async () => {
   expect(removed).toBeGreaterThan(0);
   expect(existsSync(saved.path)).toBe(false);
 });
+
+test("chunkText hard-splits long lines at the configured chunk size", async () => {
+  const toolOutput = await import("../../src/tool-output.js");
+  const text = `prefix-${"x".repeat(12)}-suffix`;
+
+  const chunks = toolOutput.chunkText(text, 8);
+
+  expect(chunks).toEqual([
+    "prefix-x",
+    "xxxxxxxx",
+    "xxx-suff",
+    "ix",
+  ]);
+  expect(Math.max(...chunks.map((chunk: string) => chunk.length))).toBe(8);
+  expect(chunks.join("")).toBe(text);
+});
+
+test("chunkText preserves newline separators, including a trailing newline", async () => {
+  const toolOutput = await import("../../src/tool-output.js");
+  const text = "alpha\nbeta\n";
+
+  const chunks = toolOutput.chunkText(text, 7);
+
+  expect(chunks).toEqual(["alpha\n", "beta\n"]);
+  expect(chunks.join("")).toBe(text);
+});
