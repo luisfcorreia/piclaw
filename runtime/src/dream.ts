@@ -126,7 +126,7 @@ export function parseDreamPromptToken(prompt: string): { matched: boolean; mode:
   return {
     matched: true,
     mode,
-    days: match[2] ? Math.max(1, Number.parseInt(match[2], 10) || fallbackDays) : fallbackDays,
+    days: match[2] ? Math.max(1, Number.parseInt(match[2], 10)) : fallbackDays,
   };
 }
 
@@ -235,7 +235,8 @@ function canReapDreamLock(): boolean {
       return false;
     } catch (error) {
       debugSuppressedError(log, "Dream lock owner PID is stale or inaccessible", error, { pid });
-      return true;
+      const code = error instanceof Error && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+      return code === "ESRCH";
     }
   } catch (error) {
     debugSuppressedError(log, "failed to inspect Dream lock", error, { path: DREAM_LOCK_PATH });
