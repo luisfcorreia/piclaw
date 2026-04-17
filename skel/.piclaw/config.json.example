@@ -1,4 +1,6 @@
 {
+  "sessionAutoRotate": true,
+  "sessionMaxSizeMb": 32,
   "tools": {
     "additionalDefaultTools": [
       "search_workspace"

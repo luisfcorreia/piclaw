@@ -446,6 +446,23 @@ test("agent runtime config getter groups foreground and background timeout setti
   );
 });
 
+test("session storage config defaults to 32 MB with auto-rotate enabled", async () => {
+  await withTempWorkspaceEnv(
+    "piclaw-config-",
+    {},
+    async () => {
+      const cfg = await importFresh<typeof import("../../src/core/config.js")>("../src/core/config.js");
+
+      expect(cfg.SESSION_STORAGE_CONFIG).toEqual({
+        maxSizeMb: 32,
+        maxSizeBytes: 32 * 1024 * 1024,
+        autoRotate: true,
+      });
+      expect(cfg.getSessionStorageConfig()).toBe(cfg.SESSION_STORAGE_CONFIG);
+    },
+  );
+});
+
 test("agent runtime config defaults to a one-hour foreground timeout", async () => {
   await withTempWorkspaceEnv(
     "piclaw-config-",

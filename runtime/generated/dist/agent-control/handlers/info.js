@@ -136,7 +136,7 @@ export async function handleSearchWorkspace(_session, command) {
         scope: command.scope,
         limit: command.limit,
         offset: command.offset,
-        refresh: command.refresh,
+        refresh: command.refresh ?? true,
         max_kb: command.max_kb,
     });
     if (error) {

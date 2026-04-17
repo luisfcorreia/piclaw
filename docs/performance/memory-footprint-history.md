@@ -29,6 +29,9 @@ Track Piclaw memory measurements over time with the repo commit context that pro
 
 | Timestamp (UTC) | Commit | Dirty | Scenario | RSS | PSS | cgroup current | VmHWM | Heap used | External | Cached main | Active chats | Prewarm queue | Notes |
 |---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 2026-04-17T20:54:34Z | `d5b6975569dd6ad4e6284828faa0079f08c72ab2` | yes | Live `piclaw.service` after installing the pressure-aware cache-trim fixes, restarting, and settling with the new startup-memory snapshot hook active | 229.6 MB | 223.5 MB | 197.3 MB | 242.3 MB | 61.7 MB | 28.4 MB | 1 | 1 | 0 | Service PID 3851 on `:8080`. Runtime counters at capture time: `cached_side_sessions=0`, `create_in_flight=0`, `prewarm_in_flight=0`, `queued_prewarms=0`, `prewarm_cooldowns=0`. The restart also emitted `.piclaw/data/startup-memory-snapshots/2026-04-17T20-54-06-298Z_post-web-start.json`, a clean post-start sample at 222.5 MB RSS / 41.4 MB heap / 16.6 MB external with `cached_main_sessions=0` and `active_chats=0`. This is the cleanest post-restart baseline in the log so far. |
+| 2026-04-17T20:25:16Z | `d5b6975569dd6ad4e6284828faa0079f08c72ab2` | yes | Live `piclaw.service` after enabling session autorotation at 64 MB and rotating `web:default` off the oversized default-session file | 280.8 MB | 272.6 MB | 568.0 MB | 296.6 MB | 102.9 MB | 65.4 MB | 2 | 2 | 0 | Service PID 49437 on `:8080`. Runtime counters at capture time: `cached_side_sessions=0`, `create_in_flight=0`, `prewarm_in_flight=0`, `queued_prewarms=0`, `prewarm_cooldowns=0`. The active `web:default` file had fallen to ~228.9 KB, while the prior oversized live session was archived at 95,217,421 bytes (`web_default/archive/2026-04-06T19-04-37-583Z_...jsonl`). This sample was still taken during interactive debugging (`active_chats=2`), but it demonstrates that trimming/rotating the huge default session materially reduced retained live memory versus the earlier ~449–479 MB readings. |
+| 2026-04-17T20:00:28Z | `d5b6975569dd6ad4e6284828faa0079f08c72ab2` | yes | Live `piclaw.service` after local install + systemd user restart with the cold-start bootstrap fixes, Dream fixes, and deterministic audit-group refresh loaded | 478.7 MB | 477.6 MB | 495.8 MB | 835.2 MB | 322.1 MB | 267.4 MB | 1 | 1 | 0 | Service PID 45635 on `:8080`. Runtime counters at capture time: `cached_side_sessions=0`, `create_in_flight=0`, `prewarm_in_flight=0`, `queued_prewarms=0`, `prewarm_cooldowns=0`. Follow-up probing showed the fresh post-restart process initially sat around ~449.3 MB RSS / ~213.6 MB external, close to the 18:02 baseline; later diagnostic requests and active-chat growth pushed the live process into the 465–479 MB range. Treat this row as an in-turn interactive snapshot, not a clean idle baseline. |
 | 2026-04-17T18:02:53Z | `d35e1f61dd1ed99662616384307ba7ca475e9ede` | yes | Live `piclaw.service` after landing startup warmup disable, removing workspace-local extensions, and moving workspace indexing off `session_start` into a background process | 450.8 MB | 449.7 MB | 429.0 MB | 651.5 MB | 257.4 MB | 203.2 MB | 1 | 1 | 0 | Service PID 24685. Runtime counters: `cached_side_sessions=0`, `create_in_flight=0`, `prewarm_in_flight=0`, `queued_prewarms=0`, `prewarm_cooldowns=0`. Workspace was dirty because the current implementation tranche was in progress, but the installed runtime had been verified against the workspace before restart. |
 
 ## Fresh-process cold-session benchmarks
@@ -56,18 +59,24 @@ Track Piclaw memory measurements over time with the repo commit context that pro
   - workspace-local `github-copilot-opus-1m-safe.ts` removed from active `.pi/extensions`
   - workspace-local `gist-badlogic-edit.ts` removed from active `.pi/extensions`
   - workspace indexing moved off blocking `session_start` into a background process
-- Subsequent dirty-workspace changes landed after the latest measured entries and still need fresh numbers recorded here:
-  - startup warmup is now env-tunable via `PICLAW_STARTUP_WARM_DEFAULT_CHAT` and `PICLAW_STARTUP_WARMUP_RECENT_LIMIT`
-  - cached main sessions are now bounded by `PICLAW_MAIN_SESSION_POOL_MAX_SIZE` / `PICLAW_SESSION_POOL_MAX_SIZE` (default 2)
-  - recent-chat background warmup now uses a lightweight cache-priming path instead of materializing a full `AgentSessionRuntime`
-  - explicit/priority warmup still creates a live runtime, and deferred branch seeds still realize eagerly on the full path
-- Next measurements to append should cover:
-  - live-service idle RSS/PSS after the new main-session cap and lightweight prewarm changes
+- Subsequent dirty-workspace changes that now have measured live impact in this log:
+  - `sessionAutoRotate` is enabled locally and the intended upstream default is now `sessionMaxSizeMb=32`
+  - `web:default` was manually rotated once, proving the oversized ~95.2 MB session file was a major retained-memory contributor
+  - the pressure-aware session-cache trim path now runs both on the cleanup timer and immediately after session acquisition under memory pressure
+  - the startup-memory snapshot hook is now installed and writing under `.piclaw/data/startup-memory-snapshots/`
+  - oversized persisted `toolResult` payloads are now sanitized both before session resume and at append-time to prevent reintroducing the same OOM class
+- Still-open measurement work:
   - explicit warmup vs lightweight-recent-warmup runtime counter differences
-  - whether the capped pool materially lowers steady-state retained-memory pressure on the crash-prone VM
+  - whether the capped pool materially lowers steady-state retained-memory pressure on the crash-prone VM under broader multi-chat activity
+  - whether the local pressure threshold defaults should be tuned down now that the pressure path is actually wired into the live runtime
 - Follow-up work should append entries after any change to:
   - packaged extension load gating
   - session bootstrap composition
   - provider refresh behavior
   - memory telemetry interpretation
   - session-cache retention policy
+  - persisted tool-result sanitization policy
+
+## Root-cause write-up
+
+- See `docs/performance/session-bootstrap-oom-analysis-2026-04-17.md` for the historical crash-loop analysis, isolated session-hydration benchmark data, and the landed mitigations.

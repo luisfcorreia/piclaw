@@ -81,19 +81,59 @@ function resolveWorkspacePath(baseDir: string, requestedPath: string): string {
 
 function readZipEntries(buf: Buffer): Map<string, string> {
   const entries = new Map<string, string>();
-  let i = 0;
-  while (i + 30 <= buf.length) {
-    if (buf.readUInt32LE(i) !== 0x04034b50) break;
-    const method = buf.readUInt16LE(i + 8);
-    const cSize = buf.readUInt32LE(i + 18);
-    const nameLen = buf.readUInt16LE(i + 26);
-    const extraLen = buf.readUInt16LE(i + 28);
-    const name = buf.toString("utf-8", i + 30, i + 30 + nameLen);
-    const dataStart = i + 30 + nameLen + extraLen;
-    const text = decodeZipEntryText(name, method, buf.subarray(dataStart, dataStart + cSize));
-    if (text !== null) entries.set(name, text);
-    i = dataStart + cSize;
+  const eocdSignature = 0x06054b50;
+  const centralDirSignature = 0x02014b50;
+  const localHeaderSignature = 0x04034b50;
+  const minEocdSize = 22;
+  const maxCommentSize = 0xffff;
+  const searchStart = Math.max(0, buf.length - (minEocdSize + maxCommentSize));
+
+  let eocdOffset = -1;
+  for (let offset = buf.length - minEocdSize; offset >= searchStart; offset -= 1) {
+    if (buf.readUInt32LE(offset) === eocdSignature) {
+      eocdOffset = offset;
+      break;
+    }
   }
+  if (eocdOffset < 0) return entries;
+
+  const entryCount = buf.readUInt16LE(eocdOffset + 10);
+  const centralDirectoryOffset = buf.readUInt32LE(eocdOffset + 16);
+  let offset = centralDirectoryOffset;
+  let seen = 0;
+
+  while (offset + 46 <= buf.length && seen < entryCount) {
+    if (buf.readUInt32LE(offset) !== centralDirSignature) break;
+    const method = buf.readUInt16LE(offset + 10);
+    const compressedSize = buf.readUInt32LE(offset + 20);
+    const fileNameLength = buf.readUInt16LE(offset + 28);
+    const extraLength = buf.readUInt16LE(offset + 30);
+    const commentLength = buf.readUInt16LE(offset + 32);
+    const localHeaderOffset = buf.readUInt32LE(offset + 42);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + fileNameLength;
+    if (nameEnd > buf.length) break;
+    const name = buf.toString("utf-8", nameStart, nameEnd);
+
+    if (localHeaderOffset + 30 > buf.length || buf.readUInt32LE(localHeaderOffset) !== localHeaderSignature) {
+      offset = nameEnd + extraLength + commentLength;
+      seen += 1;
+      continue;
+    }
+
+    const localNameLength = buf.readUInt16LE(localHeaderOffset + 26);
+    const localExtraLength = buf.readUInt16LE(localHeaderOffset + 28);
+    const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd <= buf.length) {
+      const text = decodeZipEntryText(name, method, buf.subarray(dataStart, dataEnd));
+      if (text !== null) entries.set(name, text);
+    }
+
+    offset = nameEnd + extraLength + commentLength;
+    seen += 1;
+  }
+
   return entries;
 }
 

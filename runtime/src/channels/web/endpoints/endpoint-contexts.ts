@@ -55,6 +55,7 @@ export interface AgentStatusContextDeps extends JsonLike {
     chatJid: string
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null } | null>;
   getAvailableModels(chatJid: string): Promise<unknown>;
+  getProviderReadyCompletedForInstance(): boolean;
 }
 
 /** Build the agent-status endpoint context from live channel dependencies. */
@@ -66,6 +67,7 @@ export function createAgentStatusContext(deps: AgentStatusContextDeps): AgentSta
     getBuffer: deps.getBuffer,
     getContextUsageForChat: deps.getContextUsageForChat,
     getAvailableModels: deps.getAvailableModels,
+    getProviderReadyCompletedForInstance: deps.getProviderReadyCompletedForInstance,
   };
 }
 

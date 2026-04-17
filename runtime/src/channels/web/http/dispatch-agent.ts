@@ -61,6 +61,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     handle: (channel, req) => channel.handleAutoresearchDismiss(req),
   },
   {
+    method: "POST",
+    path: "/agent/oobe/complete",
+    handle: (channel, req) => channel.handleAgentOobeComplete(req),
+  },
+  {
     method: "GET",
     path: "/agent/queue-state",
     handle: (channel, req) => channel.handleAgentQueueState(req),

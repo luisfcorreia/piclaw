@@ -167,7 +167,7 @@ export async function handleSearchWorkspace(_session: AgentSession, command: Sea
     scope: command.scope,
     limit: command.limit,
     offset: command.offset,
-    refresh: command.refresh,
+    refresh: command.refresh ?? true,
     max_kb: command.max_kb,
   });
 

@@ -76,6 +76,7 @@ const {
     stopAutoresearch,
     dismissAutoresearch,
     getAgentModels,
+    completeInstanceOobe,
     getActiveChatAgents,
     getChatBranches,
     renameChatBranch,
@@ -503,6 +504,9 @@ function MainApp({ locationParams, navigate }) {
     const handleCompleteProviderReadyOobe = useCallback(() => {
         setProviderReadyCompleted(true);
         setLocalStorageItem(OOBE_PROVIDER_READY_COMPLETED_KEY, 'true');
+        void completeInstanceOobe('provider-ready').catch(() => {
+            // expected: local dismissal still hides the panel in this browser even if the instance write fails.
+        });
     }, []);
 
     useEffect(() => {

@@ -489,6 +489,11 @@ export function installWebChannelPrototype(
       writable: true,
       value: withHttpSurface(async (service, req: Request) => await service.handleAutoresearchDismiss(req)),
     },
+    handleAgentOobeComplete: {
+      configurable: true,
+      writable: true,
+      value: withHttpSurface(async (service, req: Request) => await service.handleAgentOobeComplete(req)),
+    },
     handleAgentQueueState: {
       configurable: true,
       writable: true,

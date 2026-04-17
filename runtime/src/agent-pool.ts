@@ -104,6 +104,9 @@ const DEFAULT_MAIN_IDLE_TTL = 3 * 60 * 1000; // 3 minutes
 const DEFAULT_SIDE_IDLE_TTL = 60 * 1000; // 1 minute
 const DEFAULT_CLEANUP_INTERVAL = 30 * 1000; // check every 30 seconds
 const DEFAULT_MAIN_SESSION_POOL_MAX_SIZE = 2;
+const DEFAULT_MEMORY_PRESSURE_RSS_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL = 30 * 1000;
+const DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = 1;
 
 function parsePositiveMs(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || "").trim(), 10);
@@ -128,6 +131,18 @@ const MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(
   process.env.PICLAW_MAIN_SESSION_POOL_MAX_SIZE ?? process.env.PICLAW_SESSION_POOL_MAX_SIZE,
   DEFAULT_MAIN_SESSION_POOL_MAX_SIZE,
 );
+const MEMORY_PRESSURE_RSS_BYTES = parseNonNegativeInt(
+  process.env.PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES,
+  DEFAULT_MEMORY_PRESSURE_RSS_BYTES,
+);
+const MEMORY_PRESSURE_MAIN_IDLE_TTL = parsePositiveMs(
+  process.env.PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS,
+  DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL,
+);
+const MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(
+  process.env.PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE,
+  DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE,
+);
 const DEFAULT_PROVIDER_RATE_LIMIT_MAX_RETRIES = 5;
 const DEFAULT_PROVIDER_RATE_LIMIT_BASE_DELAY_MS = 5000;
 
@@ -144,6 +159,7 @@ export class AgentPool {
   private activeForkBaseLeafByChat = new Map<string, string | null>();
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private shuttingDown = false;
+  private memoryPressureActive = false;
 
   // Shared across all sessions (expensive to create, safe to reuse)
   private authStorage: AuthStorage;
@@ -215,7 +231,7 @@ export class AgentPool {
     mkdirSync(SESSIONS_DIR, { recursive: true });
     mkdirSync(this.logsDir, { recursive: true });
     this.cleanupTimer = setInterval(
-      () => this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL }),
+      () => this.evictIdle(),
       CLEANUP_INTERVAL,
     );
   }
@@ -525,7 +541,16 @@ export class AgentPool {
   // ── internal ────────────────────────────────────────────
 
   private async getOrCreateRuntime(chatJid: string): Promise<AgentSessionRuntime> {
-    return this.sessionManager.getOrCreate(chatJid);
+    const runtime = await this.sessionManager.getOrCreate(chatJid);
+    const pressure = this.getMemoryPressureMode();
+    if (pressure.active && !this.shuttingDown) {
+      this.sessionManager.evictIdle({
+        mainIdleTtlMs: pressure.mainIdleTtlMs,
+        sideIdleTtlMs: SIDE_IDLE_TTL,
+        mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
+      });
+    }
+    return runtime;
   }
 
   private async getOrCreate(chatJid: string): Promise<AgentSession> {
@@ -540,7 +565,33 @@ export class AgentPool {
     return this.sessionManager.syncSideSessionFromMain(mainSession, sideRuntime);
   }
 
+  private getMemoryPressureMode(): { active: boolean; mainIdleTtlMs: number; mainSessionMaxSizeOverride: number | undefined } {
+    const rssBytes = process.memoryUsage.rss();
+    const active = MEMORY_PRESSURE_RSS_BYTES > 0 && rssBytes >= MEMORY_PRESSURE_RSS_BYTES;
+    if (this.memoryPressureActive !== active) {
+      this.memoryPressureActive = active;
+      log.info(active ? "Memory pressure mode enabled" : "Memory pressure mode cleared", {
+        operation: "memory_pressure.mode_change",
+        rssBytes,
+        thresholdBytes: MEMORY_PRESSURE_RSS_BYTES,
+        mainIdleTtlMs: active ? MEMORY_PRESSURE_MAIN_IDLE_TTL : MAIN_IDLE_TTL,
+        mainSessionPoolMaxSize: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : MAIN_SESSION_POOL_MAX_SIZE,
+      });
+    }
+
+    return {
+      active,
+      mainIdleTtlMs: active ? Math.min(MAIN_IDLE_TTL, MEMORY_PRESSURE_MAIN_IDLE_TTL) : MAIN_IDLE_TTL,
+      mainSessionMaxSizeOverride: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : undefined,
+    };
+  }
+
   private evictIdle(): void {
-    this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL });
+    const pressure = this.getMemoryPressureMode();
+    this.sessionManager.evictIdle({
+      mainIdleTtlMs: pressure.mainIdleTtlMs,
+      sideIdleTtlMs: SIDE_IDLE_TTL,
+      mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
+    });
   }
 }

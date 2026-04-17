@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { initDatabase } from "../../../../src/db.js";
 import { WebAgentControlPlaneService } from "../../../../src/channels/web/agent/agent-control-plane-service.js";
 import type { QueuedFollowupLifecycleService } from "../../../../src/channels/web/runtime/queued-followup-lifecycle-service.js";
 
@@ -39,6 +40,23 @@ function createService(overrides: Partial<ConstructorParameters<typeof WebAgentC
 }
 
 describe("WebAgentControlPlaneService", () => {
+  test("persists provider-ready OOBE completion at the instance level", async () => {
+    initDatabase();
+    const service = createService();
+    const response = await service.handleAgentOobeComplete(new Request("https://example.com/agent/oobe/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "provider-ready" }),
+    }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: "ok",
+      kind: "provider-ready",
+      provider_ready_completed_instance: true,
+    });
+  });
+
   test("shapes autoresearch control responses with default chat fallbacks", async () => {
     const statusChats: string[] = [];
     const stopInputs: Array<{ chat_jid: string; generate_report: boolean }> = [];

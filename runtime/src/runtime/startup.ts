@@ -25,9 +25,11 @@ import { createLogger } from "../utils/logger.js";
 import { patchConsoleTimestamps } from "./console-timestamps.js";
 import type { RuntimeState } from "./state.js";
 import { launchWorkspaceIndexProcess } from "../workspace-index-process.js";
+import { SystemMetricsSampler } from "../channels/web/agent/system-metrics.js";
 
 const log = createLogger("runtime.startup");
 const WORKSPACE_SKEL_DIR = resolve(import.meta.dir, "../../../skel");
+const STARTUP_MEMORY_SNAPSHOT_DIR = join(DATA_DIR, "startup-memory-snapshots");
 
 function parseStartupWarmupBoolean(value: string | undefined, fallback = false): boolean {
   const normalized = String(value || "").trim().toLowerCase();
@@ -130,10 +132,51 @@ export function queueStartupSessionWarmup(
   }
 }
 
+function sanitizeStartupSnapshotLabel(label: string): string {
+  return label.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "startup";
+}
+
+export function captureStartupMemorySnapshot(
+  agentPool: Pick<AgentPool, "getMemoryInstrumentationSnapshot">,
+  options: { label?: string } = {},
+): string | null {
+  try {
+    mkdirSync(STARTUP_MEMORY_SNAPSHOT_DIR, { recursive: true });
+    const capturedAt = new Date();
+    const stamp = capturedAt.toISOString().replace(/[:.]/g, "-");
+    const label = sanitizeStartupSnapshotLabel(options.label || "startup");
+    const filePath = join(STARTUP_MEMORY_SNAPSHOT_DIR, `${stamp}_${label}.json`);
+    const sampler = new SystemMetricsSampler(1, 2000);
+    const snapshot = sampler.readSnapshot(agentPool.getMemoryInstrumentationSnapshot());
+    writeFileSync(filePath, `${JSON.stringify({
+      captured_at: capturedAt.toISOString(),
+      pid: process.pid,
+      label,
+      snapshot,
+    }, null, 2)}\n`, "utf8");
+    log.info("Captured startup memory snapshot", {
+      operation: "startup_memory_snapshot.capture",
+      filePath,
+      label,
+      rssBytes: snapshot.process_memory.rss_bytes,
+      activeChats: snapshot.runtime_memory?.active_chats ?? null,
+    });
+    return filePath;
+  } catch (error) {
+    log.warn("Failed to capture startup memory snapshot", {
+      operation: "startup_memory_snapshot.capture",
+      label: options.label || "startup",
+      err: error,
+    });
+    return null;
+  }
+}
+
 /** Start web channel and run immediate crash-recovery bootstrap. */
 export async function startWebChannel(queue: AgentQueue, agentPool: AgentPool): Promise<WebChannel> {
   const web = new WebChannel({ queue, agentPool });
   await web.start();
+  captureStartupMemorySnapshot(agentPool, { label: "post-web-start" });
   queueStartupSessionWarmup(agentPool, resolveStartupSessionWarmupOptions());
   web.recoverInflightRuns();
   // Run an immediate pending-resume scan at startup so deferred queued
@@ -226,7 +269,6 @@ export function createWhatsAppChannel(state: RuntimeState): WhatsAppChannel {
           type: "message",
           chatJid: "web:default",
           text: code,
-          noNudge: true,
         };
         const filePath = join(ipcDir, `${createUuid("pairing")}.json`);
         writeFileSync(filePath, JSON.stringify(payload));

@@ -88,10 +88,13 @@ export function parseDreamPromptToken(prompt) {
         return { matched: false, mode: "manual", days: MANUAL_DREAM_DEFAULT_DAYS };
     const mode = match[1].toLowerCase().startsWith("auto") ? "auto" : "manual";
     const fallbackDays = mode === "auto" ? AUTO_DREAM_DEFAULT_DAYS : MANUAL_DREAM_DEFAULT_DAYS;
+    const parsedDays = match[2] ? Number.parseInt(match[2], 10) : NaN;
     return {
         matched: true,
         mode,
-        days: match[2] ? Math.max(1, Number.parseInt(match[2], 10) || fallbackDays) : fallbackDays,
+        days: match[2]
+            ? (Number.isFinite(parsedDays) ? Math.max(1, parsedDays) : fallbackDays)
+            : fallbackDays,
     };
 }
 export function hasOutstandingDreamConsolidation(recentDays) {
@@ -199,6 +202,9 @@ function canReapDreamLock() {
         }
         catch (error) {
             debugSuppressedError(log, "Dream lock owner PID is stale or inaccessible", error, { pid });
+            if (error && typeof error === "object" && "code" in error && error.code === "EPERM") {
+                return false;
+            }
             return true;
         }
     }

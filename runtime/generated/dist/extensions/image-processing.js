@@ -82,11 +82,15 @@ const ImageProcessSchema = Type.Object({
     affine_matrix: Type.Optional(Type.Array(Type.Number(), { description: "Affine transform matrix [a,b,c,d] for affine action.", minItems: 4, maxItems: 4 })),
     strip_metadata: Type.Optional(Type.Boolean({ description: "Strip all metadata (EXIF/ICC/XMP) from output. Default: false." })),
 });
+function getWorkspaceDir() {
+    const configured = process.env.PICLAW_WORKSPACE?.trim();
+    return resolve(configured || WORKSPACE_DIR);
+}
 function resolveWorkspacePath(input) {
     const trimmed = (input || "").trim();
     if (!trimmed)
         throw new Error("Empty file path.");
-    return resolve(WORKSPACE_DIR, trimmed);
+    return resolve(getWorkspaceDir(), trimmed);
 }
 function inferFormat(filePath) {
     const ext = extname(filePath).toLowerCase().replace(".", "");
@@ -380,7 +384,8 @@ async function executeImageProcess(_toolCallId, params) {
             const { mkdirSync: mkFs } = await import("node:fs");
             mkFs(tilePath, { recursive: true });
             await sharp(inputPath).tile({ size: tileSize, layout: "dz" }).toFile(join(tilePath, "output"));
-            const relTile = tilePath.startsWith(WORKSPACE_DIR) ? tilePath.slice(WORKSPACE_DIR.length + 1) : tilePath;
+            const workspaceDir = getWorkspaceDir();
+            const relTile = tilePath.startsWith(workspaceDir) ? tilePath.slice(workspaceDir.length + 1) : tilePath;
             return {
                 content: [{ type: "text", text: `Deep zoom tiles generated in ${relTile}/ (tile size: ${tileSize}px)` }],
                 details: { action: "tile", input: params.input, outputDir: relTile, tileSize },
@@ -422,7 +427,8 @@ async function executeImageProcess(_toolCallId, params) {
                 await sharp(inputPath, { animated: true, page: i }).png().toFile(framePath);
                 extracted.push(framePath);
             }
-            const relDir = frameDir.startsWith(WORKSPACE_DIR) ? frameDir.slice(WORKSPACE_DIR.length + 1) : frameDir;
+            const workspaceDir = getWorkspaceDir();
+            const relDir = frameDir.startsWith(workspaceDir) ? frameDir.slice(workspaceDir.length + 1) : frameDir;
             return {
                 content: [{ type: "text", text: `Extracted ${extracted.length} frames to ${relDir}/` }],
                 details: { action: "frames", input: params.input, frameCount: extracted.length, outputDir: relDir },
@@ -491,7 +497,8 @@ async function executeImageProcess(_toolCallId, params) {
             const { writeFileSync: writeFs } = await import("node:fs");
             writeFs(gifOutputPath, Buffer.from(gif.bytes()));
             const gifStat = statSync(gifOutputPath);
-            const relOutput = gifOutputPath.startsWith(WORKSPACE_DIR) ? gifOutputPath.slice(WORKSPACE_DIR.length + 1) : gifOutputPath;
+            const workspaceDir = getWorkspaceDir();
+            const relOutput = gifOutputPath.startsWith(workspaceDir) ? gifOutputPath.slice(workspaceDir.length + 1) : gifOutputPath;
             return {
                 content: [{ type: "text", text: `Animated GIF created: ${relOutput} (${frameW}x${frameH}, ${frameCount} frames, ${formatBytes(gifStat.size)})` }],
                 details: {
@@ -541,8 +548,9 @@ async function executeImageProcess(_toolCallId, params) {
     const inputStat = statSync(inputPath);
     const outputMeta = await sharp(outputPath).metadata();
     const savings = inputStat.size - outputStat.size;
-    const relativeOutput = outputPath.startsWith(WORKSPACE_DIR)
-        ? outputPath.slice(WORKSPACE_DIR.length + 1)
+    const workspaceDir = getWorkspaceDir();
+    const relativeOutput = outputPath.startsWith(workspaceDir)
+        ? outputPath.slice(workspaceDir.length + 1)
         : outputPath;
     return {
         content: [{ type: "text", text: `${action} complete: ${relativeOutput} (${outputMeta.width}x${outputMeta.height}, ${formatBytes(outputStat.size)}${savings > 0 ? `, saved ${formatBytes(savings)}` : ""})` }],

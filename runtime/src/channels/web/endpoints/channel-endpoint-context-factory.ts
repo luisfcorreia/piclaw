@@ -14,6 +14,7 @@ import {
   createPostMutationsContext,
   createUiEndpointsContext,
 } from "./endpoint-contexts.js";
+import { isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
 import type { AgentStatusContext } from "../agent/agent-status.js";
 import type { ContentEndpointsContext } from "./content-endpoints.js";
 import type { AgentsEndpointContext, AvatarEndpointContext } from "./identity-endpoints.js";
@@ -106,6 +107,7 @@ export function createWebChannelEndpointContexts(
           getBuffer: (turnId, panel) => channel.getBuffer(turnId, panel),
           getContextUsageForChat: (chatJid) => channel.agentPool.getContextUsageForChat(chatJid),
           getAvailableModels: (chatJid) => channel.agentPool.getAvailableModels(chatJid),
+          getProviderReadyCompletedForInstance: () => isProviderReadyOobeCompletedForInstance(),
         });
       }
       return agentStatusContext;

@@ -4,7 +4,9 @@
 import { clearInflightMarker, getAgentReplyStateAfter, getAllChatCursors, getDb, getDeferredQueuedFollowups, getInflightRuns, getMessagesSince, rollbackInflightRun, } from "../../../db.js";
 import { createLogger } from "../../../utils/logger.js";
 const log = createLogger("web.recovery");
-const RECOVERY_LANE_KEY = "web-recovery";
+function recoveryLaneKey(chatJid) {
+    return `chat:${chatJid}`;
+}
 function getKnownChatJids() {
     const rows = getDb().prepare(`
     SELECT chat_jid FROM chat_cursors
@@ -125,7 +127,7 @@ export function recoverInflightRuns(ctx, store = defaultStore) {
                     await (ctx.sleep ? ctx.sleep(ctx.recoveryDelayMs) : Bun.sleep(ctx.recoveryDelayMs));
                 }
                 await ctx.processChat(inflight.chatJid, ctx.defaultAgentId);
-            }, `resume:${inflight.chatJid}`, RECOVERY_LANE_KEY);
+            }, `resume:${inflight.chatJid}`, recoveryLaneKey(inflight.chatJid));
         }
     }
 }
@@ -154,6 +156,6 @@ export function resumePendingChats(ctx, chatJid, store = defaultStore) {
                 await (ctx.sleep ? ctx.sleep(ctx.recoveryDelayMs) : Bun.sleep(ctx.recoveryDelayMs));
             }
             await ctx.processChat(jid, ctx.defaultAgentId);
-        }, `resume:${jid}`, RECOVERY_LANE_KEY);
+        }, `resume:${jid}`, recoveryLaneKey(jid));
     }
 }

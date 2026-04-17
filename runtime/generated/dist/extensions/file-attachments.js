@@ -257,7 +257,7 @@ async function validateAndNormalizeImage(rawData, claimedMime) {
 }
 /** Build a file-attachments extension bound to a specific registry instance. */
 export function createFileAttachmentsExtension(registry = getAttachmentRegistry()) {
-    return (pi) => {
+    const extension = function fileAttachments(pi) {
         pi.on("before_agent_start", async (event) => {
             return { systemPrompt: `${event.systemPrompt}\n\n${ATTACHMENT_HINT}` };
         });
@@ -345,6 +345,7 @@ export function createFileAttachmentsExtension(registry = getAttachmentRegistry(
             execute: executeExportAttachment,
         });
     };
+    return extension;
 }
 /** Extension factory that registers the attach_file tool. */
 export const fileAttachments = createFileAttachmentsExtension(getAttachmentRegistry());

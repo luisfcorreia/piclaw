@@ -382,6 +382,149 @@ test("agent pool explicit warmup still materializes a live runtime", async () =>
   await pool.shutdown();
 });
 
+test("agent pool cleanup timer applies the shorter memory-pressure idle TTL", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({
+    PICLAW_WORKSPACE: ws.workspace,
+    PICLAW_STORE: ws.store,
+    PICLAW_DATA: ws.data,
+    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
+    PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS: "1",
+    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "2",
+  });
+
+  const originalSetInterval = globalThis.setInterval;
+  const originalClearInterval = globalThis.clearInterval;
+  let cleanupCallback: (() => void) | null = null;
+
+  (globalThis as any).setInterval = ((handler: TimerHandler) => {
+    cleanupCallback = handler as () => void;
+    return 1 as any;
+  }) as typeof setInterval;
+  (globalThis as any).clearInterval = (() => {}) as typeof clearInterval;
+
+  try {
+    const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+    let disposed = 0;
+    class StubSession {
+      subscribe(_listener: (event: any) => void) {
+        return () => {};
+      }
+      async prompt(_prompt: string) {}
+      async abort() {}
+      dispose() {
+        disposed += 1;
+      }
+    }
+
+    const pool = new AgentPool({
+      createSession: async () => createRuntime(new StubSession()) as any,
+    });
+
+    expect(cleanupCallback).not.toBeNull();
+
+    (pool as any).pool.set("web:one", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() - 10 });
+    (pool as any).pool.set("web:two", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() });
+
+    cleanupCallback?.();
+    await Bun.sleep(0);
+
+    expect((pool as any).pool.has("web:one")).toBe(false);
+    expect((pool as any).pool.has("web:two")).toBe(true);
+    expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
+    expect(disposed).toBe(1);
+
+    await pool.shutdown();
+  } finally {
+    globalThis.setInterval = originalSetInterval;
+    globalThis.clearInterval = originalClearInterval;
+  }
+});
+
+test("agent pool applies the pressure pool cap immediately after acquiring a second session", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({
+    PICLAW_WORKSPACE: ws.workspace,
+    PICLAW_STORE: ws.store,
+    PICLAW_DATA: ws.data,
+    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
+    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "1",
+  });
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  let disposed = 0;
+  class StubSession {
+    subscribe(_listener: (event: any) => void) {
+      return () => {};
+    }
+    async prompt(_prompt: string) {}
+    async abort() {}
+    dispose() {
+      disposed += 1;
+    }
+  }
+
+  const pool = new AgentPool({
+    createSession: async () => createRuntime(new StubSession()) as any,
+  });
+
+  await pool.runAgent("first", "web:one", { timeoutMs: 0 });
+  expect((pool as any).pool.has("web:one")).toBe(true);
+
+  await pool.runAgent("second", "web:two", { timeoutMs: 0 });
+
+  expect((pool as any).pool.has("web:one")).toBe(false);
+  expect((pool as any).pool.has("web:two")).toBe(true);
+  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
+  expect(disposed).toBe(1);
+
+  await pool.shutdown();
+});
+
+test("agent pool trims cached main sessions more aggressively when RSS crosses the pressure threshold", async () => {
+  const ws = getTestWorkspace();
+  restoreEnv = setEnv({
+    PICLAW_WORKSPACE: ws.workspace,
+    PICLAW_STORE: ws.store,
+    PICLAW_DATA: ws.data,
+    PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES: "1",
+    PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE: "1",
+  });
+
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  let disposed = 0;
+  class StubSession {
+    subscribe(_listener: (event: any) => void) {
+      return () => {};
+    }
+    async prompt(_prompt: string) {}
+    async abort() {}
+    dispose() {
+      disposed += 1;
+    }
+  }
+
+  const pool = new AgentPool({
+    createSession: async () => createRuntime(new StubSession()) as any,
+  });
+
+  (pool as any).pool.set("web:one", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() - 5_000 });
+  (pool as any).pool.set("web:two", { runtime: createRuntime(new StubSession()) as any, lastUsed: Date.now() });
+
+  (pool as any).evictIdle();
+  await Bun.sleep(0);
+
+  expect((pool as any).pool.has("web:one")).toBe(false);
+  expect((pool as any).pool.has("web:two")).toBe(true);
+  expect(pool.getMemoryInstrumentationSnapshot().cachedMainSessions).toBe(1);
+  expect(disposed).toBe(1);
+
+  await pool.shutdown();
+});
+
 test("agent pool rate-limits repeated recent-chat warmup for the same chat", async () => {
   const ws = createTempWorkspace("piclaw-recent-warmup-cooldown-");
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });

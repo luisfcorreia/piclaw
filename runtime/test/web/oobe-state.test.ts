@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   countAvailableModels,
+  isProviderReadyCompletedForInstance,
   resolveOobePanelState,
 } from '../../web/src/ui/oobe-state.ts';
 
@@ -63,6 +64,17 @@ test('resolveOobePanelState keeps dismissed or completed panels hidden', () => {
     modelPayload: { models: ['openai/gpt-4.1'] },
     providerReadyCompleted: true,
   }).kind).toBe('hidden');
+
+  expect(resolveOobePanelState({
+    modelsLoaded: true,
+    modelPayload: { models: ['openai/gpt-4.1'], oobe: { provider_ready_completed_instance: true } },
+  }).kind).toBe('hidden');
+});
+
+test('isProviderReadyCompletedForInstance reads the instance-scoped completion flag from model payloads', () => {
+  expect(isProviderReadyCompletedForInstance({ oobe: { provider_ready_completed_instance: true } })).toBe(true);
+  expect(isProviderReadyCompletedForInstance({ oobe: { provider_ready_completed_instance: false } })).toBe(false);
+  expect(isProviderReadyCompletedForInstance(null)).toBe(false);
 });
 
 test('resolveOobePanelState suppresses the panel in pane-popout mode and before model readiness is known', () => {

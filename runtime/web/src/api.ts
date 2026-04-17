@@ -396,6 +396,13 @@ export async function getAgentModels(chatJid = null) {
     return request(`/agent/models${query}`);
 }
 
+export async function completeInstanceOobe(kind = 'provider-ready') {
+    return request('/agent/oobe/complete', {
+        method: 'POST',
+        body: JSON.stringify({ kind }),
+    });
+}
+
 /**
  * Upload media file
  */

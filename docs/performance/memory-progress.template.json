@@ -1,6 +1,6 @@
 {
   "width": 1200,
-  "height": 780,
+  "height": 960,
   "title": "Piclaw RAM reduction progress",
   "subtitle_prefix": "Generated from docs/performance/memory-footprint-history.md",
   "live_summary_title": "Current live service snapshot",

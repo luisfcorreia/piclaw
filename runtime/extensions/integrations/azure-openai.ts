@@ -189,6 +189,52 @@ const CONTEXT_AWARE_INPUT_TOKEN_CAP = Math.max(
 );
 const CONTEXT_OUTPUT_RESERVE = Math.max(16000, Number(process.env.AOAI_CONTEXT_OUTPUT_RESERVE || "65536"));
 
+export const AZURE_RATE_LIMIT_BACKOFF_MS = 15_000;
+
+function getHeaderValue(headers: unknown, key: string): string | null {
+  if (!headers || typeof headers !== "object") return null;
+  const lookup = key.toLowerCase();
+  for (const [headerKey, value] of Object.entries(headers as Record<string, unknown>)) {
+    if (headerKey.toLowerCase() !== lookup) continue;
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const first = value.find((entry) => typeof entry === "string" && entry.trim());
+      if (typeof first === "string") return first.trim();
+    }
+  }
+  return null;
+}
+
+export function parseRetryAfterMs(retryAfter: string | null | undefined, nowMs = Date.now()): number | null {
+  if (typeof retryAfter !== "string") return null;
+  const trimmed = retryAfter.trim();
+  if (!trimmed) return null;
+  if (/^\d+$/.test(trimmed)) return Math.max(0, Number.parseInt(trimmed, 10) * 1000);
+  const absoluteMs = Date.parse(trimmed);
+  if (!Number.isFinite(absoluteMs)) return null;
+  return Math.max(0, absoluteMs - nowMs);
+}
+
+export function isAzureRetryableRequestError(error: unknown): boolean {
+  const status = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : NaN;
+  if (!Number.isFinite(status)) return false;
+  return status === 408 || status === 409 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+export function resolveAzureRetryDelayMs(options: { attempt: number; error: unknown; nowMs?: number }): number | null {
+  if (!isAzureRetryableRequestError(options.error)) return null;
+  const headers = options.error && typeof options.error === "object" && "headers" in options.error
+    ? (options.error as { headers?: unknown }).headers
+    : undefined;
+  const retryAfterMs = parseRetryAfterMs(getHeaderValue(headers, "retry-after"), options.nowMs);
+  if (retryAfterMs !== null) return retryAfterMs;
+  const status = options.error && typeof options.error === "object" && "status" in options.error
+    ? Number((options.error as { status?: unknown }).status)
+    : NaN;
+  if (status === 429 || status === 503) return AZURE_RATE_LIMIT_BACKOFF_MS;
+  return Math.max(2000, (options.attempt + 1) * 2000);
+}
+
 /**
  * Derive a context-window-based replay budget for Azure models.
  *
@@ -1516,7 +1562,6 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
       //     budget needs time to renew. Short retries only make it worse.
       //   - Client errors (4xx, invalid_request_error) are never retried.
       const MAX_RETRIES = 2;
-      const RATE_LIMIT_BACKOFF_MS = 15_000;
       let streamStarted = false;
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -1628,7 +1673,7 @@ function streamAzureOpenAIResponses(model: any, context: any, options: any) {
         // per-minute token budget has time to renew. Short retries against
         // TPM exhaustion just burn more quota and fail again.
         const delayMs = looksLikeRateLimit
-          ? RATE_LIMIT_BACKOFF_MS
+          ? AZURE_RATE_LIMIT_BACKOFF_MS
           : (attempt + 1) * 2000;
         console.error(`[azure-openai] Attempt ${attempt + 1}/${MAX_RETRIES + 1} failed (${detail})${looksLikeRateLimit ? " [rate-limit backoff]" : ""}, retrying in ${delayMs}ms...`);
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 type TemplateConfig = {
@@ -43,12 +43,19 @@ type LiveRow = {
 
 type TableRow = Record<string, string>;
 
+type ChartArea = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 const DEFAULT_TEMPLATE: TemplateConfig = {
   width: 1200,
-  height: 780,
+  height: 960,
   title: "Piclaw RAM reduction progress",
   subtitle_prefix: "Generated from docs/performance/memory-footprint-history.md",
-  live_summary_title: "Current live service snapshot",
+  live_summary_title: "Latest live service snapshot",
   cold_rss_title: "Cold-session RSS delta (MB)",
   cold_elapsed_title: "Cold-session elapsed time (ms)",
   max_bars: 8,
@@ -160,6 +167,19 @@ function shortScenarioLabel(scenario: string): [string, string] {
   return [words[0] ?? "Step", words[1] ?? "update"];
 }
 
+function liveScenarioLabel(scenario: string): string {
+  const value = scenario.toLowerCase();
+  if (value.includes("autorotation") || value.includes("rotating `web:default`") || value.includes("rotating web:default")) {
+    return "post rotate";
+  }
+  if (value.includes("deterministic audit-group refresh")) return "interactive probe";
+  if (value.includes("startup warmup disable")) return "bg index baseline";
+  return stripMarkdown(scenario)
+    .replace(/^live\s+/i, "")
+    .replace(/piclaw\.service/gi, "service")
+    .slice(0, 28);
+}
+
 function parseColdRows(markdown: string): ColdRow[] {
   return parseMarkdownTableSection(markdown, "## Fresh-process cold-session benchmarks")
     .map((row) => ({
@@ -193,7 +213,8 @@ function parseLiveRows(markdown: string): LiveRow[] {
       prewarmQueue: parseIntCell(row["Prewarm queue"] ?? ""),
       notes: stripMarkdown(row["Notes"] ?? ""),
     }))
-    .filter((row) => row.scenario && row.rssMb > 0);
+    .filter((row) => row.scenario && row.rssMb > 0)
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
 }
 
 function niceCeil(maxValue: number, tickCount: number): number {
@@ -225,9 +246,28 @@ function escapeXml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function renderBars(rows: ColdRow[], values: number[], chart: { x: number; y: number; width: number; height: number; maxValue: number; fill: string; labelY: number; className: string; }) {
+function formatTimeLabel(timestamp: string): string {
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) return timestamp;
+  const date = new Date(parsed);
+  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}Z`;
+}
+
+function renderGrid(chart: ChartArea, maxValue: number, tickCount: number, axisX: number): string {
+  const lines: string[] = [];
+  for (let tick = 0; tick <= tickCount; tick += 1) {
+    const ratio = tick / tickCount;
+    const y = chart.y + chart.height - ratio * chart.height;
+    const value = (maxValue / tickCount) * tick;
+    lines.push(`<line x1="${chart.x}" y1="${y.toFixed(1)}" x2="${chart.x + chart.width}" y2="${y.toFixed(1)}" stroke="#233045" stroke-width="1"/>`);
+    lines.push(`<text x="${axisX}" y="${(y + 4).toFixed(1)}" class="axis">${escapeXml(formatNumber(value))}</text>`);
+  }
+  return lines.join("\n");
+}
+
+function renderBars(rows: ColdRow[], values: number[], chart: ChartArea & { maxValue: number; fill: string; labelY: number; stepY: number; }) {
   const count = rows.length;
-  const gap = 16;
+  const gap = 14;
   const barWidth = Math.max(24, (chart.width - gap * (count - 1)) / Math.max(1, count));
   const result: string[] = [];
 
@@ -236,70 +276,119 @@ function renderBars(rows: ColdRow[], values: number[], chart: { x: number; y: nu
     const barHeight = chart.maxValue > 0 ? (value / chart.maxValue) * chart.height : 0;
     const x = chart.x + index * (barWidth + gap);
     const y = chart.y + chart.height - barHeight;
-    result.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="10" fill="${chart.fill}"/>`);
+    result.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="9" fill="${chart.fill}"/>`);
     result.push(`<text x="${(x + barWidth / 2).toFixed(1)}" y="${(y - 8).toFixed(1)}" text-anchor="middle" class="value">${escapeXml(formatNumber(value))}</text>`);
+    result.push(`<text x="${(x + barWidth / 2).toFixed(1)}" y="${chart.stepY}" text-anchor="middle" class="tiny">${escapeXml(`S${index + 1}`)}</text>`);
 
     const [line1, line2] = shortScenarioLabel(rows[index].scenario);
     result.push(`<text x="${(x + barWidth / 2).toFixed(1)}" y="${chart.labelY}" text-anchor="middle" class="small">${escapeXml(line1)}</text>`);
-    result.push(`<text x="${(x + barWidth / 2).toFixed(1)}" y="${chart.labelY + 16}" text-anchor="middle" class="small">${escapeXml(line2)}</text>`);
+    result.push(`<text x="${(x + barWidth / 2).toFixed(1)}" y="${chart.labelY + 15}" text-anchor="middle" class="small">${escapeXml(line2)}</text>`);
   }
 
   return result.join("\n");
 }
 
-function renderGrid(chart: { x: number; y: number; width: number; height: number; maxValue: number; tickCount: number; axisX: number; }) {
-  const lines: string[] = [];
-  for (let tick = 0; tick <= chart.tickCount; tick += 1) {
-    const ratio = tick / chart.tickCount;
-    const y = chart.y + chart.height - ratio * chart.height;
-    const value = (chart.maxValue / chart.tickCount) * tick;
-    lines.push(`<line x1="${chart.x}" y1="${y.toFixed(1)}" x2="${chart.x + chart.width}" y2="${y.toFixed(1)}" stroke="#233045" stroke-width="1"/>`);
-    lines.push(`<text x="${chart.axisX}" y="${(y + 4).toFixed(1)}" class="axis">${escapeXml(formatNumber(value))}</text>`);
+function yForValue(value: number, maxValue: number, chart: ChartArea): number {
+  return chart.y + chart.height - ((value / maxValue) * chart.height);
+}
+
+function buildPath(values: number[], maxValue: number, chart: ChartArea): string {
+  if (values.length === 0) return "";
+  if (values.length === 1) {
+    const x = chart.x + chart.width / 2;
+    const y = yForValue(values[0] ?? 0, maxValue, chart);
+    return `M ${x.toFixed(1)} ${y.toFixed(1)}`;
   }
-  return lines.join("\n");
+
+  const step = chart.width / Math.max(1, values.length - 1);
+  const points = values.map((value, index) => ({
+    x: chart.x + step * index,
+    y: yForValue(value, maxValue, chart),
+  }));
+
+  let pathData = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let index = 1; index < points.length; index += 1) {
+    const prev = points[index - 1];
+    const point = points[index];
+    const cx1 = prev.x + (point.x - prev.x) / 3;
+    const cx2 = point.x - (point.x - prev.x) / 3;
+    pathData += ` C ${cx1.toFixed(1)} ${prev.y.toFixed(1)}, ${cx2.toFixed(1)} ${point.y.toFixed(1)}, ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+  }
+  return pathData;
+}
+
+function renderLiveTimeline(rows: LiveRow[], chart: ChartArea): string {
+  if (rows.length === 0) return "";
+
+  const rssValues = rows.map((row) => row.rssMb);
+  const pssValues = rows.map((row) => row.pssMb ?? row.rssMb);
+  const maxValue = niceCeil(Math.max(...rssValues, ...pssValues), 4);
+  const axisX = chart.x - 34;
+  const grid = renderGrid(chart, maxValue, 4, axisX);
+  const step = rows.length > 1 ? chart.width / Math.max(1, rows.length - 1) : 0;
+  const rssPath = buildPath(rssValues, maxValue, chart);
+  const pssPath = buildPath(pssValues, maxValue, chart);
+
+  const parts: string[] = [grid];
+  parts.push(`<path d="${rssPath}" fill="none" stroke="#60a5fa" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`);
+  parts.push(`<path d="${pssPath}" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>`);
+
+  rows.forEach((row, index) => {
+    const x = rows.length > 1 ? chart.x + step * index : chart.x + chart.width / 2;
+    const rssY = yForValue(row.rssMb, maxValue, chart);
+    const pssY = yForValue(row.pssMb ?? row.rssMb, maxValue, chart);
+    parts.push(`<circle cx="${x.toFixed(1)}" cy="${rssY.toFixed(1)}" r="5.5" fill="#60a5fa"/>`);
+    parts.push(`<circle cx="${x.toFixed(1)}" cy="${pssY.toFixed(1)}" r="4.5" fill="#a78bfa"/>`);
+    parts.push(`<text x="${x.toFixed(1)}" y="${(rssY - 10).toFixed(1)}" text-anchor="middle" class="value">${escapeXml(formatNumber(row.rssMb))}</text>`);
+    parts.push(`<text x="${x.toFixed(1)}" y="${chart.y + chart.height + 24}" text-anchor="middle" class="small">${escapeXml(formatTimeLabel(row.timestamp))}</text>`);
+    parts.push(`<text x="${x.toFixed(1)}" y="${chart.y + chart.height + 40}" text-anchor="middle" class="tiny">${escapeXml(liveScenarioLabel(row.scenario))}</text>`);
+  });
+
+  return parts.join("\n");
+}
+
+function renderLegendItem(x: number, y: number, color: string, label: string): string {
+  return `<rect x="${x}" y="${y - 9}" width="14" height="14" rx="4" fill="${color}"/><text x="${x + 22}" y="${y + 2}" class="small">${escapeXml(label)}</text>`;
 }
 
 function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[], liveRows: LiveRow[]): string {
-  if (coldRows.length === 0) {
-    throw new Error("No fresh-process cold-session benchmark rows found in memory history.");
-  }
+  if (coldRows.length === 0) throw new Error("No fresh-process cold-session benchmark rows found in memory history.");
+  if (liveRows.length === 0) throw new Error("No live-service snapshot rows found in memory history.");
 
   const displayedColdRows = coldRows.slice(-config.max_bars);
-  const latestCold = displayedColdRows[displayedColdRows.length - 1];
   const baselineCold = coldRows.find((row) => !/empty-workspace/i.test(row.scenario)) ?? coldRows[0];
-  const latestLive = liveRows[liveRows.length - 1] ?? null;
+  const latestCold = displayedColdRows[displayedColdRows.length - 1];
+  const firstLive = liveRows[0];
+  const latestLive = liveRows[liveRows.length - 1];
+  const peakLive = liveRows.reduce((best, row) => row.rssMb > best.rssMb ? row : best, liveRows[0]);
 
   const rssValues = displayedColdRows.map((row) => row.rssDeltaMb);
   const elapsedValues = displayedColdRows.map((row) => row.elapsedMs);
   const rssMax = niceCeil(Math.max(...rssValues), 3);
   const elapsedMax = niceCeil(Math.max(...elapsedValues), 4);
-  const rssChange = formatPercentDelta(baselineCold.rssDeltaMb, latestCold.rssDeltaMb);
-  const elapsedChange = formatPercentDelta(baselineCold.elapsedMs, latestCold.elapsedMs);
-  const subtitleCommit = latestCold.commit || latestLive?.commit || "(unknown commit)";
-  const liveSummary = latestLive
-    ? `${formatNumber(latestLive.rssMb)} MB RSS${latestLive.pssMb !== null ? ` · ${formatNumber(latestLive.pssMb)} MB PSS` : ""}`
-    : "No live-service snapshot recorded yet";
-  const liveDetail = latestLive
-    ? `${latestLive.cachedMain ?? 0} cached main · ${latestLive.activeChats ?? 0} active chats · ${latestLive.prewarmQueue ?? 0} prewarm queue`
-    : "Append a live snapshot row to populate this card.";
 
-  const rssGrid = renderGrid({ x: 80, y: 300, width: 480, height: 220, maxValue: rssMax, tickCount: 3, axisX: 38 });
-  const elapsedGrid = renderGrid({ x: 650, y: 300, width: 480, height: 220, maxValue: elapsedMax, tickCount: 4, axisX: 610 });
-  const rssBars = renderBars(displayedColdRows, rssValues, { x: 95, y: 300, width: 420, height: 220, maxValue: rssMax, fill: "url(#barBlue)", labelY: 546, className: "rss" });
-  const elapsedBars = renderBars(displayedColdRows, elapsedValues, { x: 665, y: 300, width: 420, height: 220, maxValue: elapsedMax, fill: "url(#barGreen)", labelY: 546, className: "elapsed" });
+  const coldRssChange = formatPercentDelta(baselineCold.rssDeltaMb, latestCold.rssDeltaMb);
+  const coldElapsedChange = formatPercentDelta(baselineCold.elapsedMs, latestCold.elapsedMs);
+  const liveRssChange = formatPercentDelta(firstLive.rssMb, latestLive.rssMb);
+  const livePeakDrop = formatPercentDelta(peakLive.rssMb, latestLive.rssMb);
+  const subtitleCommit = latestLive.commit || latestCold.commit || "(unknown commit)";
+
+  const coldRssGrid = renderGrid({ x: 70, y: 308, width: 500, height: 210 }, rssMax, 3, 34);
+  const coldElapsedGrid = renderGrid({ x: 630, y: 308, width: 500, height: 210 }, elapsedMax, 4, 594);
+  const coldRssBars = renderBars(displayedColdRows, rssValues, { x: 88, y: 308, width: 442, height: 210, maxValue: rssMax, fill: "url(#barBlue)", labelY: 545, stepY: 531 });
+  const coldElapsedBars = renderBars(displayedColdRows, elapsedValues, { x: 648, y: 308, width: 442, height: 210, maxValue: elapsedMax, fill: "url(#barGreen)", labelY: 545, stepY: 531 });
+  const liveTimeline = renderLiveTimeline(liveRows, { x: 90, y: 645, width: 1020, height: 155 });
 
   const footerLines = [
-    `• Cold-session RSS delta: ${formatNumber(baselineCold.rssDeltaMb)} MB → ${formatNumber(latestCold.rssDeltaMb)} MB (${rssChange}).`,
-    `• Cold-session elapsed: ${formatNumber(baselineCold.elapsedMs, 0)} ms → ${formatNumber(latestCold.elapsedMs, 0)} ms (${elapsedChange}).`,
-    latestLive
-      ? `• Latest live snapshot: ${formatNumber(latestLive.rssMb)} MB RSS${latestLive.pssMb !== null ? ` / ${formatNumber(latestLive.pssMb)} MB PSS` : ""}.`
-      : "• No live-service snapshot recorded yet in the history file.",
-    `• Latest milestone: ${latestCold.scenario}.`,
+    `Cold experiments: real-workspace RSS delta ${formatNumber(baselineCold.rssDeltaMb)} MB → ${formatNumber(latestCold.rssDeltaMb)} MB (${coldRssChange}); elapsed ${formatNumber(baselineCold.elapsedMs, 0)} ms → ${formatNumber(latestCold.elapsedMs, 0)} ms (${coldElapsedChange}).`,
+    `Live service: ${formatNumber(firstLive.rssMb)} MB RSS at ${formatTimeLabel(firstLive.timestamp)} → ${formatNumber(latestLive.rssMb)} MB at ${formatTimeLabel(latestLive.timestamp)} (${liveRssChange}); peak was ${formatNumber(peakLive.rssMb)} MB at ${formatTimeLabel(peakLive.timestamp)}.`,
+    `Latest live snapshot: ${formatNumber(latestLive.rssMb)} MB RSS / ${formatNumber(latestLive.pssMb ?? latestLive.rssMb)} MB PSS / ${formatNumber(latestLive.heapUsedMb ?? 0)} MB heap / ${formatNumber(latestLive.externalMb ?? 0)} MB external.`,
+    `Interpretation: the middle row is ordered experimental progression, while the bottom row is the actual chronological live-service memory history.`,
   ];
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${config.width}" height="${config.height}" viewBox="0 0 ${config.width} ${config.height}" role="img" aria-labelledby="title desc">
   <title id="title">${escapeXml(config.title)}</title>
-  <desc id="desc">Cold-session bootstrap progress and live-service memory history from ${escapeXml(inputPath)}.</desc>
+  <desc id="desc">Cold-session experiment progression and chronological live-service memory history from ${escapeXml(inputPath)}.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0f172a"/>
@@ -321,55 +410,65 @@ function renderSvg(config: TemplateConfig, inputPath: string, coldRows: ColdRow[
       .h2 { font: 700 18px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #e5e7eb; }
       .body { font: 13px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #cbd5e1; }
       .small { font: 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #94a3b8; }
+      .tiny { font: 11px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #7c8aa5; }
       .axis { font: 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #94a3b8; }
       .value { font: 700 12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #f8fafc; }
+      .metric { font: 700 26px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; fill: #f8fafc; }
     </style>
   </defs>
 
   <rect x="0" y="0" width="${config.width}" height="${config.height}" fill="url(#bg)"/>
 
   <text x="40" y="48" class="h1">${escapeXml(config.title)}</text>
-  <text x="40" y="74" class="body">${escapeXml(config.subtitle_prefix)} · latest commit ${escapeXml(subtitleCommit)} · ${displayedColdRows.length} cold-session points</text>
+  <text x="40" y="74" class="body">${escapeXml(config.subtitle_prefix)} · latest commit ${escapeXml(subtitleCommit)} · ${displayedColdRows.length} cold experiment steps · ${liveRows.length} live snapshots</text>
 
   <g filter="url(#shadow)">
-    <rect x="40" y="100" width="350" height="110" rx="18" fill="#111827" stroke="#1f2937"/>
-    <rect x="425" y="100" width="350" height="110" rx="18" fill="#111827" stroke="#1f2937"/>
-    <rect x="810" y="100" width="350" height="110" rx="18" fill="#111827" stroke="#1f2937"/>
+    <rect x="40" y="100" width="350" height="112" rx="18" fill="#111827" stroke="#1f2937"/>
+    <rect x="425" y="100" width="350" height="112" rx="18" fill="#111827" stroke="#1f2937"/>
+    <rect x="810" y="100" width="350" height="112" rx="18" fill="#111827" stroke="#1f2937"/>
   </g>
 
-  <text x="62" y="134" class="small">Real workspace cold-session RSS delta</text>
-  <text x="62" y="172" class="h1" fill="#60a5fa">${escapeXml(rssChange)}</text>
-  <text x="62" y="194" class="body">${escapeXml(formatNumber(baselineCold.rssDeltaMb))} MB → ${escapeXml(formatNumber(latestCold.rssDeltaMb))} MB</text>
+  <text x="62" y="132" class="small">Cold-session improvement vs real workspace baseline</text>
+  <text x="62" y="168" class="metric" fill="#60a5fa">${escapeXml(coldRssChange)}</text>
+  <text x="62" y="190" class="body">RSS delta ${escapeXml(formatNumber(baselineCold.rssDeltaMb))} → ${escapeXml(formatNumber(latestCold.rssDeltaMb))} MB · elapsed ${escapeXml(formatNumber(baselineCold.elapsedMs, 0))} → ${escapeXml(formatNumber(latestCold.elapsedMs, 0))} ms</text>
 
-  <text x="447" y="134" class="small">Real workspace cold-session elapsed time</text>
-  <text x="447" y="172" class="h1" fill="#34d399">${escapeXml(elapsedChange)}</text>
-  <text x="447" y="194" class="body">${escapeXml(formatNumber(baselineCold.elapsedMs, 0))} ms → ${escapeXml(formatNumber(latestCold.elapsedMs, 0))} ms</text>
+  <text x="447" y="132" class="small">Live-service RSS progression (chronological)</text>
+  <text x="447" y="168" class="metric" fill="#a78bfa">${escapeXml(liveRssChange)}</text>
+  <text x="447" y="190" class="body">${escapeXml(formatNumber(firstLive.rssMb))} → ${escapeXml(formatNumber(latestLive.rssMb))} MB RSS · ${escapeXml(livePeakDrop)} from ${escapeXml(formatNumber(peakLive.rssMb))} MB peak</text>
 
-  <text x="832" y="134" class="small">${escapeXml(config.live_summary_title)}</text>
-  <text x="832" y="172" class="h1" fill="#f8fafc">${escapeXml(liveSummary)}</text>
-  <text x="832" y="194" class="body">${escapeXml(liveDetail)}</text>
+  <text x="832" y="132" class="small">${escapeXml(config.live_summary_title)}</text>
+  <text x="832" y="168" class="metric">${escapeXml(formatNumber(latestLive.rssMb))} MB</text>
+  <text x="832" y="190" class="body">PSS ${escapeXml(formatNumber(latestLive.pssMb ?? latestLive.rssMb))} · heap ${escapeXml(formatNumber(latestLive.heapUsedMb ?? 0))} · external ${escapeXml(formatNumber(latestLive.externalMb ?? 0))}</text>
 
   <g filter="url(#shadow)">
-    <rect x="40" y="240" width="550" height="340" rx="22" fill="#111827" stroke="#1f2937"/>
-    <rect x="610" y="240" width="550" height="340" rx="22" fill="#111827" stroke="#1f2937"/>
+    <rect x="40" y="240" width="550" height="330" rx="22" fill="#111827" stroke="#1f2937"/>
+    <rect x="610" y="240" width="550" height="330" rx="22" fill="#111827" stroke="#1f2937"/>
   </g>
 
   <text x="60" y="274" class="h2">${escapeXml(config.cold_rss_title)}</text>
+  <text x="60" y="294" class="small">Experiment-step progression — ordered by changes, not wall-clock time</text>
   <text x="630" y="274" class="h2">${escapeXml(config.cold_elapsed_title)}</text>
+  <text x="630" y="294" class="small">Same experiment steps as left chart; labels S1–S8 match across both plots</text>
 
-  ${rssGrid}
-  ${elapsedGrid}
-  ${rssBars}
-  ${elapsedBars}
+  ${coldRssGrid}
+  ${coldElapsedGrid}
+  ${coldRssBars}
+  ${coldElapsedBars}
 
   <g filter="url(#shadow)">
-    <rect x="40" y="620" width="1120" height="130" rx="22" fill="#111827" stroke="#1f2937"/>
+    <rect x="40" y="600" width="1120" height="250" rx="22" fill="#111827" stroke="#1f2937"/>
   </g>
-  <text x="60" y="652" class="h2">Generated summary</text>
-  <text x="60" y="678" class="body">${escapeXml(footerLines[0])}</text>
-  <text x="60" y="700" class="body">${escapeXml(footerLines[1])}</text>
-  <text x="60" y="722" class="body">${escapeXml(footerLines[2])}</text>
-  <text x="60" y="744" class="body">${escapeXml(footerLines[3])}</text>
+  <text x="60" y="634" class="h2">Live-service memory timeline</text>
+  <text x="60" y="654" class="small">Actual chronological service history from the live-snapshot table</text>
+  ${renderLegendItem(840, 632, "#60a5fa", "RSS")}
+  ${renderLegendItem(920, 632, "#a78bfa", "PSS")}
+  ${liveTimeline}
+
+  <g filter="url(#shadow)">
+    <rect x="40" y="875" width="1120" height="60" rx="18" fill="#111827" stroke="#1f2937"/>
+  </g>
+  <text x="60" y="900" class="body">${escapeXml(footerLines[0])}</text>
+  <text x="60" y="918" class="body">${escapeXml(footerLines[1])}</text>
 </svg>`;
 }
 
@@ -381,7 +480,7 @@ function main() {
   const templatePath = path.resolve(projectRoot, options.template);
 
   const markdown = readFileSync(inputPath, "utf8");
-  const template = Bun.file(templatePath).exists()
+  const template = existsSync(templatePath)
     ? { ...DEFAULT_TEMPLATE, ...JSON.parse(readFileSync(templatePath, "utf8")) as Partial<TemplateConfig> }
     : DEFAULT_TEMPLATE;
 

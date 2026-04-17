@@ -321,7 +321,7 @@ async function validateAndNormalizeImage(
 
 /** Build a file-attachments extension bound to a specific registry instance. */
 export function createFileAttachmentsExtension(registry: AttachmentRegistry = getAttachmentRegistry()): ExtensionFactory {
-  return (pi: ExtensionAPI) => {
+  const extension: ExtensionFactory = function fileAttachments(pi: ExtensionAPI) {
     pi.on("before_agent_start", async (event) => {
       return { systemPrompt: `${event.systemPrompt}\n\n${ATTACHMENT_HINT}` };
     });
@@ -411,6 +411,7 @@ export function createFileAttachmentsExtension(registry: AttachmentRegistry = ge
       execute: executeExportAttachment,
     });
   };
+  return extension;
 }
 
 /** Extension factory that registers the attach_file tool. */

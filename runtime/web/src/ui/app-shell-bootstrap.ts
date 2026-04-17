@@ -102,6 +102,7 @@ export function resolveAppApiSurface(apiNamespace: Record<string, any> = api): A
     stopAutoresearch: resolveOptionalApi(apiNamespace, 'stopAutoresearch', { status: 'ok' }),
     dismissAutoresearch: resolveOptionalApi(apiNamespace, 'dismissAutoresearch', { status: 'ok' }),
     getAgentModels: resolveOptionalApi(apiNamespace, 'getAgentModels', { current: null, models: [] }),
+    completeInstanceOobe: resolveOptionalApi(apiNamespace, 'completeInstanceOobe', { status: 'ok' }),
     getActiveChatAgents: resolveOptionalApi(apiNamespace, 'getActiveChatAgents', { chats: [] }),
     getChatBranches: resolveOptionalApi(apiNamespace, 'getChatBranches', { chats: [] }),
     renameChatBranch: resolveOptionalApi(apiNamespace, 'renameChatBranch', null),

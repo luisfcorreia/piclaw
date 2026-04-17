@@ -15,6 +15,7 @@ export interface AgentStatusContext {
     chatJid: string
   ): Promise<{ tokens: number | null; contextWindow: number; percent: number | null } | null>;
   getAvailableModels(chatJid: string): Promise<unknown>;
+  getProviderReadyCompletedForInstance(): boolean;
 }
 
 function resolveChatJid(req: Request, defaultChatJid: string): string {
@@ -75,6 +76,15 @@ export async function handleAgentModelsRequest(req: Request, ctx: AgentStatusCon
   const { result, durationMs } = await measureAsync(async () => {
     const chatJid = resolveChatJid(req, ctx.defaultChatJid);
     const payload = await ctx.getAvailableModels(chatJid);
+    if (payload && typeof payload === "object") {
+      return ctx.json({
+        ...payload as Record<string, unknown>,
+        oobe: {
+          ...((payload as { oobe?: Record<string, unknown> }).oobe ?? {}),
+          provider_ready_completed_instance: ctx.getProviderReadyCompletedForInstance(),
+        },
+      }, 200);
+    }
     return ctx.json(payload, 200);
   });
   return appendServerTiming(result, {

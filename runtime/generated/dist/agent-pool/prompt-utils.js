@@ -39,6 +39,12 @@ export function toSideReasoning(level) {
 }
 export const DEFAULT_SESSION_IDLE_SETTLE_TICKS = 20;
 export const DEFAULT_SESSION_IDLE_MAX_WAIT_MS = 10_000;
+export const DEFAULT_SESSION_IDLE_COMPACTION_MAX_WAIT_MS = 30_000;
+export function resolveSessionIdleMaxWaitMs(session, defaultMaxWaitMs = DEFAULT_SESSION_IDLE_MAX_WAIT_MS, compactionMaxWaitMs = DEFAULT_SESSION_IDLE_COMPACTION_MAX_WAIT_MS) {
+    if (!session.isCompacting)
+        return defaultMaxWaitMs;
+    return Math.max(defaultMaxWaitMs, compactionMaxWaitMs);
+}
 /** Wait until a session fully settles after a prompt completes. */
 export async function waitForSessionIdle(session, settleTicks = DEFAULT_SESSION_IDLE_SETTLE_TICKS, onSettled, maxWaitMs = DEFAULT_SESSION_IDLE_MAX_WAIT_MS) {
     let idleTicks = 0;

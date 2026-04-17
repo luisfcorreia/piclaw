@@ -13,6 +13,7 @@ type ControlPlaneServiceStub = {
   handleAutoresearchStatus(req: Request): Promise<Response>;
   handleAutoresearchStop(req: Request): Promise<Response>;
   handleAutoresearchDismiss(req: Request): Promise<Response>;
+  handleAgentOobeComplete(req: Request): Promise<Response>;
   handleAgentQueueState(req: Request): Promise<Response>;
   handleAgentQueueRemove(req: Request): Promise<Response>;
   handleAgentQueueSteer(req: Request): Promise<Response>;
@@ -41,6 +42,10 @@ describe("WebChannel agent control-plane delegation", () => {
       handleAutoresearchDismiss: async (req) => {
         calls.push(`autoresearch-dismiss:${req.method}`);
         return response("autoresearch-dismiss", 208);
+      },
+      handleAgentOobeComplete: async (req) => {
+        calls.push(`oobe-complete:${req.method}`);
+        return response("oobe-complete", 216);
       },
       handleAgentQueueState: async (req) => {
         calls.push(`queue-state:${req.method}:${new URL(req.url).searchParams.get("chat_jid") ?? ""}`);
@@ -80,6 +85,8 @@ describe("WebChannel agent control-plane delegation", () => {
       .toBe(207);
     expect((await fixture.channel.handleAutoresearchDismiss(new Request("https://example.com/agent/autoresearch/dismiss", { method: "POST" }))).status)
       .toBe(208);
+    expect((await fixture.channel.handleAgentOobeComplete(new Request("https://example.com/agent/oobe/complete", { method: "POST" }))).status)
+      .toBe(216);
     expect(await (await fixture.channel.handleAgentQueueState(new Request("https://example.com/agent/queue-state?chat_jid=web%3Abranch"))).text())
       .toBe("queue-state");
     expect((await fixture.channel.handleAgentQueueRemove(new Request("https://example.com/agent/queue-remove", { method: "POST" }))).status)
@@ -99,6 +106,7 @@ describe("WebChannel agent control-plane delegation", () => {
       "autoresearch-status:GET:web:branch",
       "autoresearch-stop:POST",
       "autoresearch-dismiss:POST",
+      "oobe-complete:POST",
       "queue-state:GET:web:branch",
       "queue-remove:POST",
       "queue-steer:POST",

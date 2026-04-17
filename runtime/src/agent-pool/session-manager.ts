@@ -339,9 +339,9 @@ export class AgentSessionManager {
     }
   }
 
-  evictIdle(options: { mainIdleTtlMs: number; sideIdleTtlMs: number }): void {
+  evictIdle(options: { mainIdleTtlMs: number; sideIdleTtlMs: number; mainSessionMaxSizeOverride?: number | null }): void {
     const now = Date.now();
-    const { mainIdleTtlMs, sideIdleTtlMs } = options;
+    const { mainIdleTtlMs, sideIdleTtlMs, mainSessionMaxSizeOverride } = options;
 
     for (const [jid, entry] of this.options.pool) {
       if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
@@ -352,7 +352,7 @@ export class AgentSessionManager {
       }
     }
 
-    this.enforceMainSessionPoolLimit();
+    this.enforceMainSessionPoolLimit({ maxSizeOverride: mainSessionMaxSizeOverride });
 
     for (const [jid, entry] of this.options.sidePool) {
       if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
@@ -384,9 +384,10 @@ export class AgentSessionManager {
     return false;
   }
 
-  private enforceMainSessionPoolLimit(options: { protectedChatJids?: string[] } = {}): void {
-    const maxSize = this.options.mainSessionMaxSize ?? 0;
-    if (!Number.isFinite(maxSize) || maxSize <= 0 || this.options.pool.size <= maxSize) return;
+  private enforceMainSessionPoolLimit(options: { protectedChatJids?: string[]; maxSizeOverride?: number | null } = {}): void {
+    const resolvedMaxSize = options.maxSizeOverride ?? this.options.mainSessionMaxSize ?? 0;
+    const maxSize = Number.isFinite(resolvedMaxSize) ? resolvedMaxSize : 0;
+    if (maxSize <= 0 || this.options.pool.size <= maxSize) return;
 
     const protectedChatJids = new Set(
       Array.isArray(options.protectedChatJids)
@@ -402,17 +403,17 @@ export class AgentSessionManager {
       if (!next) break;
       const [chatJid, entry] = next;
       if (this.options.pool.get(chatJid)?.runtime !== entry.runtime) continue;
-      this.disposeCachedMainRuntime(chatJid, entry.runtime, "evict_idle.main_session_pool_limit");
+      this.disposeCachedMainRuntime(chatJid, entry.runtime, "evict_idle.main_session_pool_limit", maxSize);
     }
   }
 
-  private disposeCachedMainRuntime(chatJid: string, runtime: AgentSessionRuntime, operation: string): void {
+  private disposeCachedMainRuntime(chatJid: string, runtime: AgentSessionRuntime, operation: string, maxSizeOverride?: number | null): void {
     if (this.options.pool.get(chatJid)?.runtime !== runtime) return;
     this.options.onInfo?.("Evicting cached main session", {
       operation,
       chatJid,
       poolSize: this.options.pool.size,
-      maxSize: this.options.mainSessionMaxSize ?? null,
+      maxSize: maxSizeOverride ?? this.options.mainSessionMaxSize ?? null,
     });
     this.options.pool.delete(chatJid);
     this.disposeRuntimeOnce(runtime, "Failed to dispose evicted session", {

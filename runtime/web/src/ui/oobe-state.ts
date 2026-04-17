@@ -30,6 +30,12 @@ export function hasConfiguredModelHint(payload: Record<string, unknown> | null |
   return typeof current === 'string' && current.trim().length > 0;
 }
 
+export function isProviderReadyCompletedForInstance(payload: Record<string, unknown> | null | undefined): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const oobe = (payload as any).oobe;
+  return Boolean(oobe && typeof oobe === 'object' && oobe.provider_ready_completed_instance === true);
+}
+
 export function resolveOobePanelState(options: {
   panePopoutMode?: boolean;
   modelsLoaded: boolean;
@@ -48,6 +54,7 @@ export function resolveOobePanelState(options: {
   const availableModelCount = countAvailableModels(modelPayload);
   const hasAvailableModels = availableModelCount > 0;
   const configuredModelHint = hasConfiguredModelHint(modelPayload);
+  const providerReadyCompletedResolved = providerReadyCompleted || isProviderReadyCompletedForInstance(modelPayload);
 
   if (panePopoutMode || !modelsLoaded) {
     return {
@@ -68,7 +75,7 @@ export function resolveOobePanelState(options: {
   }
 
   return {
-    kind: providerReadyCompleted ? 'hidden' : 'provider-ready',
+    kind: providerReadyCompletedResolved ? 'hidden' : 'provider-ready',
     hasAvailableModels,
     availableModelCount,
     hasConfiguredModelHint: configuredModelHint,

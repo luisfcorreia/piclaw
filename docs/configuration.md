@@ -201,8 +201,8 @@ That means most users should prefer `/login` over setting raw provider env vars 
 | `PICLAW_USER_NAME` | _(empty)_ | Display name for the human user in the web UI |
 | `PICLAW_USER_AVATAR` | _(empty)_ | Avatar URL for the human user |
 | `PICLAW_USER_AVATAR_BACKGROUND` | _(empty)_ | CSS background colour for the user avatar circle |
-| `PICLAW_SESSION_MAX_SIZE_MB` | `100` | Session file size threshold (MB) for auto-rotation warnings |
-| `PICLAW_SESSION_AUTO_ROTATE` | `0` | Automatically rotate oversized session files before the next prompt |
+| `PICLAW_SESSION_MAX_SIZE_MB` | `32` | Session file size threshold (MB) for auto-rotation warnings and pre-prompt rotation |
+| `PICLAW_SESSION_AUTO_ROTATE` | `1` | Automatically rotate oversized session files before the next prompt |
 | `PICLAW_WHATSAPP_PHONE` | _(empty)_ | Alias for `WHATSAPP_PHONE` |
 | `PICLAW_TOOL_OUTPUT_RETENTION_DAYS` | `30` | Days to retain stored tool outputs |
 | `PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS` | `43200000` | Cleanup interval (ms) |
@@ -212,6 +212,8 @@ Notes:
 - Interactive web turns now use `PICLAW_AGENT_TIMEOUT` directly.
 - Background/scheduled turns use `PICLAW_BACKGROUND_AGENT_TIMEOUT` when set, otherwise they fall back to `PICLAW_AGENT_TIMEOUT`.
 - On `systemd --user` installs, keep `PICLAW_WORKSPACE`, `PICLAW_STORE`, and `PICLAW_DATA` stable across restarts. Startup recovery relies on the persisted SQLite state plus writable IPC files under `PICLAW_DATA/ipc/tasks`.
+- Session auto-rotation now defaults to a safer operational ceiling (`32 MB`). This is intentionally conservative because pathological persisted sessions can hydrate to much larger in-memory footprints than their on-disk JSONL size suggests.
+- Oversized persisted `toolResult` payloads are sanitized before session resume and at append-time so inline image/blob payloads do not keep re-accumulating inside session files.
 
 Deprecated env names (still supported): `ASSISTANT_NAME`, `ASSISTANT_AVATAR`, `AGENT_TIMEOUT`, `AGENT_TIMEOUT_BACKGROUND`.
 

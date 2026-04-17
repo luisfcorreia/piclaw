@@ -43,6 +43,9 @@ const DEFAULT_MAIN_IDLE_TTL = 3 * 60 * 1000; // 3 minutes
 const DEFAULT_SIDE_IDLE_TTL = 60 * 1000; // 1 minute
 const DEFAULT_CLEANUP_INTERVAL = 30 * 1000; // check every 30 seconds
 const DEFAULT_MAIN_SESSION_POOL_MAX_SIZE = 2;
+const DEFAULT_MEMORY_PRESSURE_RSS_BYTES = 512 * 1024 * 1024;
+const DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL = 30 * 1000;
+const DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = 1;
 function parsePositiveMs(value, fallback) {
     const parsed = Number.parseInt(String(value || "").trim(), 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -55,6 +58,9 @@ const MAIN_IDLE_TTL = parsePositiveMs(process.env.PICLAW_MAIN_SESSION_IDLE_TTL_M
 const SIDE_IDLE_TTL = parsePositiveMs(process.env.PICLAW_SIDE_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS, DEFAULT_SIDE_IDLE_TTL);
 const CLEANUP_INTERVAL = parsePositiveMs(process.env.PICLAW_SESSION_CLEANUP_INTERVAL_MS, DEFAULT_CLEANUP_INTERVAL);
 const MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(process.env.PICLAW_MAIN_SESSION_POOL_MAX_SIZE ?? process.env.PICLAW_SESSION_POOL_MAX_SIZE, DEFAULT_MAIN_SESSION_POOL_MAX_SIZE);
+const MEMORY_PRESSURE_RSS_BYTES = parseNonNegativeInt(process.env.PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES, DEFAULT_MEMORY_PRESSURE_RSS_BYTES);
+const MEMORY_PRESSURE_MAIN_IDLE_TTL = parsePositiveMs(process.env.PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS, DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL);
+const MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(process.env.PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE, DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE);
 const DEFAULT_PROVIDER_RATE_LIMIT_MAX_RETRIES = 5;
 const DEFAULT_PROVIDER_RATE_LIMIT_BASE_DELAY_MS = 5000;
 /**
@@ -70,6 +76,7 @@ export class AgentPool {
     activeForkBaseLeafByChat = new Map();
     cleanupTimer = null;
     shuttingDown = false;
+    memoryPressureActive = false;
     // Shared across all sessions (expensive to create, safe to reuse)
     authStorage;
     modelRegistry;
@@ -138,7 +145,7 @@ export class AgentPool {
         });
         mkdirSync(SESSIONS_DIR, { recursive: true });
         mkdirSync(this.logsDir, { recursive: true });
-        this.cleanupTimer = setInterval(() => this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL }), CLEANUP_INTERVAL);
+        this.cleanupTimer = setInterval(() => this.evictIdle(), CLEANUP_INTERVAL);
     }
     applyRateLimitRetryDefaults() {
         const settingsManager = this.settingsManager;
@@ -377,7 +384,16 @@ export class AgentPool {
     }
     // ── internal ────────────────────────────────────────────
     async getOrCreateRuntime(chatJid) {
-        return this.sessionManager.getOrCreate(chatJid);
+        const runtime = await this.sessionManager.getOrCreate(chatJid);
+        const pressure = this.getMemoryPressureMode();
+        if (pressure.active && !this.shuttingDown) {
+            this.sessionManager.evictIdle({
+                mainIdleTtlMs: pressure.mainIdleTtlMs,
+                sideIdleTtlMs: SIDE_IDLE_TTL,
+                mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
+            });
+        }
+        return runtime;
     }
     async getOrCreate(chatJid) {
         return (await this.getOrCreateRuntime(chatJid)).session;
@@ -388,7 +404,31 @@ export class AgentPool {
     async syncSideSessionFromMain(mainSession, sideRuntime) {
         return this.sessionManager.syncSideSessionFromMain(mainSession, sideRuntime);
     }
+    getMemoryPressureMode() {
+        const rssBytes = process.memoryUsage.rss();
+        const active = MEMORY_PRESSURE_RSS_BYTES > 0 && rssBytes >= MEMORY_PRESSURE_RSS_BYTES;
+        if (this.memoryPressureActive !== active) {
+            this.memoryPressureActive = active;
+            log.info(active ? "Memory pressure mode enabled" : "Memory pressure mode cleared", {
+                operation: "memory_pressure.mode_change",
+                rssBytes,
+                thresholdBytes: MEMORY_PRESSURE_RSS_BYTES,
+                mainIdleTtlMs: active ? MEMORY_PRESSURE_MAIN_IDLE_TTL : MAIN_IDLE_TTL,
+                mainSessionPoolMaxSize: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : MAIN_SESSION_POOL_MAX_SIZE,
+            });
+        }
+        return {
+            active,
+            mainIdleTtlMs: active ? Math.min(MAIN_IDLE_TTL, MEMORY_PRESSURE_MAIN_IDLE_TTL) : MAIN_IDLE_TTL,
+            mainSessionMaxSizeOverride: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : undefined,
+        };
+    }
     evictIdle() {
-        this.sessionManager.evictIdle({ mainIdleTtlMs: MAIN_IDLE_TTL, sideIdleTtlMs: SIDE_IDLE_TTL });
+        const pressure = this.getMemoryPressureMode();
+        this.sessionManager.evictIdle({
+            mainIdleTtlMs: pressure.mainIdleTtlMs,
+            sideIdleTtlMs: SIDE_IDLE_TTL,
+            mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
+        });
     }
 }

@@ -296,6 +296,7 @@ const groupDefinitions: GroupDefinition[] = [
         "avatar-service.test.ts",
         "dashboard-widget.test.ts",
         "link-previews.test.ts",
+        "media-handler.test.ts",
         "media-service.test.ts",
         "post-link-preview-content.test.ts",
         "remote-display-websocket-tcp-bridge.test.ts",
@@ -377,6 +378,7 @@ const groupDefinitions: GroupDefinition[] = [
           "status-panel-shortcuts.test.ts",
           "tool-git-context.test.ts",
           "status-duration.test.ts",
+          "use-sse-connection.test.ts",
           "status-git-label.test.ts",
           "status-meta-order.test.ts",
           "tab-source-editor.test.ts",
@@ -438,6 +440,7 @@ const groupDefinitions: GroupDefinition[] = [
           "video-viewer-pane.test.ts",
           "zip-preview.test.ts",
           "status-hints.test.ts",
+          "status-render.test.ts",
         ])
         || isAppRenderingPaneTest(relativePath)
       ),
@@ -455,6 +458,7 @@ const groupDefinitions: GroupDefinition[] = [
           "vnc-input.test.ts",
           "vnc-pane.test.ts",
           "workspace-auto-open.test.ts",
+          "workspace-explorer.test.ts",
           "workspace-preview-pane.test.ts",
           "workspace-scale.test.ts",
           "workspace-visibility.test.ts",

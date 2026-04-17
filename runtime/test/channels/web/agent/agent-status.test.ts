@@ -15,6 +15,7 @@ function createContext(overrides: Partial<AgentStatusContext> = {}): AgentStatus
     getBuffer: () => undefined,
     getContextUsageForChat: async () => null,
     getAvailableModels: async () => ({ models: [] }),
+    getProviderReadyCompletedForInstance: () => false,
     ...overrides,
   };
 }
@@ -66,11 +67,17 @@ describe("web agent status helpers", () => {
       req,
       createContext({
         getAvailableModels: async () => payload,
+        getProviderReadyCompletedForInstance: () => true,
       })
     );
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Server-Timing")).toContain("agent_models;dur=");
-    expect(await res.json()).toEqual(payload);
+    expect(await res.json()).toEqual({
+      ...payload,
+      oobe: {
+        provider_ready_completed_instance: true,
+      },
+    });
   });
 });
