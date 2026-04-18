@@ -8,6 +8,7 @@ import {
   updateAgentProfileFromEvent,
   updateUserProfileFromEvent,
 } from './app-auth-bootstrap.js';
+import { restoreContextUsage } from './app-status-refresh-orchestration.js';
 import { refreshModelAndQueueState as refreshModelAndQueueStateBundle } from './app-status-refresh-orchestration.js';
 import { applyStoredSidebarWidth } from './app-boot-load-orchestration.js';
 import {
@@ -54,6 +55,7 @@ interface UseChatRefreshLifecycleOptions {
   refreshQueueState: () => void;
   refreshContextUsage: () => Promise<void>;
   refreshAutoresearchStatus: () => Promise<void>;
+  setContextUsage: (next: any) => void;
 }
 
 export function startModelAndQueueRefreshEffect(options: {
@@ -165,6 +167,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     refreshQueueState,
     refreshContextUsage,
     refreshAutoresearchStatus,
+    setContextUsage,
   } = options;
 
   const loadAgents = useCallback(async () => {
@@ -187,7 +190,12 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
 
   useEffect(() => {
     noteAppChatActivation({ chatJid: currentChatJid });
-  }, [currentChatJid]);
+    // Restore the last known context usage for this chat from localStorage
+    // so the context indicator shows immediately without waiting for the API.
+    const stored = restoreContextUsage(currentChatJid);
+    if (stored) setContextUsage(stored);
+    void refreshContextUsage();
+  }, [currentChatJid, refreshContextUsage, setContextUsage]);
 
   const updateAgentProfile = useCallback((payload: any) => {
     updateAgentProfileFromEvent({

@@ -40,6 +40,7 @@ import {
   resolveSseEventRoutingContext,
 } from './app-sse-event-routing.js';
 import { isAppChatActivationRecent } from './app-refresh-coordination.js';
+import { persistContextUsage } from './app-status-refresh-orchestration.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
 
@@ -297,7 +298,10 @@ export function handleAppSseEvent(
         if (isMainTimelineView(viewStateRef.current)) {
           void refreshTimeline();
         }
-        if (data.context_usage) setContextUsage(data.context_usage);
+        if (data.context_usage) {
+          setContextUsage(data.context_usage);
+          persistContextUsage(currentChatJid, data.context_usage);
+        }
       }
       void refreshContextUsage();
       wasAgentActiveRef.current = false;

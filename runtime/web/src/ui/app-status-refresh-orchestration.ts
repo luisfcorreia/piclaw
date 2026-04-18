@@ -8,8 +8,28 @@ import {
   type FollowupQueueItemLike,
 } from './app-followup-queue.js';
 import { isMainTimelineView } from './app-realtime-timeline.js';
+import { getLocalStorageJSON, setLocalStorageItem } from '../utils/storage.js';
 
 type StateSetter<T> = (next: T | ((prev: T) => T)) => void;
+
+const CONTEXT_STORAGE_PREFIX = 'piclaw:ctx:';
+
+export function persistContextUsage(chatJid: string, payload: unknown): void {
+  if (!chatJid || !payload || typeof payload !== 'object') return;
+  const data = payload as Record<string, unknown>;
+  if (data.percent == null) return;
+  try {
+    setLocalStorageItem(CONTEXT_STORAGE_PREFIX + chatJid, JSON.stringify(payload));
+  } catch {
+    // ignore
+  }
+}
+
+export function restoreContextUsage(chatJid: string): Record<string, unknown> | null {
+  if (!chatJid) return null;
+  return getLocalStorageJSON<Record<string, unknown>>(CONTEXT_STORAGE_PREFIX + chatJid);
+}
+
 
 interface RefBox<T> {
   current: T;
@@ -91,7 +111,10 @@ export async function refreshContextUsageForChat(options: RefreshContextUsageFor
   try {
     const contextPayload = await getAgentContext(targetChatJid);
     if (activeChatJidRef.current !== targetChatJid) return;
-    if (contextPayload) setContextUsage(contextPayload);
+    if (contextPayload) {
+      setContextUsage(contextPayload);
+      persistContextUsage(targetChatJid, contextPayload);
+    }
   } catch (error) {
     if (activeChatJidRef.current !== targetChatJid) return;
     console.warn('Failed to fetch agent context:', error);
