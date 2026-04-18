@@ -67,6 +67,22 @@ Ask up to 20 questions in sequence, one-at-a-time, unless already answered.
 
 Keep answers in a feature-scoped notes/work-item file or `notes/preferences/feature-refinement.md` if the process becomes reusable.
 
+## Web UI / Adaptive Card note
+
+When the user is in the PiClaw **web UI**, you may use a compact **Adaptive Card** for refinement questions when it is materially better than markdown — especially for:
+
+- single-choice follow-up questions
+- short structured confirmations
+- approval / pick-one-next-step decisions
+
+Rules:
+
+- still ask **one question at a time** unless the user has already answered later items
+- prefer markdown if it is clearer or less heavy-weight
+- use the current `adaptive-cards-authoring` skill/runtime constraints
+- keep cards compact, with concise fallback text and supported actions only
+- do not turn the whole 20-question flow into a giant form; cards are for selective structured steps, not bulk interrogation
+
 ## Practical tip
 
 Prefer *narrow first, iterate later*: lock scope by answering 1–10 first, then expand with dependency/testing details only after behavior is clear.
