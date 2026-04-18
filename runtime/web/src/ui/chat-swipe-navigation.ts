@@ -213,9 +213,13 @@ function showIndicator(
   _containerWidth: number,
   neighbours: SwipeNeighbours,
 ): void {
-  const progress = Math.min(Math.abs(dx) / 100, 1);
+  const absDx = Math.abs(dx);
+  const progress = Math.min(absDx / 100, 1);
+  const willTrigger = absDx >= 72; // matches shouldTriggerTouchChatSwipe minDistancePx
+
   indicator.style.display = 'flex';
   indicator.style.opacity = String(Math.min(progress * 2.5, 1));
+  indicator.classList.toggle('chat-swipe-indicator--ready', willTrigger);
 
   const isNext = dx < 0;
   const target = isNext ? neighbours.next : neighbours.prev;

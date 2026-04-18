@@ -32,17 +32,25 @@
     justify-content: center;
     gap: 8px;
     pointer-events: none;
-    /* Fixed size so it never jumps */
     min-width: 160px;
     max-width: 260px;
     padding: 12px 22px;
     border-radius: var(--radius-full, 9999px);
-    /* Theme colours */
+    /* Neutral until triggered */
+    background: var(--bg-secondary, #f7f9fa);
+    color: var(--text-secondary, #536471);
+    border: 1.5px solid var(--border-color, #eff3f4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transition: background 0.15s ease-out, color 0.15s ease-out,
+                border-color 0.15s ease-out, opacity 0.1s ease-out;
+}
+
+/* Accent state once the swipe will definitely trigger */
+.chat-swipe-indicator--ready {
     background: var(--accent-color, #1d9bf0);
     color: var(--bg-primary, #fff);
-    border: 1.5px solid color-mix(in srgb, var(--accent-color, #1d9bf0) 70%, var(--bg-primary, #fff) 30%);
+    border-color: color-mix(in srgb, var(--accent-color, #1d9bf0) 70%, var(--bg-primary, #fff) 30%);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-    transition: opacity 0.1s ease-out;
 }
 
 .chat-swipe-chevron {
