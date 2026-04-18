@@ -6,6 +6,7 @@ import { getTurnColor } from '../ui/agent-utils.js';
 import { buildTurnDotClass, resolveRunningStatusIndicator, shouldShowRunningStatusDot } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, getStatusRetryCountdownLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { extractToolContextPath } from '../ui/tool-git-context.js';
+import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 
 const COPY_ICON_SVG = html`
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -892,11 +893,12 @@ export function AgentRequestModal({ request, onRespond }) {
 
 /** Preact component: SSE connection status indicator. */
 export function ConnectionStatus({ status }) {
-    if (status === 'connected') return null;
+    const presentation = useConnectionStatusPresentation(status);
+    if (!presentation.show) return null;
 
     return html`
-        <div class="connection-status ${status}">
-            ${status === 'disconnected' ? 'Reconnecting' : status}
+        <div class="connection-status ${presentation.statusClass}">
+            ${presentation.label}
         </div>
     `;
 }

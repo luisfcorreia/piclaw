@@ -8,6 +8,7 @@ import { shouldOpenSessionSwitcherFromBlankCompose } from '../ui/compose-session
 import { formatBranchPickerLabel, formatCurrentBranchLabel } from '../ui/branch-lifecycle.js';
 import { buildComposeStatusDotClass } from '../ui/status-dot.js';
 import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } from '../ui/status-duration.js';
+import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 import { FilePill } from './file-pill.js';
 import { refreshAgentModelStateBestEffort } from './compose-model-refresh.js';
 
@@ -710,14 +711,9 @@ export function ComposeBox({
         : null;
     const notificationTitle = notificationActive ? 'Disable notifications' : 'Enable notifications';
     const hasAttachments = mediaFiles.length > 0 || fileRefs.length > 0 || messageRefs.length > 0;
-    const connectionStatusLabel = connectionStatus === 'disconnected'
-        ? 'Reconnecting'
-        : String(connectionStatus || 'Connecting')
-            .replace(/[-_]+/g, ' ')
-            .replace(/^./, (match) => match.toUpperCase());
-    const connectionStatusTitle = connectionStatus === 'disconnected'
-        ? 'Reconnecting'
-        : `Connection: ${connectionStatusLabel}`;
+    const connectionStatusPresentation = useConnectionStatusPresentation(connectionStatus);
+    const connectionStatusLabel = connectionStatusPresentation.label;
+    const connectionStatusTitle = connectionStatusPresentation.title;
 
     const mentionAgents = (Array.isArray(activeChatAgents) ? activeChatAgents : [])
         .filter((chat) => !chat?.archived_at);
@@ -2231,7 +2227,7 @@ export function ComposeBox({
                     ${(connectionStatus !== 'connected' || !searchMode) && html`
                         <div class="compose-send-stack">
                             ${connectionStatus !== 'connected' && html`
-                                <span class="compose-connection-status connection-status ${connectionStatus}" title=${connectionStatusTitle}>
+                                <span class="compose-connection-status connection-status ${connectionStatusPresentation.statusClass}" title=${connectionStatusTitle}>
                                     ${connectionStatusLabel}
                                 </span>
                             `}
