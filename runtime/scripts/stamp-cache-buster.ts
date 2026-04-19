@@ -1,24 +1,53 @@
 /**
  * scripts/stamp-cache-buster.ts
  *
- * Replaces all `?v=<digits>` cache-buster query strings in index.html
- * with a fresh unix-epoch-seconds timestamp.  Also stamps the vendor
- * importmap URL with a content-hash so browser caches bust when the
- * vendor bundle changes.  Run automatically at the end of `build:web`.
+ * Replaces all `?v=<digits|hex>` cache-buster query strings in index.html
+ * with a content-derived hash of the app bundle files.  This guarantees
+ * the buster changes if and only if the bundle content changes, regardless
+ * of build timestamps or git operations on index.html.
+ *
+ * Also stamps the vendor importmap URL with a content-hash so browser
+ * caches bust when the vendor bundle changes.
+ *
+ * Run automatically at the end of `build:web`.
  */
 
+import { createHash } from "crypto";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 const INDEX = resolve(import.meta.dir, "../web/static/index.html");
-const stamp = Math.floor(Date.now() / 1000).toString();
+const DIST = resolve(import.meta.dir, "../web/static/dist");
+
+// Build a content hash from the main bundle files so the stamp is
+// deterministic and tied to actual content, not wall-clock time.
+function computeBundleContentHash(): string {
+  const bundleFiles = [
+    resolve(DIST, "app.bundle.js"),
+    resolve(DIST, "app.bundle.css"),
+    resolve(DIST, "login.bundle.js"),
+    resolve(DIST, "login.bundle.css"),
+    resolve(DIST, "editor.bundle.js"),
+  ];
+  const hash = createHash("sha256");
+  for (const file of bundleFiles) {
+    try {
+      hash.update(readFileSync(file));
+    } catch {
+      // File may not exist in minimal builds; skip.
+    }
+  }
+  return hash.digest("hex").slice(0, 12);
+}
+
+const stamp = computeBundleContentHash();
 
 const original = readFileSync(INDEX, "utf-8");
 let html = original;
 
 // 1. Stamp ?v= tokens on static bundle references.
 //    Match both numeric stamps (?v=1234567890) and the build-time placeholder.
-html = html.replace(/\?v=(?:\d+|__APP_ASSET_VERSION__)/g, `?v=${stamp}`);
+html = html.replace(/\?v=(?:[\da-f]+|__APP_ASSET_VERSION__)/g, `?v=${stamp}`);
 
 // 2. Stamp the vendor importmap URL so browser caches bust on content changes.
 //    Use the vendor bundle's sha256 prefix from the metadata file when available,
