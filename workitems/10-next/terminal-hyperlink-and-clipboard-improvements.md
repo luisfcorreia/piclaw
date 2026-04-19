@@ -4,7 +4,7 @@ title: Terminal hyperlink detection and clipboard improvements
 status: next
 priority: medium
 created: 2026-03-18
-updated: 2026-04-12
+updated: 2026-04-19
 target_release: next
 tags:
   - work-item
@@ -60,6 +60,9 @@ Improve the web terminal experience by adding clickable hyperlink detection (OSC
 - [ ] Ticket moved to `50-done/`
 
 ## Updates
+
+### 2026-04-19
+- Queued for agent audit (board batch action). Agent should review quality score, acceptance criteria, and test plan.
 
 ### 2026-03-18
 - Created ticket for terminal hyperlink and clipboard UX improvements.

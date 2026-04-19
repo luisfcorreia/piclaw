@@ -1,10 +1,10 @@
 ---
 id: automatic-recovery-after-mid-turn-failures-and-context-pressure
 title: Automatic recovery after mid-turn failures and context pressure
-status: doing
+status: review
 priority: high
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-19
 target_release: next
 tags:
   - work-item
@@ -347,6 +347,9 @@ turn paths should use the shared engine from the start.
 - Avoid duplicate side effects by refusing unsafe tool replay.
 
 ## Updates
+
+### 2026-04-19
+- Moved doing → review via board batch action.
 
 ### 2026-04-18
 - Created from structured refinement after repeated user reports that auto

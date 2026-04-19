@@ -1,10 +1,10 @@
 ---
 id: retune-session-ttl-and-pressure-defaults
 title: Retune session TTL and pressure defaults
-status: next
+status: doing
 priority: medium
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-19
 estimate: S
 risk: medium
 tags:
@@ -92,6 +92,9 @@ Current defaults to re-evaluate:
 - [ ] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-19
+- Moved next → doing via board batch action.
 
 ### 2026-04-18
 - Created as a follow-up to `runtime-ram-optimization-opportunities-2026-04-17` after the main-session budget and pressure-trigger changes landed.

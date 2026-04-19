@@ -1,10 +1,10 @@
 ---
 id: prepare-v1.7.16-patch-release
 title: Prepare v1.7.16 patch release
-status: doing
+status: review
 priority: medium
 created: 2026-04-16
-updated: 2026-04-16
+updated: 2026-04-19
 target_release: v1.7.16
 tags:
   - work-item
@@ -110,6 +110,9 @@ This prep ticket should answer three practical questions before release day:
 - [ ] Ticket front matter and updates reflect the actual outcome
 
 ## Updates
+
+### 2026-04-19
+- Moved doing → review via board batch action.
 
 ### 2026-04-16
 - Started patch-release prep after `v1.7.15`.

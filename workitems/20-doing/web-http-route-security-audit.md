@@ -1,10 +1,10 @@
 ---
 id: web-http-route-security-audit
 title: Security audit of all web HTTP routes and middleware
-status: next
+status: doing
 priority: high
 created: 2026-04-11
-updated: 2026-04-11
+updated: 2026-04-19
 target_release: next
 tags:
   - security

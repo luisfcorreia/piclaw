@@ -1,10 +1,10 @@
 ---
 id: reduce-cold-session-bootstrap-memory-and-eager-extension-load
 title: "Reduce cold session bootstrap memory and eager extension load"
-status: doing
+status: review
 priority: high
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-19
 tags:
   - work-item
   - kanban
@@ -341,6 +341,9 @@ Why last:
 - [ ] Ticket front matter and update history are current
 
 ## Updates
+
+### 2026-04-19
+- Moved doing → review via board batch action.
 
 ### 2026-04-17
 - Audited the 2026-04-17 crash and confirmed it was a startup session-creation OOM loop, not a normal exception.

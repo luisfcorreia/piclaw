@@ -4,7 +4,7 @@ title: Improve first-run OOBE and guidance for new users
 status: doing
 priority: medium
 created: 2026-04-04
-updated: 2026-04-12
+updated: 2026-04-19
 estimate: L
 risk: medium
 tags:
@@ -203,6 +203,9 @@ The expected split should look roughly like:
 - [ ] Ticket is either refined into `10-next/` or split into smaller ready tickets.
 
 ## Updates
+
+### 2026-04-19
+- Queued for agent audit (board batch action). Agent should review quality score, acceptance criteria, and test plan.
 
 ### 2026-04-14
 - Closed the active provider-readiness child slice end to end:
