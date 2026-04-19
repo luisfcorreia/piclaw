@@ -5,7 +5,8 @@
  * running piclaw instance by dropping JSON files into the IPC directories:
  *   - `<DATA_DIR>/ipc/messages/*.json` – outbound messages to send.
  *   - `<DATA_DIR>/ipc/tasks/*.json`    – task lifecycle commands (schedule,
- *     pause, resume, cancel, update, cleanup, resume_chat, resume_pending).
+ *     pause, resume, cancel, update, cleanup, resume_chat, resume_pending,
+ *     execute_proposal, reject_proposal).
  *
  * The watcher polls these directories every IPC_POLL_INTERVAL ms, processes
  * each file, and deletes it on success (or renames it to `error-*` on failure).
@@ -64,6 +65,8 @@ export interface IpcDeps {
   runDream?: (data: Record<string, unknown>) => Promise<void>;
   /** Execute an approved mediated proposal via the agent pool. */
   executeProposal?: (proposalId: string) => Promise<void>;
+  /** Reject a pending mediated proposal and push rejection callback. */
+  rejectProposal?: (proposalId: string, reason?: string | null) => Promise<void>;
 }
 
 /** Guard to prevent starting the watcher more than once. */
@@ -659,6 +662,24 @@ export async function processTaskCommand(data: JsonRecord, deps: IpcDeps): Promi
       });
       if (deps.executeProposal) {
         await deps.executeProposal(proposalId);
+      }
+      break;
+    }
+
+    case "reject_proposal": {
+      const proposalId = getStringField(data, "proposal_id");
+      if (!proposalId) {
+        log.warn("reject_proposal task missing proposal_id", { operation: "process_task_command.reject_proposal" });
+        break;
+      }
+      const reason = getStringField(data, "reason") || undefined;
+      log.info("Processing reject_proposal IPC task", {
+        operation: "process_task_command.reject_proposal",
+        proposalId,
+        reason,
+      });
+      if (deps.rejectProposal) {
+        await deps.rejectProposal(proposalId, reason);
       }
       break;
     }

@@ -412,3 +412,52 @@ export async function executeApprovedProposal(
     notify?.(`Proposal \`${proposalId}\` execution threw: ${msg}`);
   }
 }
+
+// ─── Proposal rejection (called via IPC, not HTTP) ───────────────────────────
+
+/**
+ * Reject a pending mediated proposal. Called from the IPC task handler when
+ * an operator or skill runs a rejection command.
+ *
+ * Updates the proposal status in the database, pushes a signed rejection
+ * callback to the requesting peer, and optionally notifies the local chat.
+ */
+export async function rejectProposal(
+  proposalId: string,
+  reason?: string | null,
+  notify?: (text: string) => void | Promise<void>,
+): Promise<void> {
+  const proposal = getRemoteRequestById(proposalId);
+  if (!proposal) {
+    log.warn("reject_proposal: proposal not found", { proposalId });
+    return;
+  }
+  if (proposal.status !== "pending") {
+    log.warn("reject_proposal: proposal not pending", { proposalId, status: proposal.status });
+    return;
+  }
+
+  const rejectReason = reason || "Rejected by operator.";
+  updateRemoteRequestDecision(proposalId, "rejected", null, rejectReason);
+
+  const peer = getRemotePeer(proposal.peer_instance_id);
+  if (peer?.base_url) {
+    try {
+      const identity = loadOrCreateIdentity();
+      const endpoint = "/api/remote/result";
+      const body = JSON.stringify({
+        negotiation_id: proposalId,
+        decision: "deny",
+        reason: rejectReason,
+      });
+      const bodyBytes = new TextEncoder().encode(body);
+      const headers = buildSignedRequestHeaders(identity, endpoint, bodyBytes, peer.trust_epoch ?? undefined);
+      await fetch(`${peer.base_url}${endpoint}`, { method: "POST", headers, body });
+    } catch (err) {
+      log.warn("Failed to push rejection callback", { operation: "reject_proposal.callback", proposalId, err });
+    }
+  }
+
+  const peerLabel = peer?.display_name ?? `${proposal.peer_instance_id.slice(0, 6)}…`;
+  notify?.(`Proposal \`${proposalId}\` from **${peerLabel}** rejected.${rejectReason !== "Rejected by operator." ? ` Reason: ${rejectReason}` : ""}`);
+}
