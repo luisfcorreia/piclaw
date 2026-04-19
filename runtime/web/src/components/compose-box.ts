@@ -70,6 +70,7 @@ export const SLASH_COMMANDS = [
   { name: "/login", description: "Login to an AI model provider (OAuth or API key)" },
   { name: "/logout", description: "Logout from an AI model provider" },
   { name: "/commands", description: "List available commands" },
+  { name: "/skill:", description: "Run a workspace skill (e.g. /skill:visual-artifact-generator, /skill:web-search)" },
 ];
 
 const COMPOSE_HISTORY_STORAGE_KEY = 'piclaw_compose_history';
