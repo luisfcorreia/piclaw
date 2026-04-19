@@ -30,7 +30,9 @@ try {
     const meta = JSON.parse(readFileSync(VENDOR_META, "utf-8"));
     if (meta.sha256) vendorStamp = meta.sha256.slice(0, 12);
   }
-} catch { /* fall back to timestamp */ }
+} catch (e) {
+  console.warn(`[cache-buster] failed to read vendor metadata: ${e instanceof Error ? e.message : e}`);
+}
 html = html.replace(
   /(\/editor-vendor\/codemirror\.js)(\?v=[^"]*)?/g,
   `$1?v=${vendorStamp}`,
