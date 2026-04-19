@@ -29,6 +29,9 @@ branches only. It should remove the archived branch's durable state safely,
 leave active/root branches untouched, and clean up now-orphaned media/session
 artifacts.
 
+Also provide a maintenance-script path that can run this cleanup recurringly and
+optionally target explicitly named sessions/agents the user wants removed.
+
 ## Current behaviour
 
 - UI prune action archives the branch and hides it from the picker.
@@ -48,6 +51,8 @@ Relevant surfaces:
 ## Acceptance Criteria
 
 - [ ] A distinct permanent-delete action exists for archived branches only.
+- [ ] A maintenance script exists for recurring cleanup (`dry-run` + `apply`).
+- [ ] The maintenance script can target either all archived branches or an explicit allowlist of branch chat JIDs / agent handles / session names.
 - [ ] Active branches and root branches cannot be permanently deleted.
 - [ ] Permanent delete removes the archived branch from `chat_branches`.
 - [ ] Permanent delete removes the branch chat row from `chats`.
@@ -64,7 +69,6 @@ Relevant surfaces:
 
 - [ ] Deleting root chats.
 - [ ] Deleting non-archived branches in one step.
-- [ ] Bulk deletion of all archived branches in the first pass.
 - [ ] Rewriting general timeline cleanup semantics.
 
 ## Implementation Notes
@@ -87,13 +91,36 @@ Follow-up check:
 
 ### Suggested flow
 
-1. verify target branch exists and `archived_at IS NOT NULL`
-2. reject root branch and any currently active/runtime-backed branch
-3. delete branch-owned rows inside one DB transaction
-4. run unreferenced-media cleanup
-5. remove session directories for the archived `chat_jid`
-6. refresh branch/timeline UI state
-7. show a clear success/failure result
+1. resolve targets from either:
+   - all archived branches, or
+   - explicit chat JIDs / agent handles / session names supplied to the script/UI
+2. verify each target exists and is archived before destructive delete (unless the explicit target mode intentionally supports deleting non-archived named sessions later)
+3. reject root branch and any currently active/runtime-backed branch
+4. delete branch-owned rows inside one DB transaction
+5. run unreferenced-media cleanup
+6. remove session directories for the archived `chat_jid`
+7. refresh branch/timeline UI state
+8. show a clear success/failure result
+
+### Maintenance script shape
+
+Suggested script surface:
+
+```bash
+bun run /workspace/scripts/prune-chat-branches.ts --dry-run --archived
+bun run /workspace/scripts/prune-chat-branches.ts --apply --archived
+bun run /workspace/scripts/prune-chat-branches.ts --dry-run --agent @default-11 --agent @default-14
+bun run /workspace/scripts/prune-chat-branches.ts --apply --chat-jid web:default:branch:21a1a92bae67
+```
+
+Recommended options:
+- `--dry-run` / `--apply`
+- `--archived`
+- `--chat-jid <jid>` (repeatable)
+- `--agent <handle>` (repeatable)
+- `--session-name <name>` or `--chat-name <name>` if we want to match `chats.name`
+- `--vacuum`
+- automatic DB backup before apply
 
 ### UI/UX
 
