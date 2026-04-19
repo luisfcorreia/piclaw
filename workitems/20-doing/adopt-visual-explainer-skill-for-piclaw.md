@@ -435,6 +435,33 @@ Outputs:
 
 ## Updates
 
+### 2026-04-19 — Slices 1–6a implemented
+- Shipped all command/prompt templates:
+  - `commands/generate-web-diagram.md` (Slice 1 — architecture/system explainer)
+  - `commands/generate-data-table.md` (Slice 2 — data table/comparison)
+  - `commands/diff-review.md` (Slice 3 — diff review)
+  - `commands/plan-review.md` (Slice 4 — plan review)
+  - `commands/fact-check.md` (Slice 4 — fact check)
+  - `commands/generate-slides.md` (Slice 5 — slide deck)
+  - `commands/project-recap.md` (Slice 6 — project recap)
+  - `commands/generate-drawio-diagram.md` (Slice 6a — draw.io generation)
+- Each command references vendored library paths, the visual-design profile,
+  and the appropriate reference material from Slice 0.
+- Next: Slice 7 (font preview + vendoring), then Slice 8 (cross-reference
+  pass), then Slice 9 (ship + validate end to end).
+
+### 2026-04-19 — Slice 0 implemented
+- Shipped the foundation skill and all references:
+  - `.pi/skills/visual-artifact-generator/SKILL.md`
+  - `references/libraries.md` (Mermaid, ECharts, D3, KaTeX, Babylon — all vendored paths)
+  - `references/css-patterns.md` (theme structure, cards, grids, tables, animations, anti-patterns)
+  - `references/responsive-nav.md` (sticky sidebar TOC, mobile horizontal scroll)
+  - `references/slide-patterns.md` (section-based slide deck structure)
+  - `references/drawio-patterns.md` (XML structure, style mapping, visual-design profile alignment)
+- All library references use Piclaw vendored paths — no CDN dependencies.
+- Visual-design profile is explicitly cross-referenced in the main SKILL.md.
+- Next: implement command/prompt templates (Slices 1–6a).
+
 ### 2026-04-19
 - Created from the upstream evaluation and user direction to adopt the core
   skill philosophy, adapt it to Piclaw's vendored libraries and environment,
