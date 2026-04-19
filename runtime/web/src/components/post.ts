@@ -77,6 +77,25 @@ function extractRecoveryMarkerBlocks(contentBlocks) {
     return contentBlocks.filter((block) => block && typeof block === 'object' && block.type === 'recovery_marker' && block.recovered);
 }
 
+const RECOVERY_CLASSIFIER_LABELS = {
+    context_recover: 'context limit exceeded',
+    rate_limit: 'rate limit hit',
+    api_error: 'API error',
+    timeout: 'request timeout',
+    overloaded: 'service overloaded',
+    connection: 'connection error',
+};
+
+function formatRecoveryChipTooltip(marker) {
+    const attempts = Number(marker?.attempts_used || 0);
+    const classifier = String(marker?.classifier || '').trim();
+    const reason = RECOVERY_CLASSIFIER_LABELS[classifier] || (classifier ? classifier.replace(/_/g, ' ') : '');
+    const parts = ['Recovered automatically'];
+    if (attempts > 1) parts[0] = `Recovered after ${attempts} attempts`;
+    if (reason) parts.push(reason);
+    return parts.join(' — ');
+}
+
 function AttachmentPill({ attachment, onPreview }) {
     const mediaId = Number(attachment?.id);
     const [info, setInfo] = useState(null);
@@ -996,11 +1015,9 @@ export function Post({ post, onClick, onHashtagClick, onMessageRef, onScrollToMe
                     ${recoveryMarker && html`
                         <span
                             class="post-recovery-chip"
-                            title=${recoveryMarker.classifier
-                                ? `${recoveryMarker.label || 'Recovered'} · ${recoveryMarker.classifier}`
-                                : (recoveryMarker.label || 'Recovered')}
+                            title=${formatRecoveryChipTooltip(recoveryMarker)}
                         >
-                            ${recoveryMarker.label || 'recovered'}
+                            recovered
                         </span>
                     `}
                     <a class="post-time" href=${`#msg-${post.id}`} onClick=${(e) => {
