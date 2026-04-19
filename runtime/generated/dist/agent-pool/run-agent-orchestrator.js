@@ -367,6 +367,8 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
         let lastClassifier = null;
         const strategyHistory = [];
         const recoveryDiagnostics = [];
+        let recoveryBudgetStartedAt = null;
+        const getRecoveryBudgetElapsedMs = () => (recoveryBudgetStartedAt == null ? 0 : Math.max(0, Date.now() - recoveryBudgetStartedAt));
         return await withChatContext(chatJid, channel, async () => {
             while (true) {
                 const attempt = await runPromptAttempt(prompt, chatJid, session, timeoutMs, runOptions, options, startTime);
@@ -401,7 +403,7 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
                     config: recoveryConfig,
                     errorText,
                     recoveryAttemptsUsed,
-                    elapsedMs: Date.now() - startTime,
+                    elapsedMs: getRecoveryBudgetElapsedMs(),
                     snapshot: attempt.snapshot,
                 });
                 lastClassifier = decision.classifier;
@@ -433,6 +435,9 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
                     }
                     return attempt.output;
                 }
+                if (recoveryBudgetStartedAt == null) {
+                    recoveryBudgetStartedAt = Date.now();
+                }
                 recoveryAttemptsUsed += 1;
                 strategyHistory.push(decision.strategy);
                 emitAgentSessionEvent(runOptions.onEvent, {
@@ -451,7 +456,7 @@ export async function runAgentPrompt(prompt, chatJid, runOptions, options) {
                             config: recoveryConfig,
                             errorText: compactionResult.errorMessage,
                             recoveryAttemptsUsed,
-                            elapsedMs: Date.now() - startTime,
+                            elapsedMs: getRecoveryBudgetElapsedMs(),
                             snapshot: {
                                 hadToolActivity: false,
                                 hadPartialOutput: attempt.snapshot.hadPartialOutput,
