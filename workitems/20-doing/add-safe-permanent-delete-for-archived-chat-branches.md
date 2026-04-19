@@ -1,9 +1,9 @@
 ---
 id: add-safe-permanent-delete-for-archived-chat-branches
 title: Add safe permanent delete for archived chat branches
-status: next
+status: doing
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-19
 tags:
   - work-item
   - web
@@ -156,6 +156,9 @@ Use a stronger confirmation than normal prune, e.g.:
 - [ ] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-19
+- Moved next → doing via board batch action.
 
 ### 2026-04-18
 - Created after confirming that current branch prune is archive-only.

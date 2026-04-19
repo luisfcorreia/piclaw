@@ -4,7 +4,7 @@ title: Add scheduled-task update and reschedule tool
 status: next
 priority: medium
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-04-19
 target_release: later
 estimate: M
 risk: medium
@@ -16,8 +16,7 @@ tags:
   - runtime
   - tasks
 owner: pi
-blocked-by:
-  - add-scheduled-task-inspection-tool-and-shared-query-service
+blocked-by: []
 ---
 
 # Add scheduled-task update and reschedule tool
@@ -80,9 +79,25 @@ This is the follow-up mutation slice from
   - [ ] Restore / reconnect matrix test
   - [ ] Pane / viewer contract test
   - [ ] Real-browser smoke test
-- [ ] Existing tests to rerun are listed
-- [ ] New regression coverage to add is listed
+- [x] Existing tests to rerun are listed
+- [x] New regression coverage to add is listed
 - [ ] Real-browser smoke pass required? If yes, record the surface
+
+### Existing tests to rerun
+- `runtime/test/extensions/extensions-scheduled-tasks.test.ts`
+- `runtime/test/ipc/ipc.test.ts`
+- `runtime/test/agent-pool/agent-pool-tools.test.ts`
+- `runtime/test/scheduled-task-query-service.test.ts`
+- `bun run typecheck`
+
+### New regression coverage to add
+- supported tool mutation contract tests for:
+  - pause
+  - resume
+  - cancel/delete
+  - reschedule / next-run recompute
+- validation parity tests against existing IPC/task-validation behavior
+- command/tool summary output tests for updated task state where applicable
 
 ## Definition of Done
 
@@ -97,12 +112,24 @@ This is the follow-up mutation slice from
 
 ## Updates
 
+### 2026-04-19
+- Agent audit completed from board batch action.
+- Findings:
+  - the former blocker `add-scheduled-task-inspection-tool-and-shared-query-service` is already resolved in `50-done/`, so this ticket no longer needs a `blocked-by` entry
+  - scope is appropriately bounded for a first mutation slice
+  - test plan needed concrete rerun targets and regression additions, now added
+- Recommendation: keep in `10-next/` but treat as implementation-ready for promotion once the team wants the mutation half of scheduled-task management.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
+
+### 2026-04-19
+- Queued for agent audit (board batch action). Agent should review quality score, acceptance criteria, and test plan.
+
 ### 2026-04-13
 - Split out as the mutation follow-up after the scheduled-task inspection assessment clarified that rescheduling and pause/resume changes are a separate missing capability from pure inspection.
 
 ## Links
 
 - `workitems/20-doing/assess-first-class-scheduled-task-inspection-surface.md`
-- `workitems/10-next/add-scheduled-task-inspection-tool-and-shared-query-service.md`
+- `workitems/50-done/add-scheduled-task-inspection-tool-and-shared-query-service.md`
 - `runtime/src/ipc.ts`
 - `runtime/src/db/tasks.ts`

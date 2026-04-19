@@ -9,12 +9,38 @@ Pushing a version tag triggers `.github/workflows/publish.yml` and publishes mul
 
 ## Cutting a release
 
+The authoritative workflow is documented in the [cut-release skill](/workspace/.pi/skills/cut-release/SKILL.md), which covers:
+
+- Gathering the delta and drafting release notes
+- Local rebuild and CI verification (`make build-piclaw && make ci-fast`)
+- Version bump, commit, tag, push
+- Remote CI monitoring after push
+- GitHub release publishing
+- Hotfix retag flow (moving a tag after post-release fixes)
+- Local install and restart
+
+### Quick path
+
 ```bash
 make bump-patch    # or make bump-minor
 make push
 ```
 
 This bumps `VERSION` and `package.json`, commits, tags, and pushes. The CI workflow builds and publishes Docker images for AMD64 and ARM64.
+
+### Full path (recommended)
+
+Always verify locally before pushing:
+
+```bash
+make build-piclaw   # full rebuild
+make ci-fast        # must show 0 fail
+git add -A && git commit -m 'release: <Movie Name> vX.Y.Z'
+git tag -a vX.Y.Z -m 'PiClaw vX.Y.Z — <Movie Name>'
+git push origin main vX.Y.Z
+```
+
+Then monitor CI and publish the GitHub release via the API (see skill for details).
 
 For manual release-image verification outside GitHub Actions, the repo-owned smoke contract is:
 

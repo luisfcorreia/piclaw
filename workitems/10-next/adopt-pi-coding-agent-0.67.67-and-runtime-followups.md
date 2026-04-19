@@ -4,7 +4,7 @@ title: Adopt pi-coding-agent 0.67.67 and apply Piclaw-side follow-ups
 status: next
 priority: high
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-19
 estimate: M
 risk: medium
 tags:
@@ -256,6 +256,21 @@ Path B if time permits, but keep the work split into reviewable commits:
 - [ ] Ticket front matter updated
 
 ## Updates
+
+### 2026-04-19
+- Agent audit completed from board batch action.
+- Findings:
+  - the ticket is already well-scoped for a medium-sized upstream adoption tranche and has concrete validation surfaces
+  - acceptance criteria are strong, but execution should stay ordered so the dependency bump itself lands before broader Piclaw-side hardening grows the scope too far
+  - keep the first implementation pass to:
+    1. bump `@mariozechner/pi-coding-agent` to `0.67.67`
+    2. rerun the already-proven focused regression slice
+    3. land `after_provider_response` diagnostics as the first Piclaw-local follow-up
+- Recommendation: keep in `10-next/`; quality is high enough to pick up, but the implementation should be deliberately staged rather than attempted as one blended mega-change.
+- Quality: ★★★★☆ 8/10 (problem: 2, scope: 2, test: 2, deps: 1, risk: 1)
+
+### 2026-04-19
+- Queued for agent audit (board batch action). Agent should review quality score, acceptance criteria, and test plan.
 
 ### 2026-04-17
 - Created after assessing upstream `@mariozechner/pi-coding-agent` updates.
