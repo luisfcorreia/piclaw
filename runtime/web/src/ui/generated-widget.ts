@@ -414,7 +414,7 @@ export function buildWidgetSrcDoc(widget: any): string {
     "default-src 'none'",
     "img-src data: blob: https: http:",
     "style-src 'unsafe-inline'",
-    "font-src data: https: http:",
+    "font-src 'self' data: https: http:",
     "media-src data: blob: https: http:",
     "connect-src 'none'",
     "frame-src 'none'",

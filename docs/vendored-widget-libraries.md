@@ -4,7 +4,8 @@ Interactive widgets posted via `send_dashboard_widget` run in a sandboxed iframe
 with `allow-scripts allow-same-origin`. The CSP allows inline scripts and
 same-origin script loading (`script-src 'unsafe-inline' 'self'`).
 
-The following libraries are vendored as static assets and available to any widget:
+The following libraries are vendored as static assets and available to any widget
+and to generated HTML artifacts from the `visual-artifact-generator` skill:
 
 ## Babylon.js 7.x
 

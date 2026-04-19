@@ -14,6 +14,7 @@ It is built for people who want a practical, stateful agent they can run locally
 - **Persistent agent state** — SQLite-backed messages, media, tasks, token usage, encrypted keychain, and session-scoped SSH / Proxmox / Portainer profiles
 - **Workspace-native workflow** — browse files, preview documents, upload attachments, drag files into the workspace explorer with progress feedback and a client-side size guard, edit code, reference files in prompts, and optionally flip core tools to a remote SSH host for the current session
 - **Built-in tools** — Ghostty-based terminal, code editor, Office/PDF/CSV/image/video viewers, draw.io, kanban board and mindmap editors, VNC client, browser automation, sharp-backed image processing, bundled MCP access via `pi-mcp-adapter`, and agent-only infrastructure tools for SSH, Proxmox, and Portainer
+- **Visual artifact generation** — agent-driven HTML pages, architecture diagrams, data tables, diff reviews, slide decks, and draw.io files using vendored Mermaid, ECharts, D3, and KaTeX libraries with a consistent visual-design profile (adapted from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer))
 - **Agent control features** — steering, queued follow-ups, threading, side prompts, autoresearch experiment loops, and scheduled tasks
 - **Context conservation by default** — small always-active tool baseline, staged tool/script discovery via `list_tools` / `list_scripts` (filtered or intent-guided discovery → compact summary → on-demand detail → activate/use), lazy activation for non-default tools, and opt-in examples for higher-detail workflow help
 - **Optional auth and channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration
@@ -175,6 +176,7 @@ See [docs/development.md](docs/development.md).
 - [qwibitai/nanoclaw](https://github.com/qwibitai/nanoclaw)
 - [badlogic/pi-mono](https://github.com/badlogic/pi-mono)
 - [davebcn87/pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) — autonomous experiment loop by Tobi Lutke and David Cortés (vendored under `runtime/vendor/autoresearch/`)
+- [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) — visual artifact generation skill philosophy, prompt workflow, and template patterns by Nico Bailon (adapted, not vendored)
 
 ## Licence
 
