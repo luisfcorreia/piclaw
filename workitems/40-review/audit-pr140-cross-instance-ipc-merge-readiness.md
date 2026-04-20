@@ -310,6 +310,108 @@ The feature-specific design doc was updated, but the repo-level canonical docs s
 - [ ] history tests for mediated proposals, short-circuit execution, callbacks, and pagination
 - [ ] user-facing tests for `/pair list`, `/pair inbox`, `/pair history`, and `peer.ts` identifier resolution
 
+## Review Comment Set
+
+### Suggested top-level PR reply
+
+> Thanks, Celso — there is a lot of solid work here, especially around the signed-request flow, pairing, callback proofing, mediated proposals, and the default conservative peer state. I did a deep audit of the branch against both the code and the published docs, and I don't think it is ready to merge yet.
+>
+> The blocking issues are:
+>
+> 1. the branch currently fails the canonical local merge gate (`make ci-fast`)
+> 2. the dedicated remote test suite is not green locally (`49` pass / `19` fail / `2` errors)
+> 3. several important guarantees in `docs/cross-instance-ipc.md` do not match the implementation yet
+>
+> The biggest contract mismatches I found are:
+>
+> - `read-only` is documented as `ping/status only`, but the runtime currently allows all read-only tools
+> - `custom` is exposed in UX/docs even though it is still effectively deferred to `restricted`
+> - the docs promise `60s` restricted / `180s` full timeout behavior, but the runtime currently uses `60s` in both execution paths
+> - the pair-review docs promise more operator-visible metadata than the current notification/review surfaces actually show
+> - `/pair history` is documented as showing all requests and outcomes, but the current implementation does not appear to assemble a unified history across mediated requests, short-circuit execution, and result callbacks
+> - the feature depends on `PICLAW_WEB_EXTERNAL_URL`, which I could not find documented in `docs/configuration.md`
+>
+> I wrote up the full audit and checklist here for tracking:
+>
+> - `workitems/40-review/audit-pr140-cross-instance-ipc-merge-readiness.md`
+>
+> I think this can get to a good place, but I would hold merge until the branch is green and the documentation contract is aligned with the final behavior.
+
+### Suggested blocking review comments
+
+#### Blocking 1 — merge gate and branch health
+
+> I don't think this is mergeable yet because the branch is red at the repo-level gate and also red in its own feature-specific tests. Before we discuss smaller contract issues, I think this needs a green baseline:
+>
+> - `make ci-fast` passes
+> - `runtime/test/remote/remote-interop.test.ts` passes
+> - `runtime/test/remote/remote-pair-commands.test.ts` passes
+>
+> Right now the failing clusters include pair-accept/confirm flow issues, unexpected `401` responses on signed paths, and revoke/trust-epoch expectation failures.
+
+#### Blocking 2 — `read-only` profile contract mismatch
+
+> The docs and code disagree on the meaning of `read-only`.
+>
+> - `docs/cross-instance-ipc.md` says `read-only` = `ping/status only`
+> - `runtime/src/remote/policy.ts` currently permits all tools whose capability kind is `read-only`
+>
+> That is a materially broader permission contract than the docs promise. I think this needs to be resolved before merge either by narrowing the code or rewriting the docs and UX to match the broader behavior.
+
+#### Blocking 3 — `custom` profile is still deferred
+
+> `custom` is currently presented as a first-class profile, but the implementation still falls back to `restricted`.
+>
+> If explicit allowlists are not implemented yet, I think we should avoid exposing `custom` as a real operator-facing choice until it actually exists, or at minimum make every doc/help surface state clearly that it is deferred.
+
+#### Blocking 4 — timeout docs do not match runtime behavior
+
+> The docs claim `60s` max execution timeout for `restricted` and `180s` for `full`, but the runtime currently appears to use `60_000` in both mediated and short-circuit execution paths.
+>
+> We should either implement the documented split or change the docs to the actual enforced policy before merge.
+
+#### Blocking 5 — pair review surface is weaker than documented
+
+> The pairing docs say the operator review step should show full callback URL, source address, instance ID, full fingerprint, and requested mode/permissions. The current notification/review surface does not appear to expose that full set of information, and requested mode/permissions do not seem to be clearly transmitted in Step A.
+>
+> For a security-sensitive trust-establishment flow, I think the review surface and the docs need to agree before merge.
+
+#### Blocking 6 — `/pair history` contract mismatch
+
+> The docs say `/pair history` shows all requests with mode, status, and outcome. The current implementation appears to read mediated `remote_requests`, but not assemble a unified history across short-circuit executions and requester-side result callbacks.
+>
+> Either the history surface needs to be broadened, or the docs need to be narrowed to the implemented scope.
+
+#### Blocking 7 — deployment/config documentation gap
+
+> This feature appears to rely on `PICLAW_WEB_EXTERNAL_URL` for a usable callback base URL, but I could not find that in `docs/configuration.md`. That makes the deploy path harder than the docs imply and could cause pairing to fall back to localhost-style callback URLs.
+>
+> I think that variable should be documented before merge, and ideally the runtime should warn when interop is enabled without a real external callback URL.
+
+### Suggested should-fix comments
+
+#### Should-fix 1 — identifier safety consistency
+
+> The security model correctly says display names are not security identifiers, but the helper/skill UX still allows routing by display name and instance-id prefix. Even if that remains acceptable for convenience sends, I think the docs should clearly distinguish convenience routing from identity-safe operations.
+
+#### Should-fix 2 — private-network SSRF wording
+
+> `PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK=1` is documented as skipping private/loopback IP checks, but the current `ssrf.ts` behavior looks broader because it returns before blocked-hostname checks. Either tighten the code or document the broader relaxation explicitly.
+
+#### Should-fix 3 — unrelated diff cleanup
+
+> The PR currently includes unrelated churn (`package-lock.json` at a stale version and `.gitignore` additions that do not seem tied to the feature). I would strongly prefer dropping those from the diff before merge.
+
+### Suggested follow-up comments
+
+#### Follow-up 1 — canonical docs beyond the feature doc
+
+> Even after the main blockers are fixed, I think this should still update the repo-level canonical docs (`docs/architecture.md`, `docs/tools-and-skills.md`) so the feature is discoverable outside the standalone cross-instance IPC design doc.
+
+#### Follow-up 2 — unified history/audit surface
+
+> The split between `remote_requests` and `remote_result_callbacks` suggests a future follow-up to provide one coherent operator-facing remote history/audit view. Even if that is too much for this PR, I would at least track it explicitly.
+
 ## Updates
 
 ### 2026-04-20
@@ -317,6 +419,7 @@ The feature-specific design doc was updated, but the repo-level canonical docs s
 - Recorded repo-level merge-gate failure (`make ci-fast`) and the dedicated remote suite result (`49` pass / `19` fail / `2` errors).
 - Captured the main doc/code mismatches: permission profile semantics, timeout semantics, pair-review UX, history semantics, identifier safety, deployment/config drift, and SSRF/dev-mode wording.
 - Recorded unrelated PR churn in `package-lock.json` and `.gitignore` as a separate cleanup item.
+- Appended a GitHub-review-ready comment set so the ticket contains both the audit evidence and the reviewer-facing blocking summary.
 
 ## Notes
 
