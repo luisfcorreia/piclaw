@@ -149,6 +149,8 @@ See [docs/development.md](docs/development.md).
 
 - [Configuration](docs/configuration.md) — environment variables, auth, reverse proxy, SSHFS
 - [Install from repo](docs/install-from-repo.md) — Bun-based Docker-free install
+- [Azure VM deployment](docs/azure/README.md) — provisioning, systemd service, Caddy reverse proxy, managed-identity
+- [Reverse proxy](docs/reverse-proxy.md) — Caddy, nginx, Cloudflare Tunnel, and trusted-proxy config
 - [Release process](docs/release.md) — versioning, tagging, publishing
 
 **Architecture & internals**
@@ -158,6 +160,10 @@ See [docs/development.md](docs/development.md).
 - [Storage model](docs/storage.md)
 - [Web pane extensions](docs/web-pane-extensions.md)
 - [Extension UI contract](docs/extension-ui-contract.md)
+- [Vendored widget libraries](docs/vendored-widget-libraries.md) — Babylon.js, ECharts, D3, Mermaid, fonts, and the widget post-processing helpers
+- [Dream memory system](docs/dream-memory.md) — nightly memory consolidation and daily note maintenance
+- [Web notification delivery policy](docs/web-notification-delivery-policy.md)
+- [iOS PWA reference](docs/PWA.md) — viewport, safe area, and standalone-mode quirks
 
 **Reference**
 
@@ -169,6 +175,10 @@ See [docs/development.md](docs/development.md).
 - [Azure OpenAI extension](docs/azure/azure-openai-extension.md) — managed-identity provider notes plus `/image` and `/flux` behaviour
 - [Experimental M365 extension](docs/m365-experimental-extension.md) — Microsoft 365 browser-auth automation, including current consumer-account support boundaries
 - [Development](docs/development.md)
+
+**Platform studies**
+
+- [Azure Functions feasibility study](docs/azure/azure-functions-feasibility-study-2026-04-17.md) — detailed analysis of running Piclaw entirely on Azure Functions (verdict: not recommended)
 
 ## Credits
 
