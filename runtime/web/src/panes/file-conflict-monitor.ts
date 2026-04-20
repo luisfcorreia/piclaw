@@ -82,7 +82,11 @@ export function createFileConflictMonitor(opts: FileConflictMonitorOptions): Fil
         stopPolling();
         showBar();
       }
-    } catch { /* skip cycle */ }
+    } catch (err) {
+      // Network errors during mtime polling are expected (e.g. offline, reload).
+      // Silently skip this cycle — the next interval will retry.
+      if (typeof console !== 'undefined') console.debug('[file-conflict-monitor] mtime poll skipped:', err);
+    }
   }
 
   function startPolling() {
