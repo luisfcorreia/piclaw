@@ -30,7 +30,7 @@ test("plain import covers config module init branches with isolated argv and env
       PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED: "1",
       PICLAW_REMOTE_INSTANCE_NAME: "remote-c",
       PICLAW_REMOTE_INTEROP_DECISION_MODEL: "decision-model-c",
-      PICLAW_TOOL_OUTPUT_RETENTION_DAYS: "14",
+      PICLAW_TOOL_OUTPUT_RETENTION_MS: "14400000",
       PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS: "60000",
       PICLAW_AGENT_TIMEOUT: "120000",
       PICLAW_BACKGROUND_AGENT_TIMEOUT: "45000",
@@ -137,7 +137,7 @@ test("plain import covers config module init branches with isolated argv and env
         });
         expect(cfg.getRemoteInteropConfig()).toBe(cfg.REMOTE_INTEROP_CONFIG);
         expect(cfg.TOOL_OUTPUT_CONFIG).toEqual({
-          retentionDays: 14,
+          retentionMs: 14400000,
           cleanupIntervalMs: 60000,
         });
         expect(cfg.getToolOutputConfig()).toBe(cfg.TOOL_OUTPUT_CONFIG);

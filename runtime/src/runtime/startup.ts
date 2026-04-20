@@ -94,7 +94,7 @@ export function initializeRuntimeEnvironment(state: RuntimeState): void {
   initDatabase();
   launchWorkspaceIndexProcess({ scope: "all" });
   const toolOutputConfig = getToolOutputConfig();
-  startToolOutputCleanup(toolOutputConfig.retentionDays, toolOutputConfig.cleanupIntervalMs);
+  startToolOutputCleanup(toolOutputConfig.retentionMs, toolOutputConfig.cleanupIntervalMs);
   state.loadTimestamps();
   state.loadChats();
 }

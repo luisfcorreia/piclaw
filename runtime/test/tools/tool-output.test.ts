@@ -40,7 +40,7 @@ test("save and search tool output", async () => {
   expect(empty.length).toBe(0);
 });
 
-test("prune removes old outputs", async () => {
+test("prune removes old outputs and their FTS rows", async () => {
   const ws = getTestWorkspace();
   restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
 
@@ -48,13 +48,15 @@ test("prune removes old outputs", async () => {
   db.initDatabase();
 
   const toolOutput = await import("../../src/tool-output.js");
-  const oldDate = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString();
-  const saved = toolOutput.saveToolOutput("old output", { createdAt: oldDate });
+  const oldDate = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+  const saved = toolOutput.saveToolOutput("old output with searchable marker", { createdAt: oldDate });
   expect(existsSync(saved.path)).toBe(true);
+  expect(toolOutput.searchToolOutput(saved.id, "marker", 5).length).toBeGreaterThan(0);
 
-  const removed = toolOutput.pruneToolOutputs(7);
+  const removed = toolOutput.pruneToolOutputs(4 * 60 * 60 * 1000);
   expect(removed).toBeGreaterThan(0);
   expect(existsSync(saved.path)).toBe(false);
+  expect(toolOutput.searchToolOutput(saved.id, "marker", 5)).toEqual([]);
 });
 
 test("chunkText hard-splits long lines at the configured chunk size", async () => {

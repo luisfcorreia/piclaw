@@ -22,9 +22,15 @@ const STORE_THRESHOLD_BYTES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_BYTE
 const STORE_THRESHOLD_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_STORE_LINES || "40", 10);
 const PREVIEW_LINES = parseInt(process.env.PICLAW_TOOL_OUTPUT_PREVIEW_LINES || "8", 10);
 const PREVIEW_LINE_CHARS = parseInt(process.env.PICLAW_TOOL_OUTPUT_PREVIEW_LINE_CHARS || "200", 10);
-const RETENTION_DAYS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_DAYS || "7", 10);
+const LEGACY_RETENTION_DAYS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_DAYS || "", 10);
+const RETENTION_MS = parseInt(process.env.PICLAW_TOOL_OUTPUT_RETENTION_MS || "", 10);
+const TOOL_OUTPUT_RETENTION_MS = Number.isFinite(RETENTION_MS) && RETENTION_MS > 0
+  ? RETENTION_MS
+  : Number.isFinite(LEGACY_RETENTION_DAYS) && LEGACY_RETENTION_DAYS > 0
+    ? LEGACY_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    : 4 * 60 * 60 * 1000;
 const CLEANUP_INTERVAL_MS = parseInt(
-  process.env.PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS || String(12 * 60 * 60 * 1000),
+  process.env.PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS || String(15 * 60 * 1000),
   10
 );
 
@@ -48,7 +54,7 @@ function shouldStoreOutput(text: string, lineCount: number): boolean {
 export default function (pi: any) {
   // Process startup already calls startToolOutputCleanup(); do not repeat that
   // work on every session bootstrap.
-  startToolOutputCleanup(RETENTION_DAYS, CLEANUP_INTERVAL_MS);
+  startToolOutputCleanup(TOOL_OUTPUT_RETENTION_MS, CLEANUP_INTERVAL_MS);
 
   pi.registerTool(createToolOutputSearchTool());
   pi.registerTool(createBatchExecTool(process.cwd()));

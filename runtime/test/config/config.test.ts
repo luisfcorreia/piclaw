@@ -286,7 +286,7 @@ test("tool output config getter groups retention env settings", async () => {
   await withTempWorkspaceEnv(
     "piclaw-config-",
     {
-      PICLAW_TOOL_OUTPUT_RETENTION_DAYS: "14",
+      PICLAW_TOOL_OUTPUT_RETENTION_MS: "14400000",
       PICLAW_TOOL_OUTPUT_CLEANUP_INTERVAL_MS: "60000",
     },
     async () => {
@@ -295,7 +295,7 @@ test("tool output config getter groups retention env settings", async () => {
       expect(cfg.getToolOutputConfig()).toBe(cfg.TOOL_OUTPUT_CONFIG);
       expect(Object.isFrozen(cfg.TOOL_OUTPUT_CONFIG)).toBe(true);
       expect(cfg.TOOL_OUTPUT_CONFIG).toEqual({
-        retentionDays: 14,
+        retentionMs: 14400000,
         cleanupIntervalMs: 60000,
       });
     },
