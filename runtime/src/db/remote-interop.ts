@@ -369,6 +369,26 @@ export function getPendingRemoteRequests(): RemoteRequestRecord[] {
     .all() as RemoteRequestRecord[];
 }
 
+/** Return all remote requests (any status), newest first. Supports pagination. */
+export function getAllRemoteRequests(limit = 50, offset = 0): RemoteRequestRecord[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT id, peer_instance_id, request_type, status, prompt, created_at, decision, remote_mode, error, result
+       FROM remote_requests
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(limit, offset) as RemoteRequestRecord[];
+}
+
+/** Return the total count of remote requests. */
+export function countRemoteRequests(): number {
+  const db = getDb();
+  const row = db.prepare(`SELECT COUNT(*) as cnt FROM remote_requests`).get() as { cnt: number };
+  return row.cnt;
+}
+
 /** Update the decision, result, and status of a remote request. */
 export function updateRemoteRequestDecision(
   id: string,

@@ -462,7 +462,7 @@ These defaults are recommended for first implementation.
 
 ---
 
-## 15) Command UX (Proposed)
+## 15) Command UX
 
 ```text
 /pair request <url>
@@ -471,13 +471,35 @@ These defaults are recommended for first implementation.
 /pair block <instance_id|fingerprint>
 /pair revoke <instance_id|fingerprint>
 /pair list
+/pair list revoked
 /pair inbox
+/pair history [page]
 /pair approve <proposal_id>
 /pair reject <proposal_id> [reason]
 /pair permissions <instance_id> <profile>
 /pair mode <instance_id> <mediated|short-circuit>
-/ask <instance_id> <prompt>
+/ask <instance_id|fingerprint|name> <prompt>
 ```
+
+| Command | Description |
+|---|---|
+| `/pair request <url>` | Initiate pairing with a remote piclaw instance |
+| `/pair accept <id>` | Accept an inbound pair request |
+| `/pair deny <id>` | Deny an inbound pair request |
+| `/pair block <id>` | Deny and block peer |
+| `/pair revoke <id>` | Revoke a pairing (local + best-effort remote notify) |
+| `/pair list` | Show paired peers and pending inbound pair requests |
+| `/pair list revoked` | Show revoked peers |
+| `/pair inbox` | Show pending proposals awaiting review |
+| `/pair history [page]` | Show all requests with mode, status and outcome (50 per page) |
+| `/pair approve <id>` | Approve and execute a pending proposal |
+| `/pair reject <id> [reason]` | Reject a proposal, optionally with reason |
+| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `restricted`, `full`, `custom`) |
+| `/pair mode <id> <mode>` | Set interaction mode (`mediated`, `short-circuit`) |
+| `/ask <id> <prompt>` | Send a prompt to a paired peer (signed HTTP request) |
+
+Prompts can also be sent via the `remote-peer` skill CLI
+(`peer.ts send <fingerprint|name> <prompt>`).
 
 UX requirements:
 

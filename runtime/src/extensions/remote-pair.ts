@@ -28,6 +28,8 @@ import {
   getOutboundPairRequestById,
   updateOutboundPairRequestStatus,
   getPendingRemoteRequests,
+  getAllRemoteRequests,
+  countRemoteRequests,
   getRemoteRequestById,
   type RemotePeerRecord,
   type RemotePairRequestRecord,
@@ -301,6 +303,60 @@ function handlePairList(pi: ExtensionAPI, filter?: string): void {
   }
 
   pi.sendMessage({ customType: "remote-pair", content: sections.join("\n\n"), display: true });
+}
+
+// ─── Proposal History ─────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
+
+function handlePairHistory(pi: ExtensionAPI, pageArg?: string): void {
+  const page = Math.max(1, parseInt(pageArg || "1", 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  let total: number;
+  try {
+    total = countRemoteRequests();
+  } catch {
+    total = 0;
+  }
+
+  if (!total) {
+    pi.sendMessage({ customType: "remote-pair", content: "No remote requests recorded.", display: true });
+    return;
+  }
+
+  let requests: RemoteRequestRecord[];
+  try {
+    requests = getAllRemoteRequests(PAGE_SIZE, offset);
+  } catch {
+    requests = [];
+  }
+
+  if (!requests.length) {
+    pi.sendMessage({ customType: "remote-pair", content: `No results on page ${page}. Total: ${total} request(s).`, display: true });
+    return;
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const lines = requests.map((r) => {
+    const peer = getRemotePeer(r.peer_instance_id);
+    const peerLabel = peer?.display_name ?? formatFingerprint(r.peer_instance_id);
+    const mode = r.remote_mode ?? "unknown";
+    const status = r.decision ?? r.status;
+    const promptPreview = r.prompt && r.prompt.length > 60 ? r.prompt.slice(0, 60) + "…" : (r.prompt || "(no prompt)");
+    return `| \`${r.id.slice(0, 8)}\` | **${peerLabel}** | ${mode} | ${status} | ${r.created_at} |\n|  |  | \`${promptPreview}\` | | |`;
+  });
+
+  const header = `**Request history (${total} total, page ${page}/${totalPages}):**`;
+  const table = `| ID | Peer | Mode | Status | Date |\n|---|---|---|---|---|\n${lines.join("\n")}`;
+  const footer = page < totalPages ? `\nRun \`/pair history ${page + 1}\` for the next page.` : "";
+
+  pi.sendMessage({
+    customType: "remote-pair",
+    content: `${header}\n\n${table}${footer}`,
+    display: true,
+  });
 }
 
 // ─── Proposal Inbox ──────────────────────────────────────────────────────────
@@ -723,6 +779,11 @@ export const remotePair: ExtensionFactory = (pi: ExtensionAPI) => {
         return;
       }
 
+      if (sub === "history") {
+        handlePairHistory(pi, rest || undefined);
+        return;
+      }
+
       if (sub === "approve") {
         if (!rest) {
           pi.sendMessage({ customType: "remote-pair", content: "Usage: /pair approve <proposal_id>", display: true });
@@ -854,6 +915,7 @@ export const remotePair: ExtensionFactory = (pi: ExtensionAPI) => {
           "  `/pair list` — show paired peers and pending requests",
           "  `/pair list revoked` — show revoked peers",
           "  `/pair inbox` — show pending proposals for review",
+          "  `/pair history` — show all requests with mode and outcome",
           "  `/pair approve <id>` — approve and execute a proposal",
           "  `/pair reject <id> [reason]` — reject a proposal",
           "  `/pair accept <id>` — accept an inbound pair request",

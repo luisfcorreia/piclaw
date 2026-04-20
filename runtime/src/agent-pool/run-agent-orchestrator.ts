@@ -443,6 +443,18 @@ export async function runAgentPrompt(
   const startTime = Date.now();
   options.clearAttachments(chatJid);
 
+  // Tool-cap and tool-ceiling state – declared outside try so cleanup
+  // can run in finally regardless of how the try exits.
+  const toolCallCapRef = { exceeded: false };
+  let toolCallUnsub: (() => void) | undefined;
+  type SessionWithToolControl = {
+    setActiveToolsByName?: (toolNames: string[]) => void;
+    getActiveToolNames?: () => string[];
+  };
+  let sessionCtrl: SessionWithToolControl | null = null;
+  let savedToolNames: string[] | null = null;
+  let originalSetActiveToolsByName: ((names: string[]) => void) | null = null;
+
   try {
     const runtime = await options.getOrCreateRuntime(chatJid);
     let session = runtime.session;
@@ -461,8 +473,6 @@ export async function runAgentPrompt(
 
     const timeoutMs = typeof runOptions.timeoutMs === "number" ? runOptions.timeoutMs : getAgentRuntimeConfig().timeoutMs;
 
-    const toolCallCapRef = { exceeded: false };
-    let toolCallUnsub: (() => void) | undefined;
     if (typeof runOptions.maxToolCalls === "number" && runOptions.maxToolCalls > 0) {
       let toolCallCount = 0;
       const cap = runOptions.maxToolCalls;
@@ -478,13 +488,7 @@ export async function runAgentPrompt(
     }
 
     // Tool ceiling enforcement – clamp active tools and prevent LLM self-escalation.
-    type SessionWithToolControl = {
-      setActiveToolsByName?: (toolNames: string[]) => void;
-      getActiveToolNames?: () => string[];
-    };
-    const sessionCtrl = session as unknown as SessionWithToolControl;
-    let savedToolNames: string[] | null = null;
-    let originalSetActiveToolsByName: ((names: string[]) => void) | null = null;
+    sessionCtrl = session as unknown as SessionWithToolControl;
 
     if (runOptions.toolCeilingFilter) {
       const ceilingFilter = runOptions.toolCeilingFilter;
@@ -738,7 +742,7 @@ export async function runAgentPrompt(
     return { status: "error", result: null, error: errorMsg };
   } finally {
     toolCallUnsub?.();
-    if (savedToolNames !== null && originalSetActiveToolsByName) {
+    if (sessionCtrl && savedToolNames !== null && originalSetActiveToolsByName) {
       sessionCtrl.setActiveToolsByName = originalSetActiveToolsByName;
       originalSetActiveToolsByName(savedToolNames);
     }
