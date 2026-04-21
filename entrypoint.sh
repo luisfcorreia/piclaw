@@ -16,6 +16,7 @@ DEFAULT_SUPERVISOR_CONF="/etc/supervisor/supervisord.conf"
 SUPERVISOR_CONF_ENV_SET="${SUPERVISOR_CONF+x}"
 SUPERVISOR_CONF="${SUPERVISOR_CONF:-$DEFAULT_SUPERVISOR_CONF}"
 SUPERVISORD_BIN="${SUPERVISORD_BIN:-/usr/bin/supervisord}"
+SUPERVISOR_VALIDATE_SCRIPT="${SUPERVISOR_VALIDATE_SCRIPT:-/usr/local/lib/bun/install/global/node_modules/piclaw/runtime/scripts/validate-supervisor-config.ts}"
 WORKSPACE_SUPERVISOR_DIR="/workspace/.piclaw/supervisor"
 SUPERVISOR_DEFAULTS_DIR="/usr/local/share/piclaw/supervisor"
 WORKSPACE_SUPERVISOR_MANIFEST="$WORKSPACE_SUPERVISOR_DIR/.defaults-manifest"
@@ -237,36 +238,11 @@ validate_supervisor_config() {
     if [ ! -f "$conf" ]; then
         return 1
     fi
-    # supervisord 4.x has no --test-config flag; -t is --strip_ansi, not a dry-run.
-    # Validate by parsing the INI directly with Python so we never invoke supervisord
-    # in foreground (nodaemon=true in both shipped configs would cause the same
-    # blocking behaviour the original -n bug caused).
-    python3 - "$conf" >/tmp/piclaw-supervisord-validate.log 2>&1 <<'SUPERVISOR_CONF_CHECK'
-import sys, configparser, glob, os
-conf = sys.argv[1]
-p = configparser.RawConfigParser()
-try:
-    p.read(conf)
-except Exception as e:
-    print(f"Config parse error in {conf}: {e}", file=sys.stderr)
-    sys.exit(1)
-if not p.has_section("supervisord"):
-    print(f"Missing [supervisord] section in {conf}", file=sys.stderr)
-    sys.exit(1)
-if p.has_section("include") and p.has_option("include", "files"):
-    base = os.path.dirname(os.path.abspath(conf))
-    for pat in p.get("include", "files").split():
-        if not os.path.isabs(pat):
-            pat = os.path.join(base, pat)
-        for inc in sorted(glob.glob(pat)):
-            sub = configparser.RawConfigParser()
-            try:
-                sub.read(inc)
-            except Exception as e:
-                print(f"Include parse error in {inc}: {e}", file=sys.stderr)
-                sys.exit(1)
-sys.exit(0)
-SUPERVISOR_CONF_CHECK
+    if [ ! -f "$SUPERVISOR_VALIDATE_SCRIPT" ]; then
+        echo "Missing supervisor validator script at $SUPERVISOR_VALIDATE_SCRIPT" >&2
+        return 1
+    fi
+    bun "$SUPERVISOR_VALIDATE_SCRIPT" "$conf" >/tmp/piclaw-supervisord-validate.log 2>&1
 }
 
 forward_supervisor_signal() {
