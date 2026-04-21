@@ -160,6 +160,10 @@ function estimateContextTokensFromSession(session: AgentSession): number {
   return context.messages.reduce((total: number, message: any) => total + estimateMessageTokens(message), 0);
 }
 
+/** Fallback context window when the model does not report one.
+ *  Conservative enough to trigger compaction before most models overflow. */
+const DEFAULT_FALLBACK_CONTEXT_WINDOW = 128_000;
+
 function getModelContextWindow(session: AgentSession): number | null {
   const model = session.model as (AgentSession["model"] & { contextLength?: number }) | undefined;
   const contextWindow = typeof model?.contextWindow === "number"
@@ -187,8 +191,17 @@ async function maybeAutoCompactSessionBeforePrompt(
   onEvent?: (event: AgentSessionEvent) => void,
 ): Promise<void> {
   if (session.isStreaming || session.isCompacting || session.isRetrying) return;
-  const contextWindow = getModelContextWindow(session);
-  if (contextWindow == null) return;
+  const reportedContextWindow = getModelContextWindow(session);
+  const contextWindow = reportedContextWindow ?? DEFAULT_FALLBACK_CONTEXT_WINDOW;
+  if (!reportedContextWindow) {
+    options.onWarn?.("Model does not report contextWindow; using fallback for pre-prompt compaction", {
+      operation: "maybe_auto_compact_session_before_prompt.fallback_context_window",
+      chatJid,
+      fallbackContextWindow: DEFAULT_FALLBACK_CONTEXT_WINDOW,
+      modelId: (session.model as any)?.id ?? null,
+      provider: (session.model as any)?.provider ?? null,
+    });
+  }
 
   const settingsManager = (session as AgentSession & {
     settingsManager?: { getCompactionSettings?: () => { enabled?: boolean; reserveTokens?: number } };

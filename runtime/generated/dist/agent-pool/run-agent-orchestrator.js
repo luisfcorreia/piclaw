@@ -120,6 +120,9 @@ function estimateContextTokensFromSession(session) {
     const context = session.sessionManager.buildSessionContext();
     return context.messages.reduce((total, message) => total + estimateMessageTokens(message), 0);
 }
+/** Fallback context window when the model does not report one.
+ *  Conservative enough to trigger compaction before most models overflow. */
+const DEFAULT_FALLBACK_CONTEXT_WINDOW = 128_000;
 function getModelContextWindow(session) {
     const model = session.model;
     const contextWindow = typeof model?.contextWindow === "number"
@@ -139,9 +142,17 @@ function getSessionStateErrorMessage(session) {
 async function maybeAutoCompactSessionBeforePrompt(session, chatJid, options, onEvent) {
     if (session.isStreaming || session.isCompacting || session.isRetrying)
         return;
-    const contextWindow = getModelContextWindow(session);
-    if (contextWindow == null)
-        return;
+    const reportedContextWindow = getModelContextWindow(session);
+    const contextWindow = reportedContextWindow ?? DEFAULT_FALLBACK_CONTEXT_WINDOW;
+    if (!reportedContextWindow) {
+        options.onWarn?.("Model does not report contextWindow; using fallback for pre-prompt compaction", {
+            operation: "maybe_auto_compact_session_before_prompt.fallback_context_window",
+            chatJid,
+            fallbackContextWindow: DEFAULT_FALLBACK_CONTEXT_WINDOW,
+            modelId: session.model?.id ?? null,
+            provider: session.model?.provider ?? null,
+        });
+    }
     const settingsManager = session.settingsManager;
     const settings = typeof settingsManager?.getCompactionSettings === "function"
         ? settingsManager.getCompactionSettings()
