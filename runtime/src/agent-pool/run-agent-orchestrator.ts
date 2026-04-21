@@ -24,6 +24,11 @@ import {
   resolveSessionIdleMaxWaitMs,
   waitForSessionIdle,
 } from "./prompt-utils.js";
+import {
+  inspectBlankTurnSessionDelta,
+  isBlankTurnSessionDelta,
+  snapshotSessionEntryCount,
+} from "./blank-turn-detection.js";
 import type { AgentTurnCoordinator } from "./turn-coordinator.js";
 import type { AgentOutput, AgentRecoveryDiagnosticEntry, AgentRecoveryMetadata, RunAgentOptions } from "./contracts.js";
 
@@ -324,6 +329,7 @@ async function runPromptAttempt(
   let hadCompletedTurnOutput = false;
   let compactionErrorMessage: string | null = null;
   let sawCompactionIntent = false;
+  const sessionEntryBaseline = snapshotSessionEntryCount(session);
 
   const originalOnTurnComplete = runOptions.onTurnComplete;
   const onTurnComplete = originalOnTurnComplete
@@ -413,11 +419,38 @@ async function runPromptAttempt(
     } else if (latentStateError) {
       output = { status: "error", result: null, error: latentStateError };
     } else {
-      output = {
-        status: "success",
-        result: finalText || null,
-        attachments: finalAttachments.length ? finalAttachments : undefined,
-      };
+      const blankTurnDelta = inspectBlankTurnSessionDelta(session, sessionEntryBaseline);
+      if (
+        !finalText
+        && finalAttachments.length === 0
+        && !hadCompletedTurnOutput
+        && !hadPartialOutput
+        && !hadToolActivity
+        && isBlankTurnSessionDelta(blankTurnDelta)
+      ) {
+        const detail = [
+          `${blankTurnDelta?.appendedUserMessageCount ?? 0} user message(s)`,
+          `${blankTurnDelta?.appendedAssistantMessageCount ?? 0} assistant message(s)`,
+          `${blankTurnDelta?.appendedToolResultMessageCount ?? 0} tool-result message(s)`,
+        ].join(", ");
+        options.onWarn?.("Prompt resolved with a blank user-only session delta", {
+          operation: "run_agent.blank_turn_delta",
+          chatJid,
+          detail,
+          blankTurnDelta,
+        });
+        output = {
+          status: "error",
+          result: null,
+          error: `Prompt completed without emitting an assistant reply before finalization (${detail}).`,
+        };
+      } else {
+        output = {
+          status: "success",
+          result: finalText || null,
+          attachments: finalAttachments.length ? finalAttachments : undefined,
+        };
+      }
     }
   }
 
