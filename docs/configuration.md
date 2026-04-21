@@ -1,6 +1,24 @@
 # Configuration
 
-This document covers all `piclaw` configuration options: environment variables, config files, secrets, authentication, and notifications.
+This document covers all `piclaw` configuration options: environment variables,
+config files, secrets, authentication, and notifications.
+
+**Jump to:**
+[Paths](#path-overrides) ·
+[Web server & networking](#web-server) ·
+[Terminal](#web-terminal) ·
+[Workspace env hook](#workspace-environment-hook-workspaceenvsh) ·
+[Provider setup](#provider-setup-via-login) ·
+[Runtime & agent](#runtime-and-agent) ·
+[MCP](#mcp-server-config-pi-mcp-adapter) ·
+[SSH remote tools](#ssh-backed-remote-core-tools) ·
+[Authentication](#authentication-totp--passkeys) ·
+[Keychain](#keychain-secrets) ·
+[WhatsApp](#whatsapp-pairing) ·
+[Pushover](#pushover-notifications) ·
+[Dream](#dream-and-autodream) ·
+[External workspace](#using-an-external-workspace) ·
+[Cross-instance interop](#cross-instance-interop)
 
 ## Path overrides
 

@@ -2,6 +2,13 @@
 
 This document lists the tools and skills exposed to the agent, plus common slash commands.
 
+**Jump to:**
+[Agent tools](#agent-tools) ·
+[Skills](#skills) ·
+[Slash commands](#slash-commands) ·
+[Skill pipeline](#skill-pipeline) ·
+[Dream / AutoDream](#dream-and-autodream)
+
 ## Agent tools
 
 Core tools (from `pi`):
