@@ -8,6 +8,7 @@ import {
 import { getChatCursor, getDb, replaceMessageContent } from "../../../db.js";
 import { RemoteInteropService } from "../../../remote/service.js";
 import { handlePost as handlePostRequest } from "../handlers/posts.js";
+import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import {
   WebAdaptiveCardSidePromptService,
   type WebAdaptiveCardSidePromptServiceOptions,
@@ -449,14 +450,14 @@ export function createWebChannelConstructorFactory(
     sendMessage: (chatJid, text, sendOptions) => runtimeFollowupFacade.sendMessage(chatJid, text, sendOptions),
     broadcastEvent: (eventType, data) => channel.broadcastEvent(eventType, data),
     skipFailedOnModelSwitch: (chatJid) => runtimeState.skipFailedOnModelSwitch(chatJid),
-    forwardAgentMessage: async (req, pathname, _chatJid, _agentId) => {
-      const webChannel = channel as unknown as WebChannelLike & {
-        handleAgentMessage?(req: Request, pathname: string): Promise<Response>;
-      };
-      if (typeof webChannel.handleAgentMessage === "function") {
-        return await webChannel.handleAgentMessage(req, pathname);
-      }
-      throw new Error("Missing WebChannel.handleAgentMessage for adaptive-card side prompts.");
+    forwardAgentMessage: async (req, pathname, chatJid, agentId) => {
+      return await handleAgentMessageRequest(
+        channel as unknown as WebChannelLike,
+        req,
+        pathname,
+        chatJid,
+        agentId,
+      );
     },
   });
 

@@ -3300,11 +3300,13 @@ test("web channel handles recovery-continue adaptive card actions on the same th
   const db = await import("../../../src/db.js");
   db.initDatabase();
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
+  const recoveryChatJid = "web:chat:recovery-continue";
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+  db.storeChatMetadata(recoveryChatJid, new Date().toISOString(), "Recovery");
 
   const sourceRowId = db.storeMessage({
     id: `msg-${Math.random()}`,
-    chat_jid: "web:default",
+    chat_jid: recoveryChatJid,
     sender: "web-agent",
     sender_name: "Pi",
     content: "Recovery exhausted. Choose how to continue.",
@@ -3351,21 +3353,26 @@ test("web channel handles recovery-continue adaptive card actions on the same th
   const res = await (web as any).handleRequest(req);
   expect(res.status).toBe(201);
 
-  const timeline = db.getTimeline("web:default", 10);
-  const submission = timeline.find((entry: any) => entry.id !== sourceRowId && entry.data?.content?.includes("Continue the previous answer from the last partial output"));
+  const recoveryTimeline = db.getTimeline(recoveryChatJid, 10);
+  const submission = recoveryTimeline.find((entry: any) => entry.id !== sourceRowId && entry.data?.content?.includes("Continue the previous answer from the last partial output"));
   expect(submission).toBeDefined();
   expect(submission?.data?.thread_id).toBe(sourceRowId);
+
+  const defaultTimeline = db.getTimeline("web:default", 10);
+  expect(defaultTimeline.some((entry: any) => String(entry.data?.content || "").includes("Continue the previous answer from the last partial output"))).toBe(false);
 });
 
 test("web channel handles recovery-retry-clean adaptive card actions as isolated runs", async () => {
   const db = await import("../../../src/db.js");
   db.initDatabase();
   db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors;");
+  const recoveryChatJid = "web:chat:recovery-retry";
   db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+  db.storeChatMetadata(recoveryChatJid, new Date().toISOString(), "Recovery");
 
   const sourceRowId = db.storeMessage({
     id: `msg-${Math.random()}`,
-    chat_jid: "web:default",
+    chat_jid: recoveryChatJid,
     sender: "web-agent",
     sender_name: "Pi",
     content: "Recovery exhausted. Choose how to continue.",
@@ -3411,10 +3418,13 @@ test("web channel handles recovery-retry-clean adaptive card actions as isolated
   const res = await (web as any).handleRequest(req);
   expect(res.status).toBe(201);
 
-  const timeline = db.getTimeline("web:default", 10);
-  const submission = timeline.find((entry: any) => entry.id !== sourceRowId && entry.data?.content?.includes("Retry the previous request cleanly as a new isolated run"));
+  const recoveryTimeline = db.getTimeline(recoveryChatJid, 10);
+  const submission = recoveryTimeline.find((entry: any) => entry.id !== sourceRowId && entry.data?.content?.includes("Retry the previous request cleanly as a new isolated run"));
   expect(submission).toBeDefined();
   expect(submission?.data?.thread_id == null || submission?.data?.thread_id === submission?.id).toBe(true);
+
+  const defaultTimeline = db.getTimeline("web:default", 10);
+  expect(defaultTimeline.some((entry: any) => String(entry.data?.content || "").includes("Retry the previous request cleanly as a new isolated run"))).toBe(false);
 });
 
 test("web channel strips internal submit metadata before persisting completion state", async () => {
