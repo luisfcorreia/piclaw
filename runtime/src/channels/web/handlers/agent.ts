@@ -52,14 +52,6 @@ import { DEFAULT_BASE_RETRY_MS, getRetryAtIso } from "../../../queue/retry-polic
 
 const log = createLogger("web.handlers.agent");
 
-/**
- * Tracks consecutive no-output turns per chat JID. When a session produces
- * empty responses back-to-back (symptom of a stuck/oversized context), we
- * escalate from a silent no-op to a recovery-stalled card so the user can
- * act (compact / new-session) instead of being silently looped.
- */
-const consecutiveNoOutputCounts = new Map<string, number>();
-
 function isRateLimitError(errorText: string | null | undefined): boolean {
   if (!errorText) return false;
   return /\b429\b|rate[ -]?limit|too many requests|retry-after/i.test(errorText);
@@ -1170,8 +1162,6 @@ export async function processChat(
   };
 
   const finalizeSuccessfulRun = async () => {
-    // Reset consecutive no-output counter on any successful run.
-    consecutiveNoOutputCounts.delete(chatJid);
     endChatRun(chatJid);
 
     const cursorAfterEnd = getChatCursor(chatJid);
@@ -1524,71 +1514,32 @@ export async function processChat(
       return;
     }
 
-    // The agent completed normally but produced no output and there was no
-    // draft buffer. This still happens in rare benign cases (for example a
-    // restart replay consuming a contextless message), so we allow one no-op
-    // before escalating. On the second consecutive no-output turn for the same
-    // chat (the reliable sign of a stuck/oversized context), we escalate to the
-    // recovery-stalled card so the user can compact or start a new session.
-    const noOutputCount = (consecutiveNoOutputCounts.get(chatJid) ?? 0) + 1;
-    consecutiveNoOutputCounts.set(chatJid, noOutputCount);
+    // A turn that finishes successfully with no persisted output is not a
+    // benign success — it leaves the chat in a consumed-but-blocked state.
+    // Treat the first occurrence as a failed run immediately so the user gets
+    // a recovery card and the cursor does not silently advance past the prompt.
+    const title = "Agent produced no response";
+    const detail =
+      "The turn ended without a persisted reply. The session may be stalled, oversized, or internally inconsistent. " +
+      "Use `/compact` to repair and rewrite the session, or `/new-session` to start fresh.";
+    const previewBlock = preview ? `\n\n> ${preview}` : "";
+    const noticeText = `⚠️ ${title}.\n\n${detail}${previewBlock}`;
 
-    if (noOutputCount >= 2) {
-      // Escalate: consecutive empty responses indicate a stuck session.
-      consecutiveNoOutputCounts.delete(chatJid);
-      const title = "Session stuck — agent produced no response twice in a row";
-      const detail =
-        "Two consecutive turns produced no output. The session context may be too large or in a broken state. " +
-        "Use `/compact` to repair and rewrite the session, or `/new-session` to start fresh.";
-      const previewBlock = preview ? `\n\n> ${preview}` : "";
-      const noticeText = `\u26a0\ufe0f ${title}.\n\n${detail}${previewBlock}`;
-
-      log.warn("Agent produced no output twice in a row — escalating to recovery card", {
-        operation: "process_chat.no_output_escalated",
-        chatJid,
-        noOutputCount,
-      });
-
-      endChatRunWithError(chatJid, {
-        prevTs: prevCursor,
-        failedTs: lastMessage.timestamp,
-        messageId: lastMessage.id,
-        threadRootId: resolvedThreadRootId ?? null,
-        createdAt: new Date().toISOString(),
-      });
-
-      const notice = channel.storeMessage(chatJid, noticeText, true, [], {
-        threadId: resolvedThreadRootId ?? undefined,
-        isTerminalAgentReply: true,
-      });
-      if (notice) {
-        channel.broadcastEvent("agent_response", notice);
-      }
-
-      trackedEmitter.status({
-        thread_id: threadId,
-        agent_id: agentId,
-        type: "error",
-        title,
-        detail,
-        turn_id: turnId,
-      });
-
-      await channel.sendMessage(chatJid, `${title}. Choose how to continue.`, {
-        threadId: resolvedThreadRootId,
-        contentBlocks: [buildRecoveryStalledCard(turnId, resolvedThreadRootId, detail)],
-      });
-      return;
-    }
-
-    log.warn("Agent completed without output; finalizing as no-op", {
-      operation: "process_chat.no_output_noop",
+    log.warn("Agent completed without output; recording failed run", {
+      operation: "process_chat.no_output_failed",
       chatJid,
+      hadIntermediateOutput,
+      persistedIntermediateOutput,
+      hadDraft,
     });
 
-    const noticeText = preview
-      ? `⚠️ Your message was received but the agent produced no response. You may need to re-send it.\n\n> ${preview}`
-      : "⚠️ Your message was received but the agent produced no response. You may need to re-send it.";
+    endChatRunWithError(chatJid, {
+      prevTs: prevCursor,
+      failedTs: lastMessage.timestamp,
+      messageId: lastMessage.id,
+      threadRootId: resolvedThreadRootId ?? null,
+      createdAt: new Date().toISOString(),
+    });
 
     const notice = channel.storeMessage(chatJid, noticeText, true, [], {
       threadId: resolvedThreadRootId ?? undefined,
@@ -1598,7 +1549,19 @@ export async function processChat(
       channel.broadcastEvent("agent_response", notice);
     }
 
-    await finalizeSuccessfulRun();
+    trackedEmitter.status({
+      thread_id: threadId,
+      agent_id: agentId,
+      type: "error",
+      title,
+      detail,
+      turn_id: turnId,
+    });
+
+    await channel.sendMessage(chatJid, `${title}. Choose how to continue.`, {
+      threadId: resolvedThreadRootId,
+      contentBlocks: [buildRecoveryStalledCard(turnId, resolvedThreadRootId, detail)],
+    });
     return;
   }
 

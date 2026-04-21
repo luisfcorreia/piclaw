@@ -979,7 +979,6 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         });
     };
     const finalizeSuccessfulRun = async () => {
-        // Single UPDATE: clears inflight AND clears any stale failed_run atomically.
         endChatRun(chatJid);
         const cursorAfterEnd = getChatCursor(chatJid);
         const pendingSteerTimestamps = channel.consumePendingSteering(chatJid);
@@ -1303,17 +1302,29 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
             });
             return;
         }
-        // The agent completed normally but produced no output and there was no
-        // draft buffer. This still happens in rare benign cases (for example a
-        // restart replay consuming a contextless message), so keep the no-op path
-        // for that narrow scenario only.
-        log.warn("Agent completed without output; finalizing as no-op", {
-            operation: "process_chat.no_output_noop",
+        // A turn that finishes successfully with no persisted output is not a
+        // benign success — it leaves the chat in a consumed-but-blocked state.
+        // Treat the first occurrence as a failed run immediately so the user gets
+        // a recovery card and the cursor does not silently advance past the prompt.
+        const title = "Agent produced no response";
+        const detail = "The turn ended without a persisted reply. The session may be stalled, oversized, or internally inconsistent. " +
+            "Use `/compact` to repair and rewrite the session, or `/new-session` to start fresh.";
+        const previewBlock = preview ? `\n\n> ${preview}` : "";
+        const noticeText = `⚠️ ${title}.\n\n${detail}${previewBlock}`;
+        log.warn("Agent completed without output; recording failed run", {
+            operation: "process_chat.no_output_failed",
             chatJid,
+            hadIntermediateOutput,
+            persistedIntermediateOutput,
+            hadDraft,
         });
-        const noticeText = preview
-            ? `⚠️ Your message was received but the agent produced no response. You may need to re-send it.\n\n> ${preview}`
-            : "⚠️ Your message was received but the agent produced no response. You may need to re-send it.";
+        endChatRunWithError(chatJid, {
+            prevTs: prevCursor,
+            failedTs: lastMessage.timestamp,
+            messageId: lastMessage.id,
+            threadRootId: resolvedThreadRootId ?? null,
+            createdAt: new Date().toISOString(),
+        });
         const notice = channel.storeMessage(chatJid, noticeText, true, [], {
             threadId: resolvedThreadRootId ?? undefined,
             isTerminalAgentReply: true,
@@ -1321,7 +1332,18 @@ export async function processChat(channel, chatJid, agentId, threadRootId) {
         if (notice) {
             channel.broadcastEvent("agent_response", notice);
         }
-        await finalizeSuccessfulRun();
+        trackedEmitter.status({
+            thread_id: threadId,
+            agent_id: agentId,
+            type: "error",
+            title,
+            detail,
+            turn_id: turnId,
+        });
+        await channel.sendMessage(chatJid, `${title}. Choose how to continue.`, {
+            threadId: resolvedThreadRootId,
+            contentBlocks: [buildRecoveryStalledCard(turnId, resolvedThreadRootId, detail)],
+        });
         return;
     }
     await finalizeSuccessfulRun();

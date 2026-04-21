@@ -173,3 +173,42 @@ test("agent pool auto-rotates oversized persisted sessions before prompting", as
 
   await pool.shutdown();
 });
+
+test("agent pool waits for an oversized busy session to settle before auto-rotating", async () => {
+  tempWorkspace = createTempWorkspace("piclaw-auto-rotate-busy-");
+  restoreEnv = setEnv({
+    PICLAW_WORKSPACE: tempWorkspace.workspace,
+    PICLAW_STORE: tempWorkspace.store,
+    PICLAW_DATA: tempWorkspace.data,
+    PICLAW_SESSION_AUTO_ROTATE: "1",
+    PICLAW_SESSION_MAX_SIZE_MB: "1",
+    PICLAW_SESSION_IDLE_MAX_WAIT_MS: "1000",
+  });
+
+  const { ensureSessionDir } = await importFresh<typeof import("../src/agent-pool/session.js")>("../src/agent-pool/session.js");
+  const { AgentPool } = await importFresh<typeof import("../src/agent-pool.js")>("../src/agent-pool.js");
+
+  const sessionDir = ensureSessionDir("web:default");
+  const session = new AutoRotateSession(tempWorkspace.workspace, sessionDir);
+  const previousSessionFile = session.sessionFile;
+  expect(previousSessionFile).toBeTruthy();
+  truncateSync(previousSessionFile!, 2 * 1024 * 1024);
+  session.isStreaming = true;
+  setTimeout(() => {
+    session.isStreaming = false;
+  }, 120);
+
+  const pool = new AgentPool({
+    createSession: async () => createRuntime(session) as any,
+  });
+
+  const result = await pool.runAgent("hello after settle", "web:default", { timeoutMs: 0 });
+  expect(result.status).toBe("success");
+  expect(result.result).toBe("rotated reply");
+  expect(session.compactCalls).toBe(1);
+  expect(session.sessionFile).not.toBe(previousSessionFile);
+  expect(previousSessionFile && existsSync(previousSessionFile)).toBe(false);
+  expect(existsSync(join(sessionDir, "archive", basename(previousSessionFile!)))).toBe(true);
+
+  await pool.shutdown();
+});

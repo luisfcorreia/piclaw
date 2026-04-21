@@ -1,14 +1,14 @@
 /**
  * runtime/startup.ts – Runtime startup wiring helpers.
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, statSync, writeFileSync } from "fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { dirname, join, resolve } from "path";
 import { WebChannel } from "../channels/web.js";
 import { PushoverChannel } from "../channels/pushover.js";
 import { WhatsAppChannel } from "../channels/whatsapp.js";
 import { setMessagesPostFn } from "../extensions/messages-crud.js";
 import { DATA_DIR, STORE_DIR, WORKSPACE_DIR, getPushoverConfig, getToolOutputConfig, getWhatsAppConfig, } from "../core/config.js";
-import { initDatabase, storeChatMetadata, storeMessage } from "../db.js";
+import { getDb, initDatabase, storeChatMetadata, storeMessage } from "../db.js";
 import { startToolOutputCleanup } from "../tool-output.js";
 import { createUuid } from "../utils/ids.js";
 import { createLogger } from "../utils/logger.js";
@@ -47,6 +47,55 @@ const WORKSPACE_BOOTSTRAP_ENTRIES = [
     "notes/memory/days/.gitkeep",
     "notes/preferences/.gitkeep",
 ];
+function sanitizeSessionDirName(chatJid) {
+    return String(chatJid || "").replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+function isDirectoryEmpty(path) {
+    try {
+        return readdirSync(path).length === 0;
+    }
+    catch {
+        return false;
+    }
+}
+export function cleanupOrphanedActiveChatArtifacts() {
+    const db = getDb();
+    const rows = db.prepare(`SELECT b.chat_jid
+       FROM chat_branches b
+       LEFT JOIN chat_cursors cc ON cc.chat_jid = b.chat_jid
+       LEFT JOIN (
+         SELECT chat_jid, COUNT(*) AS cnt
+           FROM messages
+          GROUP BY chat_jid
+       ) m ON m.chat_jid = b.chat_jid
+      WHERE b.archived_at IS NULL
+        AND cc.chat_jid IS NULL
+        AND COALESCE(m.cnt, 0) = 0`).all();
+    let cleaned = 0;
+    for (const row of rows) {
+        const chatJid = String(row.chat_jid || "").trim();
+        if (!chatJid)
+            continue;
+        const mainDir = join(DATA_DIR, "sessions", sanitizeSessionDirName(chatJid));
+        const sideDir = join(DATA_DIR, "sessions", `${sanitizeSessionDirName(chatJid)}__btw-side`);
+        const mainDirExists = existsSync(mainDir);
+        const sideDirExists = existsSync(sideDir);
+        const mainDirEmpty = !mainDirExists || isDirectoryEmpty(mainDir);
+        const sideDirEmpty = !sideDirExists || isDirectoryEmpty(sideDir);
+        if (!mainDirEmpty || !sideDirEmpty) {
+            continue;
+        }
+        db.prepare("DELETE FROM chat_branches WHERE chat_jid = ?").run(chatJid);
+        db.prepare("DELETE FROM chats WHERE jid = ?").run(chatJid);
+        db.prepare("DELETE FROM token_usage WHERE chat_jid = ?").run(chatJid);
+        if (mainDirExists)
+            rmSync(mainDir, { recursive: true, force: true });
+        if (sideDirExists)
+            rmSync(sideDir, { recursive: true, force: true });
+        cleaned += 1;
+    }
+    return cleaned;
+}
 function bootstrapWorkspaceFromSkel() {
     if (!existsSync(WORKSPACE_SKEL_DIR))
         return;
@@ -81,6 +130,13 @@ export function initializeRuntimeEnvironment(state) {
     mkdirSync(WORKSPACE_DIR, { recursive: true });
     bootstrapWorkspaceFromSkel();
     initDatabase();
+    const cleanedOrphans = cleanupOrphanedActiveChatArtifacts();
+    if (cleanedOrphans > 0) {
+        log.info("Cleaned orphaned active chat artifacts at startup", {
+            operation: "cleanup_orphaned_active_chat_artifacts",
+            cleaned: cleanedOrphans,
+        });
+    }
     launchWorkspaceIndexProcess({ scope: "all" });
     const toolOutputConfig = getToolOutputConfig();
     startToolOutputCleanup(toolOutputConfig.retentionMs, toolOutputConfig.cleanupIntervalMs);

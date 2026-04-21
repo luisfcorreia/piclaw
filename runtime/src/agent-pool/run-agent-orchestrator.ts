@@ -70,6 +70,27 @@ async function maybeAutoRotateSession(
     && sessionFileLines >= sessionStorageConfig.maxLines;
   if (!exceedsSize && !exceedsLines) return session;
 
+  if (session.isStreaming || session.isCompacting || session.isRetrying) {
+    const idleMaxWaitMs = resolveSessionIdleMaxWaitMs(session);
+    try {
+      await waitForSessionIdle(session, 10, (result) => {
+        options.onInfo?.("Oversized session settled before auto-rotation", {
+          operation: "maybe_auto_rotate_session.wait_for_idle",
+          chatJid,
+          waitMs: result.totalWaitMs,
+          settleTicks: result.settleTicks,
+        });
+      }, idleMaxWaitMs);
+    } catch (error) {
+      options.onWarn?.("Auto-rotation skipped", {
+        operation: "maybe_auto_rotate_session",
+        chatJid,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return session;
+    }
+  }
+
   const result = await rotateSession(session, runtime, { reason: "automatic" });
   if (result.status === "success") {
     options.onInfo?.("Auto-rotated oversized session", {
