@@ -36,6 +36,3 @@ artifacts/agent-control-fuzz/
 artifacts/web-control-plane-fuzz/
 runtime/artifacts/agent-control-fuzz/
 runtime/artifacts/web-control-plane-fuzz/
-
-workspace/*
-home*
