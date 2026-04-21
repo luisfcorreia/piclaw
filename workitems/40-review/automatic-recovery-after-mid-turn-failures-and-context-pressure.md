@@ -4,7 +4,7 @@ title: Automatic recovery after mid-turn failures and context pressure
 status: review
 priority: high
 created: 2026-04-18
-updated: 2026-04-19
+updated: 2026-04-21
 target_release: next
 tags:
   - work-item
@@ -348,6 +348,27 @@ turn paths should use the shared engine from the start.
 
 ## Updates
 
+### 2026-04-21
+- User field report confirmed two still-live failure modes on `main` during long context-pressure runs:
+  - the terminal persisted warning `⚠️ Your message was received but the agent produced no response. You may need to re-send it.` was still being emitted after stalled compaction / automatic recovery, which is the wrong classification for that failure path
+  - manual `/compact` could itself fail with Anthropic-style transcript validation errors such as orphaned ``tool_result`` / ``tool_use_id`` mismatches, proving the repair path was incomplete for tool-call transcript corruption
+- Root-cause audit on `main` (`daffa0f8`) showed:
+  - `runtime/src/channels/web/handlers/agent.ts` still finalized some no-output recovery/compaction failures through the benign no-op branch
+  - `/compact` in `runtime/src/agent-control/handlers/control.ts` called `session.compact()` directly without first applying the existing orphan-tool-result repair logic already used before normal agent runs
+  - user-visible corruption messaging still only mentioned corrupt image blocks even though orphaned tool-result blocks were a real observed corruption class
+- Landed a stabilization slice in commit `6eddf72c` (`Fix stalled recovery and compact session repair`):
+  - `/compact` now prunes orphaned tool-result blocks before rewriting the session
+  - corrupted-session messaging now explicitly covers orphaned tool-result / `tool_use_id` transcript corruption and states that `/compact` repairs both corrupt image blocks and orphaned tool-result blocks automatically
+  - the web no-output fallback now detects stalled compaction / recovery activity and records a failed run plus a persistent recovery-needed notice/card instead of the bogus “produced no response” notice
+  - recovery-stalled web UX now preserves a durable explanation and same-thread action affordance instead of only transient SSE status text
+- Focused verification for the stabilization slice passed locally:
+  - `runtime/test/agent-pool/orphan-tool-results.test.ts`
+  - `runtime/test/agent-control/agent-control-handlers.test.ts`
+  - `runtime/test/channels/web/agent-error-classification.test.ts`
+  - `runtime/test/channels/web/web-channel.test.ts`
+  - result: `97 pass / 0 fail`
+- This does **not** close the broader ticket yet. It fixes a concrete regression cluster inside the larger recovery/compaction effort, but the full shared recovery acceptance surface still needs completion and broader verification.
+
 ### 2026-04-19
 - Moved doing → review via board batch action.
 
@@ -472,7 +493,10 @@ turn paths should use the shared engine from the start.
 
 ## Links
 
+- Commit: `6eddf72c` — `Fix stalled recovery and compact session repair`
 - `runtime/src/channels/web/handlers/agent.ts`
+- `runtime/src/agent-control/handlers/control.ts`
+- `runtime/src/agent-pool/orphan-tool-results.ts`
 - `runtime/src/agent-pool/run-agent-orchestrator.ts`
 - `runtime/src/channels/web/sse/agent-events.ts`
 - `runtime/src/extensions/smart-compaction.ts`
