@@ -52,6 +52,12 @@ bun peer.ts send <peer> "<prompt>"
 - `full / short-circuit` peers → `/api/remote/execute` (synchronous, returns result)
 - all others → `/api/remote/proposal` (queued, requires human approval on their side)
 
+**Permission profiles** (set via `/pair permissions`):
+- `read-only` — ping/status only; proposals and execution are rejected
+- `non-mutating` — all read-only tools (no side-effects); mutating tools blocked
+- `restricted` (default) — denylist-based; shell, file-write, keychain, etc. blocked
+- `full` — unrestricted tool access
+
 Examples:
 ```bash
 bun peer.ts send product-manager "What is your current task?"

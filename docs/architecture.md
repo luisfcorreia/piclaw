@@ -343,7 +343,7 @@ Key modules:
 | `remote/service-operations.ts` | Ping, proposal, execute, revoke, result-callback |
 | `remote/service-security.ts` | Callback proof verification (SSRF-safe) |
 | `remote/auth.ts` | Ed25519 signature build/verify |
-| `remote/policy.ts` | Profile-based tool ceiling filters |
+| `remote/policy.ts` | Profile-based tool ceiling filters (`read-only` → `non-mutating` → `restricted` → `full`) |
 | `remote/ssrf.ts` | Callback URL validation (hostname, DNS, private-IP) |
 | `extensions/remote-pair.ts` | `/pair` slash command (accept/deny/block/revoke/list) |
 | `skills/remote-peer/` | Agent skill for sending prompts to paired peers |

@@ -354,6 +354,13 @@ Pairing grants identity trust, not blanket execution rights.
 | `full` | full remote execution rights |
 | `custom` | explicit allowlist (internal only — not yet user-facing) |
 
+**`read-only`** is the most conservative profile: the peer can only ping and
+check status. Proposals and execution are rejected at the endpoint level.
+
+**`non-mutating`** allows the peer to run any tool whose capability kind is
+`read-only` in the tool-capabilities registry (e.g. `read`, `find`, `grep`,
+`ls`, `list_tools`). Mutating tools are blocked by the tool ceiling filter.
+
 ### Restricted baseline (deny by default)
 
 Disallow at minimum:
