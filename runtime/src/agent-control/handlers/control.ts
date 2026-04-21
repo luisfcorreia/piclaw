@@ -15,6 +15,7 @@ import { createMedia } from "../../db.js";
 import { requestGracefulShutdown } from "../../runtime/shutdown-registry.js";
 import { createLogger, debugSuppressedError } from "../../utils/logger.js";
 import { killTrackedProcesses } from "../../utils/process-tracker.js";
+import { pruneOrphanToolResults } from "../../agent-pool/orphan-tool-results.js";
 
 const log = createLogger("agent-control.control");
 
@@ -85,6 +86,16 @@ function createCompactReportAttachment(
   }
 }
 
+function isSessionCorruptionError(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return /invalid_request_error|\b400\b.*(?:image|media_type|content|base64|tool_use_id|tool_result|tool_use)|media_type|image.*source|unexpected [`'\"]?tool_use_id[`'\"]?|tool_result.*corresponding.*tool_use/i.test(message);
+}
+
+function formatCompactFailureMessage(message: string): string {
+  if (!isSessionCorruptionError(message)) return message;
+  return `⚠️ API error — the session may be corrupted:\n\n\`${message.slice(0, 500)}\`\n\nPiClaw now prunes orphaned tool-result blocks and corrupt image blocks automatically when you use \`/compact\`. If the rewritten session still fails, use \`/new-session\` to start fresh.`;
+}
+
 /** Handle /restart: reload the agent session from disk. */
 export async function handleRestart(session: AgentSession, _command: RestartCommand): Promise<AgentControlResult> {
   try {
@@ -137,6 +148,7 @@ export async function handleExit(session: AgentSession, _command: ExitCommand): 
 /** Handle /compact: manually trigger conversation compaction. */
 export async function handleCompact(session: AgentSession, command: CompactCommand): Promise<AgentControlResult> {
   try {
+    const prunedToolResults = pruneOrphanToolResults(session, "control:/compact");
     const result = await session.compact(command.instructions?.trim() || undefined);
     const generatedAt = new Date().toISOString();
     const attachmentId = createCompactReportAttachment(
@@ -147,10 +159,11 @@ export async function handleCompact(session: AgentSession, command: CompactComma
     );
     const lines = [
       "Compaction complete.",
+      prunedToolResults > 0 ? `Removed ${prunedToolResults} orphaned tool-result block${prunedToolResults === 1 ? "" : "s"} before rewriting the session.` : null,
       `Tokens before: ${formatCompactNumber(result.tokensBefore)}`,
       `First kept entry: ${result.firstKeptEntryId}`,
       attachmentId ? "Attached: full compaction report (.md)." : "Full compaction report attachment unavailable.",
-    ];
+    ].filter(Boolean) as string[];
     return {
       status: "success",
       message: lines.join("\n"),
@@ -158,7 +171,7 @@ export async function handleCompact(session: AgentSession, command: CompactComma
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { status: "error", message };
+    return { status: "error", message: formatCompactFailureMessage(message) };
   }
 }
 

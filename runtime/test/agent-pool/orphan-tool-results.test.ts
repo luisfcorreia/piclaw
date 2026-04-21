@@ -33,8 +33,9 @@ describe("pruneOrphanToolResults", () => {
       { role: "toolResult", toolCallId: "call-orphan" },
     ]);
 
-    pruneOrphanToolResults(session, "web:test");
+    const pruned = pruneOrphanToolResults(session, "web:test");
 
+    expect(pruned).toBe(1);
     expect(state.messages.length).toBe(2);
     expect(state.messages.some((msg) => msg.role === "toolResult" && msg.toolCallId === "call-1")).toBe(true);
     expect(state.messages.some((msg) => msg.role === "toolResult" && msg.toolCallId === "call-orphan")).toBe(false);
@@ -46,14 +47,36 @@ describe("pruneOrphanToolResults", () => {
       { role: "toolResult", toolCallId: "call-1" },
     ]);
 
-    pruneOrphanToolResults(session, "web:test");
+    const pruned = pruneOrphanToolResults(session, "web:test");
 
+    expect(pruned).toBe(1);
     expect(state.messages).toEqual([{ role: "assistant", content: [{ type: "text" }] }]);
+  });
+
+  test("removes orphan tool_result blocks embedded in message content arrays", () => {
+    const { session, state } = createSession([
+      { role: "assistant", content: [{ type: "tool_use", id: "call-1" }] },
+      {
+        role: "user",
+        content: [
+          { type: "text", id: "keep-me" },
+          { type: "tool_result", tool_use_id: "call-1" },
+          { type: "tool_result", tool_use_id: "call-orphan" },
+        ],
+      },
+    ]);
+
+    const pruned = pruneOrphanToolResults(session, "web:test");
+
+    expect(pruned).toBe(1);
+    expect((state.messages[1] as any).content).toEqual([
+      { type: "text", id: "keep-me" },
+      { type: "tool_result", tool_use_id: "call-1" },
+    ]);
   });
 
   test("is a no-op when session has no internal messages array", () => {
     const session = {} as AgentSession;
-    pruneOrphanToolResults(session, "web:test");
-    expect(true).toBe(true);
+    expect(pruneOrphanToolResults(session, "web:test")).toBe(0);
   });
 });

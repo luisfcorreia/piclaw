@@ -2110,6 +2110,72 @@ test("processChat keeps the rate-limit notice when a draft fallback is published
   expect(botMessages[0].data.content).not.toContain("Response ended with an error before finalization");
 });
 
+test("processChat persists a recovery-needed notice instead of the generic no-response warning when compaction/recovery stalls", async () => {
+  const ws = createTempWorkspace("piclaw-web-channel-");
+  cleanupWorkspace = ws.cleanup;
+  restoreEnv = setEnv({ PICLAW_WORKSPACE: ws.workspace, PICLAW_STORE: ws.store, PICLAW_DATA: ws.data });
+
+  const db = await import("../../../src/db.js");
+  db.initDatabase();
+  db.getDb().exec("DELETE FROM message_media; DELETE FROM messages; DELETE FROM chats; DELETE FROM chat_cursors; DELETE FROM chat_cursors;");
+  db.storeChatMetadata("web:default", new Date().toISOString(), "Web");
+
+  db.storeMessage({
+    id: `msg-${Math.random()}`,
+    chat_jid: "web:default",
+    sender: "user",
+    sender_name: "User",
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    is_from_me: false,
+    is_bot_message: false,
+  });
+
+  const webMod = await import("../../../src/channels/web.js");
+  const web = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: {
+      setSessionBinder: () => {},
+      runAgent: async (_prompt: string, _chatJid: string, options: any) => {
+        options.onEvent?.({ type: "compaction_start", reason: "overflow" });
+        options.onEvent?.({ type: "compaction_end", reason: "overflow", willRetry: false, errorMessage: "Recovery compaction failed: session contains orphaned tool-result blocks." });
+        options.onEvent?.({ type: "recovery_start", strategy: "compact_then_retry", attempt: 1, maxAttempts: 2, reason: "context pressure" });
+        options.onEvent?.({ type: "recovery_end", outcome: "exhausted", attemptsUsed: 1, classifier: "compaction_failure", errorMessage: "session contains orphaned tool-result blocks" });
+        return {
+          status: "success",
+          result: null,
+          attachments: [],
+          recovery: {
+            attemptsUsed: 1,
+            totalElapsedMs: 1200,
+            recovered: false,
+            exhausted: true,
+            lastClassifier: "compaction_failure",
+            strategyHistory: ["compact_then_retry"],
+            diagnostics: [],
+          },
+        };
+      },
+      getContextUsageForChat: async () => null,
+    },
+  });
+
+  await web.processChat("web:default", "default");
+
+  const failedRun = db.getFailedRun("web:default");
+  expect(failedRun).toBeTruthy();
+
+  const timeline = db.getTimeline("web:default", 20);
+  const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
+  expect(botMessages.some((item: any) => String(item.data.content || "").includes("Automatic recovery exhausted — this turn ended without a persisted reply."))).toBe(true);
+  expect(botMessages.some((item: any) => String(item.data.content || "").includes("orphaned tool-result blocks"))).toBe(true);
+  expect(botMessages.some((item: any) => String(item.data.content || "").includes("produced no response"))).toBe(false);
+
+  const cardMessage = timeline.find((entry: any) => Array.isArray(entry.data?.content_blocks)
+    && entry.data.content_blocks.some((block: any) => block?.type === "adaptive_card" && String(block.card_id || "").startsWith("recovery-exhausted-")));
+  expect(cardMessage).toBeDefined();
+});
+
 test("processChat finalizes as no-op when no terminal output can be persisted", async () => {
   const ws = createTempWorkspace("piclaw-web-channel-");
   cleanupWorkspace = ws.cleanup;

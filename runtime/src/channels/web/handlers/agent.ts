@@ -69,7 +69,7 @@ function isModelConfigError(errorText: string | null | undefined): boolean {
 
 function isSessionCorruptionError(errorText: string | null | undefined): boolean {
   if (!errorText) return false;
-  return /invalid_request_error|\b400\b.*(?:image|media_type|content|base64)|media_type|image.*source/i.test(errorText);
+  return /invalid_request_error|\b400\b.*(?:image|media_type|content|base64|tool_use_id|tool_result|tool_use)|media_type|image.*source|unexpected [`'\"]?tool_use_id[`'\"]?|tool_result.*corresponding.*tool_use/i.test(errorText);
 }
 
 function isQuotaError(errorText: string | null | undefined): boolean {
@@ -97,7 +97,7 @@ function formatUserVisibleError(errorText: string, rateLimited: boolean): string
   }
 
   if (isSessionCorruptionError(errorText)) {
-    return `\u26a0\ufe0f API error \u2014 the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error may repeat on every message. Try \`/compact\` to rewrite the session (this strips corrupt image blocks automatically), or \`/new-session\` to start fresh.`;
+    return `\u26a0\ufe0f API error \u2014 the session may be corrupted:\n\n\`${errorText.slice(0, 500)}\`\n\nThis error may repeat on every message. Try \`/compact\` to rewrite the session (PiClaw now strips corrupt image blocks and orphaned tool-result blocks automatically), or \`/new-session\` to start fresh.`;
   }
 
   return `\u26a0\ufe0f Agent error: ${errorText.slice(0, 300)}`;
@@ -164,20 +164,28 @@ export function buildRecoveryMarkerBlocks(recovery: { attemptsUsed?: number; las
   }];
 }
 
-function buildRecoveryExhaustedCard(turnId: string, threadId: number | null | undefined, attemptsUsed: number, classifier?: string | null): Record<string, unknown> {
-  const detail = classifier ? `Automatic recovery stopped after ${attemptsUsed} attempt(s) (${classifier}).` : `Automatic recovery stopped after ${attemptsUsed} attempt(s).`;
+function buildRecoveryActionCard(
+  turnId: string,
+  threadId: number | null | undefined,
+  options: {
+    cardIdPrefix: string;
+    title: string;
+    detail: string;
+    fallbackText: string;
+  },
+): Record<string, unknown> {
   return {
     type: "adaptive_card",
-    card_id: `recovery-exhausted-${turnId}`,
+    card_id: `${options.cardIdPrefix}-${turnId}`,
     schema_version: "1.5",
     state: "active",
-    fallback_text: "Automatic recovery exhausted. Choose Continue or Retry cleanly.",
+    fallback_text: options.fallbackText,
     payload: {
       type: "AdaptiveCard",
       version: "1.5",
       body: [
-        { type: "TextBlock", text: "Automatic recovery exhausted", weight: "Bolder", size: "Medium" },
-        { type: "TextBlock", text: detail, wrap: true, spacing: "Small" },
+        { type: "TextBlock", text: options.title, weight: "Bolder", size: "Medium" },
+        { type: "TextBlock", text: options.detail, wrap: true, spacing: "Small" },
         { type: "TextBlock", text: "Choose how to proceed.", wrap: true, spacing: "Small" },
       ],
       actions: [
@@ -200,6 +208,25 @@ function buildRecoveryExhaustedCard(turnId: string, threadId: number | null | un
       ],
     },
   };
+}
+
+function buildRecoveryExhaustedCard(turnId: string, threadId: number | null | undefined, attemptsUsed: number, classifier?: string | null): Record<string, unknown> {
+  const detail = classifier ? `Automatic recovery stopped after ${attemptsUsed} attempt(s) (${classifier}).` : `Automatic recovery stopped after ${attemptsUsed} attempt(s).`;
+  return buildRecoveryActionCard(turnId, threadId, {
+    cardIdPrefix: "recovery-exhausted",
+    title: "Automatic recovery exhausted",
+    detail,
+    fallbackText: "Automatic recovery exhausted. Choose Continue or Retry cleanly.",
+  });
+}
+
+function buildRecoveryStalledCard(turnId: string, threadId: number | null | undefined, detail: string): Record<string, unknown> {
+  return buildRecoveryActionCard(turnId, threadId, {
+    cardIdPrefix: "recovery-stalled",
+    title: "Context recovery needed",
+    detail,
+    fallbackText: "Context recovery needed. Choose Continue or Retry cleanly.",
+  });
 }
 
 export function summarizeCommandStatusTitle(message: unknown, fallback = "Command failed"): string {
@@ -1056,6 +1083,23 @@ export async function processChat(
     onThoughtBuffer: (text, totalLines) => channel.updateThoughtBuffer(turnId, text, totalLines),
     onDraftBuffer: (text, totalLines) => channel.updateDraftBuffer(turnId, text, totalLines),
   });
+  const trackedStreamingHandler = (event: Record<string, unknown>) => {
+    const type = typeof event?.type === "string" ? event.type : "";
+    if (type === "compaction_start" || type === "compaction_end") {
+      sawCompactionEvent = true;
+    }
+    if (type === "compaction_end") {
+      const errorMessage = typeof event.errorMessage === "string" ? event.errorMessage.trim() : "";
+      if (errorMessage) lastCompactionErrorMessage = errorMessage;
+    }
+    if (type === "recovery_start" || type === "recovery_end") {
+      sawRecoveryEvent = true;
+    }
+    if (type === "recovery_end") {
+      lastRecoveryOutcome = typeof event.outcome === "string" ? event.outcome : null;
+    }
+    streamingHandler(event as any);
+  };
 
   const hasActiveClients = channel.sse.clients.size > 0;
   const agentRuntimeConfig = getAgentRuntimeConfig();
@@ -1068,12 +1112,19 @@ export async function processChat(
   let persistedIntermediateOutput = false;
   let intermediatePersistFailed = false;
   let lastRecoveryMeta: { attemptsUsed?: number; recovered?: boolean; exhausted?: boolean; lastClassifier?: string | null } | null = null;
-  const isCompactionIntentActive = (): boolean => {
+  let sawCompactionEvent = false;
+  let sawRecoveryEvent = false;
+  let lastCompactionErrorMessage: string | null = null;
+  let lastRecoveryOutcome: string | null = null;
+  const getActiveRecoveryIntent = (): "compaction" | "recovery" | null => {
     const status = channel.getAgentStatus(chatJid);
-    if (!status || typeof status !== "object") return false;
+    if (!status || typeof status !== "object") return null;
     const intentKey = status.intent_key ?? status.intentKey;
-    return status.type === "intent" && intentKey === "compaction";
+    if (status.type !== "intent") return null;
+    if (intentKey === "compaction" || intentKey === "recovery") return intentKey;
+    return null;
   };
+  const isCompactionIntentActive = (): boolean => getActiveRecoveryIntent() === "compaction";
   const publishDraftFallback = (reason?: "timeout" | "error" | "empty-final" | "rate-limit", detail?: string) => {
     // Draft fallback should publish the currently visible draft for whichever
     // turn failed to finalize, even if earlier turns in the same session were
@@ -1170,7 +1221,7 @@ export async function processChat(
 
   const output = await channel.agentPool.runAgent(prompt, chatJid, {
     timeoutMs,
-    onEvent: streamingHandler,
+    onEvent: trackedStreamingHandler,
     onTurnComplete: (turn: { text: string; attachments: unknown[] }) => {
       // Turn boundary: the first turn (index 0) is the original prompt's
       // response — skip placeholder consumption so it doesn't steal a
@@ -1391,22 +1442,88 @@ export async function processChat(
       return;
     }
 
+    const originalContent = currentMessage.content || "";
+    const preview = originalContent.length > 120
+      ? originalContent.slice(0, 120) + "…"
+      : originalContent;
+    const recoveryIntent = getActiveRecoveryIntent();
+    const recoveryLooksStalled = Boolean(lastRecoveryMeta?.exhausted)
+      || lastRecoveryOutcome === "exhausted"
+      || sawCompactionEvent
+      || sawRecoveryEvent
+      || recoveryIntent !== null
+      || !!lastCompactionErrorMessage;
+
+    if (recoveryLooksStalled) {
+      const title = lastRecoveryMeta?.exhausted || lastRecoveryOutcome === "exhausted"
+        ? "Automatic recovery exhausted"
+        : lastCompactionErrorMessage
+          ? "Context compaction failed"
+          : recoveryIntent === "compaction"
+            ? "Context compaction did not complete"
+            : "Context recovery did not complete";
+      const detail = lastCompactionErrorMessage
+        ? lastCompactionErrorMessage
+        : lastRecoveryMeta?.lastClassifier
+          ? `Last recovery classifier: ${lastRecoveryMeta.lastClassifier}.`
+          : "The turn ended without a persisted reply while compaction or automatic recovery was in flight.";
+      const previewBlock = preview ? `\n\n> ${preview}` : "";
+      const noticeText = `⚠️ ${title} — this turn ended without a persisted reply.\n\n${detail}\n\nUse \`/compact\` to repair and rewrite the session, or \`/new-session\` if the session keeps failing.${previewBlock}`;
+
+      log.warn("Agent completed without output after compaction/recovery activity", {
+        operation: "process_chat.no_output_recovery_stalled",
+        chatJid,
+        title,
+        sawCompactionEvent,
+        sawRecoveryEvent,
+        recoveryIntent,
+        lastCompactionErrorMessage,
+        recovery: lastRecoveryMeta,
+      });
+
+      endChatRunWithError(chatJid, {
+        prevTs: prevCursor,
+        failedTs: lastMessage.timestamp,
+        messageId: lastMessage.id,
+        threadRootId: resolvedThreadRootId ?? null,
+        createdAt: new Date().toISOString(),
+      });
+
+      const notice = channel.storeMessage(chatJid, noticeText, true, [], {
+        threadId: resolvedThreadRootId ?? undefined,
+        isTerminalAgentReply: true,
+      });
+      if (notice) {
+        channel.broadcastEvent("agent_response", notice);
+      }
+
+      trackedEmitter.status({
+        thread_id: threadId,
+        agent_id: agentId,
+        type: "error",
+        title,
+        detail,
+        turn_id: turnId,
+      });
+
+      await channel.sendMessage(chatJid, `${title}. Choose how to continue.`, {
+        threadId: resolvedThreadRootId,
+        contentBlocks: [lastRecoveryMeta?.exhausted
+          ? buildRecoveryExhaustedCard(turnId, resolvedThreadRootId, lastRecoveryMeta.attemptsUsed || 0, lastRecoveryMeta.lastClassifier)
+          : buildRecoveryStalledCard(turnId, resolvedThreadRootId, detail)],
+      });
+      return;
+    }
+
     // The agent completed normally but produced no output and there was no
-    // draft buffer.  This typically happens when restart recovery replays a
-    // contextless message.  Treat as a successful no-op so the cursor
-    // advances and the same message is not retried endlessly.
-    //
-    // Post a system notice so the user can see their message was consumed
-    // without a response and re-send if needed.
+    // draft buffer. This still happens in rare benign cases (for example a
+    // restart replay consuming a contextless message), so keep the no-op path
+    // for that narrow scenario only.
     log.warn("Agent completed without output; finalizing as no-op", {
       operation: "process_chat.no_output_noop",
       chatJid,
     });
 
-    const originalContent = currentMessage.content || "";
-    const preview = originalContent.length > 120
-      ? originalContent.slice(0, 120) + "…"
-      : originalContent;
     const noticeText = preview
       ? `⚠️ Your message was received but the agent produced no response. You may need to re-send it.\n\n> ${preview}`
       : "⚠️ Your message was received but the agent produced no response. You may need to re-send it.";

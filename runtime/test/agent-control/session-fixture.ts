@@ -86,6 +86,7 @@ export class TestAgentControlSession {
   promptTemplates: Array<{ name: string; description: string }>;
   resourceLoader: any;
   modelRegistry: any;
+  agent: { state: { messages: any[] }; replaceMessages: (messages: any[]) => void };
 
   constructor(readonly rootDir: string, modelRegistry: any = createTestModelRegistry()) {
     this.modelRegistry = modelRegistry;
@@ -106,6 +107,12 @@ export class TestAgentControlSession {
       ],
       thinkingLevel: "low",
       model: { provider: "openai", modelId: "gpt-test" },
+    };
+    this.agent = {
+      state: { messages: [] },
+      replaceMessages: (messages: any[]) => {
+        this.agent.state.messages = [...messages];
+      },
     };
     this.extensionRunner = {
       getRegisteredCommands: () => [

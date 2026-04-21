@@ -18,7 +18,7 @@ describe("provider error classification", () => {
   const authPatterns = /authentication failed|credentials may have expired|no api key found|re-authenticate|unauthorized|\b401\b|\b403\b|invalid.*api.*key|api.*key.*invalid|token.*expired|oauth.*expired|refresh.*token/i;
   const quotaPatterns = /quota|usage.*limit|out of.*usage|billing|insufficient.*funds|exceeded.*limit|credit/i;
   const rateLimitPatterns = /\b429\b|rate[ -]?limit|too many requests|retry-after/i;
-  const sessionCorruptionPatterns = /invalid_request_error|\b400\b.*(?:image|media_type|content|base64)|media_type|image.*source/i;
+  const sessionCorruptionPatterns = /invalid_request_error|\b400\b.*(?:image|media_type|content|base64|tool_use_id|tool_result|tool_use)|media_type|image.*source|unexpected [`'\"]?tool_use_id[`'\"]?|tool_result.*corresponding.*tool_use/i;
   const modelConfigPatterns = /no model selected|select a model|use \/model|use \/login/i;
 
   test("detects Anthropic auth expiry", () => {
@@ -58,9 +58,10 @@ describe("provider error classification", () => {
     expect(rateLimitPatterns.test("Retry-After: 30")).toBe(true);
   });
 
-  test("detects session corruption from image errors", () => {
+  test("detects session corruption from image and orphaned tool-result errors", () => {
     expect(sessionCorruptionPatterns.test('400 messages.2.content.1.image.source.base64.data: Image format image/png not supported')).toBe(true);
     expect(sessionCorruptionPatterns.test("invalid_request_error")).toBe(true);
+    expect(sessionCorruptionPatterns.test('400 messages.2.content.0: unexpected `tool_use_id` found in `tool_result` blocks: toolu_test. Each `tool_result` block must have a corresponding `tool_use` block in the previous message.')).toBe(true);
   });
 
   test("detects model config errors", () => {

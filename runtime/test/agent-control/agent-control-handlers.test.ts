@@ -248,12 +248,23 @@ test("agent control queue, compact, and abort commands", async () => {
   const session = new TestAgentControlSession(ws.workspace, registry);
   const runtime = createTestSessionRuntime(session);
 
+  session.agent.state.messages = [
+    { role: "assistant", content: [{ type: "toolCall", id: "call-1" }] },
+    { role: "toolResult", toolCallId: "call-1" },
+    { role: "toolResult", toolCallId: "call-orphan" },
+  ];
+
   const compact = await applyControlCommand(runtime as any, registry, { type: "compact", instructions: "shorten", raw: "/compact shorten" });
   expect(compact.message).toContain("Compaction complete.");
+  expect(compact.message).toContain("Removed 1 orphaned tool-result block before rewriting the session.");
   expect(compact.message).toContain("Attached: full compaction report (.md).");
   expect(compact.message).not.toContain("Summary:");
   expect(compact.message).not.toContain("Summary");
   expect(compact.mediaIds).toHaveLength(1);
+  expect(session.agent.state.messages).toEqual([
+    { role: "assistant", content: [{ type: "toolCall", id: "call-1" }] },
+    { role: "toolResult", toolCallId: "call-1" },
+  ]);
   const compactMedia = db.getMediaById(compact.mediaIds![0]);
   expect(compactMedia?.filename).toMatch(/^compaction-report-.*\.md$/);
   expect(compactMedia?.content_type).toBe("text/markdown");
@@ -261,6 +272,13 @@ test("agent control queue, compact, and abort commands", async () => {
   expect(compactReport).toContain("# Compaction report");
   expect(compactReport).toContain("## Summary");
   expect(compactReport).toContain("Summary");
+
+  session.compactError = new Error("400 messages.2.content.0: unexpected `tool_use_id` found in `tool_result` blocks: toolu_test. Each `tool_result` block must have a corresponding `tool_use` block in the previous message.");
+  const compactCorruption = await applyControlCommand(runtime as any, registry, { type: "compact", raw: "/compact" });
+  expect(compactCorruption.status).toBe("error");
+  expect(compactCorruption.message).toContain("⚠️ API error — the session may be corrupted");
+  expect(compactCorruption.message).toContain("prunes orphaned tool-result blocks and corrupt image blocks automatically");
+  session.compactError = null;
 
   const autoCompact = await applyControlCommand(runtime as any, registry, { type: "auto_compact", enabled: true, raw: "/auto-compact on" });
   expect(autoCompact.message).toContain("on");
