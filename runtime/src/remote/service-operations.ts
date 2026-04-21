@@ -15,6 +15,8 @@ import {
   DEFAULT_MAX_TOOL_CALLS_FULL,
   DEFAULT_MAX_TOOL_CALLS_RESTRICTED,
   DEFAULT_REQUEST_HOP_LIMIT,
+  DEFAULT_TIMEOUT_MS_FULL,
+  DEFAULT_TIMEOUT_MS_RESTRICTED,
 } from "./limits.js";
 import {
   checkContentLength,
@@ -200,10 +202,11 @@ export async function handleExecute(req: Request, context: RemoteOperationHandle
   context.executeConcurrency.acquire(peer.instance_id);
   const start = Date.now();
   const maxToolCalls = peer.profile === "full" ? DEFAULT_MAX_TOOL_CALLS_FULL : DEFAULT_MAX_TOOL_CALLS_RESTRICTED;
+  const timeoutMs = peer.profile === "full" ? DEFAULT_TIMEOUT_MS_FULL : DEFAULT_TIMEOUT_MS_RESTRICTED;
   const toolCeilingFilter = getToolCeilingFilter(peer.profile) ?? undefined;
   try {
     const chatJid = `remote:${peer.instance_id}`;
-    const output = await context.agentPool.runAgent(prompt, chatJid, { timeoutMs: 60_000, maxToolCalls, toolCeilingFilter });
+    const output = await context.agentPool.runAgent(prompt, chatJid, { timeoutMs, maxToolCalls, toolCeilingFilter });
     const duration = Date.now() - start;
     const recoverySummary = formatRecoverySummary(output.recovery);
 
@@ -364,13 +367,14 @@ export async function executeApprovedProposal(
   }
 
   const maxToolCalls = peer.profile === "full" ? DEFAULT_MAX_TOOL_CALLS_FULL : DEFAULT_MAX_TOOL_CALLS_RESTRICTED;
+  const timeoutMs = peer.profile === "full" ? DEFAULT_TIMEOUT_MS_FULL : DEFAULT_TIMEOUT_MS_RESTRICTED;
   const toolCeilingFilter = getToolCeilingFilter(peer.profile) ?? undefined;
   const chatJid = `remote:${peer.instance_id}`;
   const start = Date.now();
 
   try {
     const output = await agentPool.runAgent(prompt, chatJid, {
-      timeoutMs: 60_000,
+      timeoutMs,
       maxToolCalls,
       toolCeilingFilter,
     });
