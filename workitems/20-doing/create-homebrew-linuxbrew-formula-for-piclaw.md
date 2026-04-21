@@ -1,7 +1,7 @@
 ---
 id: create-homebrew-linuxbrew-formula-for-piclaw
 title: Create a Homebrew / Linuxbrew formula for one-line piclaw installation
-status: next
+status: doing
 priority: medium
 created: 2026-04-21
 updated: 2026-04-21
