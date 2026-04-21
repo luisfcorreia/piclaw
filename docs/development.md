@@ -191,3 +191,44 @@ Notes:
 ## Layout
 
 See [architecture.md](architecture.md) for the full source layout and module boundaries.
+
+## Skill and extension development
+
+New skills go in `.pi/skills/<name>/SKILL.md` (workspace-local) or
+`skel/.pi/skills/<name>/` (shipped with the skel for new installs).
+
+New internal tools register through the extension API:
+
+```ts
+pi.registerTool({ name, description, parameters, execute });
+```
+
+For visual artifacts, always load and follow:
+
+- `/workspace/.pi/skills/visual-artifact-generator/SKILL.md`
+- `/workspace/.pi/skills/visual-design/SKILL.md`
+
+Use the `mermaid-fixup.js` helper for any artifact that renders Mermaid diagrams.
+
+## Adding new HTTP endpoints
+
+New `GET /agent/*` or `POST /agent/*` endpoints follow this chain:
+
+1. `runtime/src/channels/web/http/dispatch-agent.ts` — register the route
+2. `runtime/src/channels/web/endpoints/channel-endpoint-facade-service.ts` — add handler method
+3. `runtime/src/channels/web/core/web-channel-http-surface-service.ts` — delegate from surface
+4. `runtime/src/channels/web/core/web-channel-contracts.ts` — declare the interface
+5. `runtime/src/channels/web/core/web-channel-prototype.ts` — bind the prototype method
+
+See `runtime/src/channels/web/agent/agent-commands.ts` (`GET /agent/commands`)
+as the canonical simple example.
+
+## Documentation updates
+
+When shipping new features, update:
+
+- `docs/tools-and-skills.md` — if new tools, skills, or slash commands are added
+- `docs/architecture.md` — if new endpoints or subsystems are added
+- `docs/configuration.md` — if new environment variables or config keys are added
+- `README.md` — if the feature merits a bullet in the Why/Feature overview
+- `docs/vendored-widget-libraries.md` — if new vendored libraries or fonts are added
