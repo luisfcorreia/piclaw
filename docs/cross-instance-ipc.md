@@ -495,10 +495,10 @@ These defaults are recommended for first implementation.
 | `/pair list` | Show paired peers and pending inbound pair requests |
 | `/pair list revoked` | Show revoked peers |
 | `/pair inbox` | Show pending proposals awaiting review |
-| `/pair history [page]` | Show all requests with mode, status and outcome (50 per page) |
+| `/pair history [page]` | Show inbound mediated proposals with status and outcome (50 per page) |
 | `/pair approve <id>` | Approve and execute a pending proposal |
 | `/pair reject <id> [reason]` | Reject a proposal, optionally with reason |
-| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `restricted`, `full`, `custom`) |
+| `/pair permissions <id> <profile>` | Set capability profile (`read-only`, `restricted`, `full`) |
 | `/pair mode <id> <mode>` | Set interaction mode (`mediated`, `short-circuit`) |
 | `/ask <id> <prompt>` | Send a prompt to a paired peer (signed HTTP request) |
 

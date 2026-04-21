@@ -685,7 +685,7 @@ export async function runBlockPairFlow(idOrFingerprint: string, pi: ExtensionAPI
 // ─── Per-peer configuration ───────────────────────────────────────────────────
 
 export async function runSetPermissionsFlow(idOrFingerprint: string, profile: string, pi: ExtensionAPI): Promise<void> {
-  const validProfiles: RemotePeerProfile[] = ["read-only", "restricted", "full", "custom"];
+  const validProfiles: RemotePeerProfile[] = ["read-only", "restricted", "full"];
   if (!validProfiles.includes(profile as RemotePeerProfile)) {
     pi.sendMessage({ customType: "remote-pair", content: `Invalid profile \`${profile}\`. Valid values: ${validProfiles.join(", ")}.`, display: true });
     return;
@@ -883,7 +883,7 @@ export const remotePair: ExtensionFactory = (pi: ExtensionAPI) => {
         const idPart = spaceIdx2 === -1 ? rest : rest.slice(0, spaceIdx2);
         const profilePart = spaceIdx2 === -1 ? "" : rest.slice(spaceIdx2 + 1).trim();
         if (!idPart || !profilePart) {
-          pi.sendMessage({ customType: "remote-pair", content: "Usage: /pair permissions <id | fingerprint> <read-only | restricted | full | custom>", display: true });
+          pi.sendMessage({ customType: "remote-pair", content: "Usage: /pair permissions <id | fingerprint> <read-only | restricted | full>", display: true });
           return;
         }
         runSetPermissionsFlow(idPart, profilePart, pi).catch((err) => {

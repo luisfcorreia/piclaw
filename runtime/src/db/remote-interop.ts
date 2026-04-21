@@ -11,7 +11,7 @@ export type RemotePeerStatus = "paired" | "pending" | "denied" | "blocked" | "re
 /** Interop mode negotiated with a remote peer. */
 export type RemotePeerMode = "mediated" | "short-circuit";
 /** Capability profile attached to a remote peer. */
-export type RemotePeerProfile = "read-only" | "restricted" | "full" | "custom";
+export type RemotePeerProfile = "read-only" | "restricted" | "full";
 
 /** Row shape for records stored in `remote_peers`. */
 export interface RemotePeerRecord {

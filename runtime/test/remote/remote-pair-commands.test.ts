@@ -628,10 +628,10 @@ describe("remote pair commands", () => {
     const fp = `${peerData.instance_id.slice(0, 6)}-${peerData.instance_id.slice(6, 12)}-${peerData.instance_id.slice(12, 18)}`;
 
     const pi = makeMockPi();
-    await runSetPermissionsFlow(fp, "custom", pi);
+    await runSetPermissionsFlow(fp, "restricted", pi);
 
     const stored = getRemotePeer(peerData.instance_id);
-    expect(stored?.profile).toBe("custom");
+    expect(stored?.profile).toBe("restricted");
   });
 
   test("runSetPermissionsFlow reports error when peer not found", async () => {
