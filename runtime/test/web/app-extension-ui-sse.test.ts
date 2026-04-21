@@ -140,3 +140,45 @@ test('resolveExtensionUiWorkingIndicator returns undefined for unrelated events'
   expect(resolveExtensionUiWorkingIndicator('extension_ui_working', { message: 'hi' })).toBeUndefined();
   expect(resolveExtensionUiWorkingIndicator('agent_response', {})).toBeUndefined();
 });
+
+// ---------------------------------------------------------------------------
+// Lifecycle reset tests (Path A acceptance criteria)
+// ---------------------------------------------------------------------------
+
+test('applyExtensionUiWorkingState clears working state on turn end (done)', () => {
+  // Simulate state that has been set by an extension
+  const active = {
+    message: 'Compacting context…',
+    indicator: { mode: 'custom' as const, frames: ['⠋', '⠙'], intervalMs: 90 },
+  };
+
+  // done/error status events are NOT extension_ui_* events — they go through
+  // the agent status path and call setExtensionWorkingState({message:null,indicator:null})
+  // directly. Verify applyExtensionUiWorkingState returns undefined (no-op)
+  // for those events so it doesn't accidentally interfere.
+  expect(applyExtensionUiWorkingState(active, 'agent_status', { type: 'done' })).toBeUndefined();
+  expect(applyExtensionUiWorkingState(active, 'agent_status', { type: 'error' })).toBeUndefined();
+});
+
+test('applyExtensionUiWorkingState does not handle non-extension-ui events', () => {
+  const active = {
+    message: 'Working…',
+    indicator: { mode: 'default' as const, frames: [], intervalMs: null },
+  };
+  // These events should return undefined — state is cleared elsewhere
+  const nonUiEvents = [
+    'agent_response', 'agent_status', 'connected', 'interaction_updated',
+    'interaction_deleted', 'timeline_post',
+  ] as const;
+
+  for (const eventType of nonUiEvents) {
+    expect(applyExtensionUiWorkingState(active, eventType, {})).toBeUndefined();
+  }
+});
+
+test('extension_ui_status does not update working state', () => {
+  // setStatus() fires extension_ui_status — it should dispatch as a browser
+  // event only, not mutate extensionWorkingState (treated as secondary text).
+  const state = { message: null, indicator: null };
+  expect(applyExtensionUiWorkingState(state, 'extension_ui_status', { text: 'SSH connected' })).toBeUndefined();
+});

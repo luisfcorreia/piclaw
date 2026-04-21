@@ -39,6 +39,7 @@ type RuntimeFollowupRuntimeState = Pick<
   | "getThreadRootId"
   | "resumeChat"
   | "skipFailedOnModelSwitch"
+  | "retryFailedOnModelSwitch"
   | "recoverInflightRuns"
   | "recoverStaleInflightRun"
   | "resumePendingChats"
@@ -166,8 +167,12 @@ export class WebChannelRuntimeFollowupFacadeService {
     this.deps.getRuntimeState().resumeChat(chatJid, threadRootId);
   }
 
-  skipFailedOnModelSwitch(chatJid: string): void {
-    this.deps.getRuntimeState().skipFailedOnModelSwitch(chatJid);
+  skipFailedOnModelSwitch(chatJid: string): boolean {
+    return this.deps.getRuntimeState().skipFailedOnModelSwitch(chatJid);
+  }
+
+  retryFailedOnModelSwitch(chatJid: string): boolean {
+    return this.deps.getRuntimeState().retryFailedOnModelSwitch(chatJid);
   }
 
   recoverInflightRuns(): void {

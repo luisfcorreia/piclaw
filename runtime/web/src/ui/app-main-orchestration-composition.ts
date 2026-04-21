@@ -188,7 +188,13 @@ export function composeMainAppLifecycleCompositionOptions(options: UseMainAppOrc
     showIntentToast,
     removeStalledPost: interaction.recoveryCallbacks.removeStalledPost,
     preserveTimelineScrollTop: timeline.preserveTimelineScrollTop,
-    finalizeStalledResponse: interaction.recoveryCallbacks.finalizeStalledResponse,
+    // Wrap finalizeStalledResponse to also clear transient extension working
+    // state (working message + indicator) which the stall finalizer doesn't
+    // reach through the normal SSE done/error path.
+    finalizeStalledResponse: () => {
+      setters.setExtensionWorkingState({ message: null, indicator: null });
+      interaction.recoveryCallbacks.finalizeStalledResponse();
+    },
     connectionStatus: shellState.connectionStatus,
     agentStatus: services.agentStatus,
     thoughtExpandedRef: refs.thoughtExpandedRef,
