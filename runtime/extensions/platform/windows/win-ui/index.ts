@@ -762,6 +762,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_list_windows",
     label: "List Windows",
     description: "Enumerate visible windows with titles, class names, PIDs, and bounding rectangles.",
+    promptSnippet: "win_list_windows: list visible top-level windows and their bounds to discover Windows UI targets.",
     parameters: Type.Object({}),
     async execute() {
       const wins = listWindows();
@@ -776,6 +777,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_screenshot",
     label: "Window Screenshot",
     description: "Capture a window to a BMP file by title substring. Works through the lock screen via PrintWindow. Use .png extension for automatic PNG conversion.",
+    promptSnippet: "win_screenshot: capture a window by title substring to a BMP or PNG file.",
     parameters: Type.Object({
       titleMatch: Type.String({ description: "Window title substring to match" }),
       outPath: Type.String({ description: "Output file path (.bmp or .png)" }),
@@ -794,6 +796,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_desktop_screenshot",
     label: "Desktop Screenshot",
     description: "Capture the full interactive virtual desktop across all monitors to a BMP or PNG file using pure Win32 GDI.",
+    promptSnippet: "win_desktop_screenshot: capture the full Windows desktop across all monitors to a BMP or PNG file.",
     parameters: Type.Object({
       outPath: Type.String({ description: "Output file path (.bmp or .png)" }),
     }),
@@ -811,6 +814,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_list_monitors",
     label: "List Monitors",
     description: "Enumerate attached monitors with index, device name, primary flag, and monitor/work-area rectangles.",
+    promptSnippet: "win_list_monitors: list attached Windows monitors and their geometry.",
     parameters: Type.Object({}),
     async execute() {
       const monitors = listMonitors();
@@ -825,6 +829,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_monitor_screenshot",
     label: "Monitor Screenshot",
     description: "Capture one monitor by index or device name to a BMP or PNG file using pure Win32 GDI.",
+    promptSnippet: "win_monitor_screenshot: capture one monitor by index or device name to a BMP or PNG file.",
     parameters: Type.Object({
       outPath: Type.String({ description: "Output file path (.bmp or .png)" }),
       monitorIndex: Type.Optional(Type.Number({ description: "1-based monitor index from win_list_monitors" })),
@@ -856,6 +861,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_region_screenshot",
     label: "Region Screenshot",
     description: "Capture an arbitrary desktop region to a BMP or PNG file using pure Win32 GDI. Supports negative coordinates on multi-monitor layouts.",
+    promptSnippet: "win_region_screenshot: capture a rectangular Windows desktop region to a BMP or PNG file.",
     parameters: Type.Object({
       x: Type.Number({ description: "Virtual-screen X coordinate" }),
       y: Type.Number({ description: "Virtual-screen Y coordinate" }),
@@ -877,6 +883,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_find_elements",
     label: "Find UI Elements",
     description: "Find interactive UI elements by name inside any window. Uses IAccessible (MSAA) — sees non-HWND controls like buttons, tabs, links inside Edge, VS Code, etc. No PowerShell needed.",
+    promptSnippet: "win_find_elements: search a Windows accessibility tree for UI elements by window title and element name.",
     parameters: Type.Object({
       windowTitle: Type.String({ description: "Window title substring" }),
       elementName: Type.String({ description: "Element name pattern to search for (case-insensitive)" }),
@@ -897,6 +904,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_click",
     label: "Click",
     description: "Click at screen coordinates, or find a UI element by name in a window and click its center.",
+    promptSnippet: "win_click: click Windows UI by coordinates or by locating an element in a window.",
     parameters: Type.Object({
       x: Type.Optional(Type.Number({ description: "Screen X coordinate" })),
       y: Type.Optional(Type.Number({ description: "Screen Y coordinate" })),
@@ -957,6 +965,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_type",
     label: "Type Text",
     description: "Send keystrokes to the focused window. Provide text for typing or a virtual key code for special keys.",
+    promptSnippet: "win_type: send text or virtual key presses to the focused Windows window.",
     parameters: Type.Object({
       text: Type.Optional(Type.String({ description: "Text to type (Unicode via SendInput)" })),
       vk: Type.Optional(Type.Number({ description: "Virtual key code (e.g. 0x0D=Enter, 0x09=Tab)" })),
@@ -1009,6 +1018,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_tree",
     label: "Accessibility Tree",
     description: "Dump the IAccessible tree for a window — shows all interactive elements (buttons, links, tabs, text) with their roles. Useful for discovering what can be clicked.",
+    promptSnippet: "win_tree: dump a Windows accessibility tree for a window to inspect clickable elements and roles.",
     parameters: Type.Object({
       windowTitle: Type.String({ description: "Window title substring" }),
       maxDepth: Type.Optional(Type.Number({ description: "Max tree depth (default 6)" })),
@@ -1052,6 +1062,7 @@ export default function register(pi: ExtensionAPI) {
     name: "win_kill",
     label: "Kill Window/Process",
     description: "Close a window by title (WM_CLOSE). With force=true, terminates the owning process. Use to clean up stale Edge instances, dialogs, etc.",
+    promptSnippet: "win_kill: close or force-kill Windows windows/processes by title match.",
     parameters: Type.Object({
       titleMatch: Type.String({ description: "Window title substring to match" }),
       force: Type.Optional(Type.Boolean({ description: "Force-kill the owning process (default: false, sends WM_CLOSE)" })),

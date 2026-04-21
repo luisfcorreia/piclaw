@@ -316,6 +316,7 @@ const groupDefinitions: GroupDefinition[] = [
         "workspace-git-branch.test.ts",
         "workspace-handlers.test.ts",
         "workspace-service.test.ts",
+        "export-timeline-endpoint.test.ts",
       ]),
   },
   {

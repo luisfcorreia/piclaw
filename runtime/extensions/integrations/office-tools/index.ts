@@ -975,6 +975,7 @@ export default function register(pi: ExtensionAPI) {
     description:
       "Read a Microsoft Office document (.docx, .xlsx, .pptx) and return its content as Markdown. " +
       "OOXML only; legacy .doc/.xls/.ppt formats are rejected.",
+    promptSnippet: "office_read: extract a .docx, .xlsx, or .pptx file to Markdown for inspection.",
     parameters: officeReadParameters,
     async execute(_id, params, _signal, _onUpdate, ctx) {
       return await executeOfficeRead(params, ctx as { cwd?: string } | undefined);
@@ -986,6 +987,7 @@ export default function register(pi: ExtensionAPI) {
     label: "Write Office Document",
     description:
       "Generate a Microsoft Office document (.docx, .xlsx, .pptx) or PDF (.pdf) from Markdown content.",
+    promptSnippet: "office_write: generate a .docx, .xlsx, .pptx, or .pdf file from Markdown content.",
     parameters: officeWriteParameters,
     async execute(_id, params, signal, _onUpdate, ctx) {
       return await executeOfficeWrite(params, signal, ctx as { cwd?: string } | undefined);

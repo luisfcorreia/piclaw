@@ -2,7 +2,7 @@
  * keychain-tools – registers a keychain tool for listing and retrieving entries.
  */
 import { Type } from "@sinclair/typebox";
-import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
 
 import { registerToolStatusHintProvider } from "../tool-status-hints.js";
 import {
@@ -69,8 +69,10 @@ function clampLimit(value: number | undefined, fallback = 100): number {
 
 const KEYCHAIN_HINT = [
   "## Keychain",
-  "Use keychain for listing available key names and retrieving entry secrets/usernames.",
-  "You can also store/update entries and delete obsolete ones.",
+  "Use keychain primarily to list available key names and manage entries by name.",
+  "Default access path: rely on automatically injected environment variables in bash/SSH and keychain-backed profile fields in other tools.",
+  "Use keychain get only as an absolute last resort when no tool or env-based path can consume the secret directly.",
+  "Never inline fetched secrets into shell commands when an env var or profile reference is available.",
   "Only reveal secrets to the user when explicitly requested.",
 ].join("\n");
 
@@ -108,7 +110,7 @@ function buildInjectedBashEnvHint(): string {
   if (entries.length === 0) {
     return [
       "## Bash secret env",
-      "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
+      "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. This is the default and preferred access path. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
     ].join("\n");
   }
 
@@ -118,13 +120,22 @@ function buildInjectedBashEnvHint(): string {
   const more = entries.length > 20 ? `\n- … ${entries.length - 20} more` : "";
   return [
     "## Bash secret env",
-    "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
+    "Keychain entries are automatically injected as environment variables into bash and SSH commands. Names with `/`, `-`, or `.` are sanitized (replaced with `_` and uppercased), e.g. `github/piclaw-bot-pat` becomes `$GITHUB_PICLAW_BOT_PAT`. This is the default and preferred access path. Do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
     "",
     `${preview}${more}`,
     "",
     "Reference these as $VAR_NAME in bash commands. Do NOT call keychain get and inline the secret into the command.",
   ].join("\n");
 }
+
+type KeychainToolDetails = {
+  count: number;
+  entries: ReturnType<typeof listKeychainEntries>;
+  name: string;
+  field: string;
+  type: string;
+  access_method?: "direct_get_last_resort";
+};
 
 /** Extension factory that registers keychain. */
 export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
@@ -135,10 +146,10 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
   pi.registerTool({
     name: "keychain",
     label: "keychain",
-    description: "List keychain entries, retrieve values, store/update entries, or delete entries. Entries are automatically injected as environment variables (names with `/`, `-`, `.` are sanitized to `_` and uppercased) into bash and SSH commands — do NOT fetch secrets and inline them into shell commands; just reference $ENTRY_NAME directly.",
-    promptSnippet: "keychain: list/get/set/delete secure keychain entries by name. Secrets are auto-injected as env vars into bash — never inline them into commands.",
+    description: "List keychain entries, retrieve values, store/update entries, or delete entries. Prefer env injection and keychain-backed profile references over reading secrets directly. Entries are automatically injected as environment variables (names with `/`, `-`, `.` are sanitized to `_` and uppercased) into bash and SSH commands — treat keychain get as a last resort and do NOT inline fetched secrets into shell commands.",
+    promptSnippet: "keychain: list/get/set/delete secure keychain entries by name. Prefer auto-injected env vars and profile references; use keychain get only as a last resort, and never inline fetched secrets into commands.",
     parameters: KeychainToolSchema,
-    async execute(_toolCallId, params) {
+    async execute(_toolCallId, params): Promise<AgentToolResult<KeychainToolDetails>> {
       if (params.action === "list") {
         const limit = clampLimit(params.limit, 100);
         const entries = listKeychainEntries().slice(0, limit);
@@ -152,7 +163,7 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
         const lines = entries.map((entry) => `• ${entry.name} (${entry.type})`);
         const injectable = listInjectableKeychainEnvNames();
         const envNote = injectable.length > 0
-          ? `\n\nEntries with shell-safe names are auto-injected as env vars into bash. Use $NAME in commands instead of inlining secrets.`
+          ? `\n\nEntries with shell-safe names are auto-injected as env vars into bash by default. Prefer $NAME in commands instead of keychain get or inlining secrets.`
           : '';
         return {
           content: [{ type: "text", text: `Keychain entries (${entries.length}):\n${lines.join("\n")}${envNote}` }],
@@ -231,13 +242,13 @@ export const keychainTools: ExtensionFactory = (pi: ExtensionAPI) => {
           }
           return {
             content: [{ type: "text", text: entry.username }],
-            details: { count: 1, entries: [], name, field, type: entry.type },
+            details: { count: 1, entries: [], name, field, type: entry.type, access_method: "direct_get_last_resort" },
           };
         }
 
         return {
           content: [{ type: "text", text: entry.secret }],
-          details: { count: 1, entries: [], name, field, type: entry.type },
+          details: { count: 1, entries: [], name, field, type: entry.type, access_method: "direct_get_last_resort" },
         };
       } catch (error) {
         return {
