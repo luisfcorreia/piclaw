@@ -209,7 +209,7 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
       setContextUsage(null);
     }
     void refreshContextUsage();
-  }, [currentChatJid, refreshContextUsage, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setHasLoadedAgentModels, setSupportsThinking]);
+  }, [currentChatJid, refreshContextUsage, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setExtensionWorkingState, setHasLoadedAgentModels, setSupportsThinking]);
 
   const updateAgentProfile = useCallback((payload: any) => {
     updateAgentProfileFromEvent({

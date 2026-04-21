@@ -147,6 +147,7 @@ interface ComposeChatRefreshLifecycleOptionsInput {
   refreshContextUsage: () => Promise<void>;
   refreshAutoresearchStatus: () => Promise<void>;
   setContextUsage: StateSetter<any>;
+  setExtensionWorkingState: StateSetter<{ message: string | null; indicator: unknown | null }>;
 }
 
 export function composeChatRefreshLifecycleOptions(input: ComposeChatRefreshLifecycleOptionsInput) {
@@ -177,6 +178,7 @@ export function composeChatRefreshLifecycleOptions(input: ComposeChatRefreshLife
     refreshContextUsage: input.refreshContextUsage,
     refreshAutoresearchStatus: input.refreshAutoresearchStatus,
     setContextUsage: input.setContextUsage,
+    setExtensionWorkingState: input.setExtensionWorkingState,
   };
 }
 
