@@ -353,8 +353,15 @@ turn paths should use the shared engine from the start.
 - Follow-up closure audit confirmed that the web recovery marker chip is already implemented in the shipped UI:
   - marker extraction + tooltip formatting in `runtime/web/src/components/post.ts`
   - chip styling in `runtime/web/static/css/content.css`
-- Added a focused component-level render test proving the message-level chip is actually visible with the expected tooltip:
-  - `runtime/test/web/post-recovery-chip.test.ts`
+- Added focused recovery-chip coverage proving the message-level chip is visible and its helper logic behaves as expected:
+  - component-level render test: `runtime/test/web/post-recovery-chip.test.ts`
+  - helper coverage: `runtime/test/channels/web/post-link-preview-content.test.ts`
+    - extracting recovered `recovery_marker` blocks
+    - formatting the tooltip text shown on the visible chip
+- Attempted the broader cross-path verification sweep using the ticket’s planned runtime test set plus `bunx tsc --noEmit -p runtime/tsconfig.json`.
+- The closure sweep is currently blocked by **repo/environment baseline issues unrelated to the recovery changes**:
+  - Dream / scheduler / some orchestrator-path tests fail immediately because the installed `/workspace/node_modules/@mariozechner/pi-coding-agent` package does not export `createAgentSessionServices` from its public entrypoint, while `runtime/src/agent-pool/session.ts` still imports that symbol
+  - local TypeScript verification is also blocked in this container by missing `bun-types`
 - User field report confirmed two still-live failure modes on `main` during long context-pressure runs:
   - the terminal persisted warning `⚠️ Your message was received but the agent produced no response. You may need to re-send it.` was still being emitted after stalled compaction / automatic recovery, which is the wrong classification for that failure path
   - manual `/compact` could itself fail with Anthropic-style transcript validation errors such as orphaned ``tool_result`` / ``tool_use_id`` mismatches, proving the repair path was incomplete for tool-call transcript corruption

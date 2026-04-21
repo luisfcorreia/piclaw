@@ -72,7 +72,7 @@ function FileAttachment({ mediaId, onPreview }) {
     `;
 }
 
-function extractRecoveryMarkerBlocks(contentBlocks) {
+export function extractRecoveryMarkerBlocks(contentBlocks) {
     if (!Array.isArray(contentBlocks)) return [];
     return contentBlocks.filter((block) => block && typeof block === 'object' && block.type === 'recovery_marker' && block.recovered);
 }
@@ -86,7 +86,7 @@ const RECOVERY_CLASSIFIER_LABELS = {
     connection: 'connection error',
 };
 
-function formatRecoveryChipTooltip(marker) {
+export function formatRecoveryChipTooltip(marker) {
     const attempts = Number(marker?.attempts_used || 0);
     const classifier = String(marker?.classifier || '').trim();
     const reason = RECOVERY_CLASSIFIER_LABELS[classifier] || (classifier ? classifier.replace(/_/g, ' ') : '');

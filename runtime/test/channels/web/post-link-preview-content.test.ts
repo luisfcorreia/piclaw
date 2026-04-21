@@ -8,7 +8,7 @@
 
 import { expect, test } from "bun:test";
 import "../../helpers.js";
-import { buildLinkPreviewBackgroundStyle, getDisplayContent } from "../../../web/src/components/post.ts";
+import { buildLinkPreviewBackgroundStyle, extractRecoveryMarkerBlocks, formatRecoveryChipTooltip, getDisplayContent } from "../../../web/src/components/post.ts";
 
 test("getDisplayContent keeps URL text when previews are present", () => {
   const content = "Check this out: https://example.com/article";
@@ -48,4 +48,20 @@ test("buildLinkPreviewBackgroundStyle keeps image URLs confined to backgroundIma
     }
     expect(node.style.color).toBe("");
   }
+});
+
+test("extractRecoveryMarkerBlocks keeps only recovered recovery markers", () => {
+  expect(extractRecoveryMarkerBlocks([
+    { type: "recovery_marker", recovered: true, attempts_used: 2 },
+    { type: "recovery_marker", recovered: false, attempts_used: 1 },
+    { type: "text", text: "hello" },
+  ])).toEqual([
+    { type: "recovery_marker", recovered: true, attempts_used: 2 },
+  ]);
+});
+
+test("formatRecoveryChipTooltip describes attempts and classifier", () => {
+  expect(formatRecoveryChipTooltip({ attempts_used: 1, classifier: "context_recover" })).toBe("Recovered automatically — context limit exceeded");
+  expect(formatRecoveryChipTooltip({ attempts_used: 3, classifier: "api_error" })).toBe("Recovered after 3 attempts — API error");
+  expect(formatRecoveryChipTooltip({ attempts_used: 2, classifier: "custom_classifier" })).toBe("Recovered after 2 attempts — custom classifier");
 });
