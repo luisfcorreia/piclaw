@@ -98,6 +98,7 @@ export function composeMainAppLifecycleCompositionOptions(options: UseMainAppOrc
     getAutoresearchStatus: services.getAutoresearchStatus,
     setExtensionStatusPanels: setters.setExtensionStatusPanels,
     setPendingExtensionPanelActions: setters.setPendingExtensionPanelActions,
+    setExtensionWorkingState: setters.setExtensionWorkingState,
     getAgentStatus: services.getAgentStatus,
     wasAgentActiveRef: refs.wasAgentActiveRef,
     viewStateRef: refs.viewStateRef,

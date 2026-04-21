@@ -402,6 +402,7 @@ function MainApp({ locationParams, navigate }) {
             setContextUsage: surface.setContextUsage,
             setExtensionStatusPanels: surface.setExtensionStatusPanels,
             setPendingExtensionPanelActions: surface.setPendingExtensionPanelActions,
+            setExtensionWorkingState: surface.setExtensionWorkingState,
             setAgentStatus,
             setAgentDraft,
             setAgentPlan,
