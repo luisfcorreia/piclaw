@@ -25,7 +25,36 @@ The extension exposes tools for:
 - Microsoft Graph profile / people / mail queries
 - OneDrive helpers
 - SharePoint browse / search / download / upload / move flows
-- calendar queries and calendar SVG rendering
+- Calendar queries and calendar SVG rendering
+- **Microsoft To Do tasks and flagged emails** (`m365_todo`)
+
+### `m365_todo` — To Do and flagged emails
+
+Read-only task view combining Microsoft To Do task lists and flagged emails
+surfaced through To Do.
+
+```ts
+m365_todo({ action: "list" })  // default: open tasks from Tasks + Flagged Emails
+m365_todo({ sources: ["flaggedEmails"] })  // only flagged emails
+m365_todo({ search: "contract", dueBefore: "2026-05-01" })
+m365_todo({ includeCompleted: true, top: 100 })
+```
+
+Parameters:
+- `sources` — `tasks`, `flaggedEmails`, `allLists` (default: `["tasks","flaggedEmails"]`)
+- `includeCompleted` — include completed items (default `false`)
+- `status` — filter by status array
+- `search` — search title, body, linked resource name
+- `dueBefore` / `dueAfter` — ISO date filters
+- `top` — max items (default 50, max 200)
+- `listIds` — explicit list IDs (overrides `sources`)
+
+Output includes normalized task items with:
+- `source` — `tasks`, `flaggedEmails`, or `list`
+- `linkedWebUrl` — Outlook item URL for flagged email tasks
+- Human-readable summary: total open, by source, first N items with title/source/status/due
+
+Partial list failures are tolerated; errors are reported in `details.errors`.
 
 ## Account support
 
