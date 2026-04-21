@@ -79,6 +79,40 @@ function buildCallbackProofString(requestId: string, challenge: string, receiver
 }
 
 /**
+ * Install a fetch stub for runAcceptPairFlow tests. The stub handles:
+ * - pair-callback (receiver calls initiator's callback URL to verify ownership)
+ * - pair-confirm (receiver notifies initiator that pairing is complete)
+ * `peerIdentity` is the initiator's identity (from makePendingRequest).
+ */
+function installAcceptPairStub(peerIdentity: InteropIdentity): () => void {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+
+    if (url.includes("/api/remote/pair-callback")) {
+      const bodyText = typeof init?.body === "string" ? init.body : "";
+      const payload = bodyText ? JSON.parse(bodyText) : {};
+      const requestId = String(payload.request_id || "");
+      const challenge = String(payload.challenge || "");
+      const receiverInstanceId = String(payload.receiver_instance_id || "");
+      const proof = buildCallbackProofString(requestId, challenge, receiverInstanceId);
+      const signature = signPayload(peerIdentity, proof);
+      return new Response(
+        JSON.stringify({ request_id: requestId, challenge, instance_id: peerIdentity.instance_id, signature }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (url.includes("/api/remote/pair-confirm")) {
+      return new Response(JSON.stringify({ status: "paired" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
+    return original(input, init as any);
+  };
+  return () => { globalThis.fetch = original; };
+}
+
+/**
  * Install a fetch stub that handles pair-request + pair-callback + pair-confirm
  * through a local RemoteInteropService instance (acting as the receiver).
  * `getInitiatorIdentity` is called lazily at callback time so it picks up
@@ -208,8 +242,10 @@ describe("remote pair commands", () => {
     restore();
     restoreUrl();
 
-    const successMsg = pi.messages.find((m: string) => m.includes("Paired with"));
-    expect(successMsg).toBeTruthy();
+    // runPairFlow sends the pair-request and stores the outbound record;
+    // pairing completes asynchronously when the receiver's operator accepts.
+    const sentMsg = pi.messages.find((m: string) => m.includes("Pair request sent"));
+    expect(sentMsg).toBeTruthy();
   });
 
   // ─── /pair revoke (runUnpairFlow) ─────────────────────────────────────────
@@ -338,7 +374,7 @@ describe("remote pair commands", () => {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  function makePendingRequest(overrides?: Partial<any>): any {
+  function makePendingRequest(overrides?: Partial<any>): any & { _identity: InteropIdentity } {
     const identity = makeIdentity();
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -354,6 +390,7 @@ describe("remote pair commands", () => {
       status: "pending",
       created_at: now,
       source_ip: null,
+      _identity: identity,
       ...overrides,
     };
   }
@@ -384,8 +421,10 @@ describe("remote pair commands", () => {
     const req = makePendingRequest();
     createPairRequest(req);
 
+    const restore = installAcceptPairStub(req._identity);
     const pi = makeMockPi();
     await runAcceptPairFlow(req.id, pi);
+    restore();
 
     const peer = getRemotePeer(req.instance_id);
     expect(peer).toBeTruthy();
@@ -400,8 +439,10 @@ describe("remote pair commands", () => {
     const req = makePendingRequest();
     createPairRequest(req);
 
+    const restore = installAcceptPairStub(req._identity);
     const pi = makeMockPi();
     await runAcceptPairFlow(req.instance_id, pi);
+    restore();
 
     const peer = getRemotePeer(req.instance_id);
     expect(peer?.status).toBe("paired");
@@ -439,25 +480,29 @@ describe("remote pair commands", () => {
   });
 
   test("runAcceptPairFlow extracts base_url from callback_url", async () => {
-    const req = makePendingRequest({ callback_url: "https://peer.example.com/api/remote/pair-callback" });
+    const req = makePendingRequest({ callback_url: "https://93.184.216.35/api/remote/pair-callback" });
     createPairRequest(req);
 
+    const restore = installAcceptPairStub(req._identity);
     const pi = makeMockPi();
     await runAcceptPairFlow(req.id, pi);
+    restore();
 
     const peer = getRemotePeer(req.instance_id);
-    expect(peer?.base_url).toBe("https://peer.example.com");
+    expect(peer?.base_url).toBe("https://93.184.216.35");
   });
 
   test("runAcceptPairFlow shows identity details in success message", async () => {
     const req = makePendingRequest({
       display_name: "lab-agent",
-      callback_url: "https://lab.example.com/api/remote/pair-callback",
+      callback_url: "https://93.184.216.36/api/remote/pair-callback",
     });
     createPairRequest(req);
 
+    const restore = installAcceptPairStub(req._identity);
     const pi = makeMockPi();
     await runAcceptPairFlow(req.id, pi);
+    restore();
 
     const msg = pi.messages.find((m: string) => m.includes("Accepted pairing"));
     expect(msg).toBeTruthy();
@@ -469,7 +514,7 @@ describe("remote pair commands", () => {
     expect(msg).toContain(`Display Name`);
     expect(msg).toContain("lab-agent");
     expect(msg).toContain(`Origin`);
-    expect(msg).toContain("https://lab.example.com");
+    expect(msg).toContain("https://93.184.216.36");
   });
 
   // ─── runDenyPairFlow ─────────────────────────────────────────────────────────
