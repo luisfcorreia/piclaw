@@ -248,6 +248,146 @@ export function archiveChatBranch(chatJid: string): ChatBranchRecord {
   return getChatBranchByChatJid(normalizedChatJid)!;
 }
 
+// ---------------------------------------------------------------------------
+// JID rename — migrate a chat's JID across every referencing table.
+// ---------------------------------------------------------------------------
+
+export interface RenameChatJidResult {
+  oldJid: string;
+  newJid: string;
+  branch: ChatBranchRecord;
+  /** Tables that had rows updated (excludes FTS shadow tables). */
+  updatedTables: string[];
+}
+
+/**
+ * Rename a chat JID across *all* DB tables in a single transaction.
+ *
+ * The caller is responsible for:
+ *   - evicting the session from the in-memory agent pool *before* calling this
+ *   - renaming the session directory on disk *after* this succeeds
+ *
+ * Child branches whose `chat_jid` starts with `oldJid + ":branch:"` are
+ * rewritten to start with `newJid + ":branch:"` so the tree stays intact.
+ */
+export function renameChatJid(oldJid: string, newJid: string): RenameChatJidResult {
+  const old = String(oldJid || "").trim();
+  const next = String(newJid || "").trim();
+  if (!old) throw new Error("oldJid is required");
+  if (!next) throw new Error("newJid is required");
+  if (old === next) throw new Error("Old and new JID are identical.");
+
+  // Disallow reserved characters that would break the branch-tree model.
+  if (/[\s]/.test(next)) throw new Error("JID must not contain whitespace.");
+
+  const existing = getChatBranchByChatJid(old);
+  if (!existing) throw new Error(`Unknown chat: ${old}`);
+
+  // Make sure the target JID is not already in use.
+  const collision = getChatBranchByChatJid(next);
+  if (collision) throw new Error(`Target JID already exists: ${next}`);
+
+  const db = getDb();
+  const now = new Date().toISOString();
+  const updated: string[] = [];
+  const childPrefix = old + ":branch:";
+  const childNextPrefix = next + ":branch:";
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    // --- chats (PK = jid) -----------------------------------------------
+    const chatsRows = db.prepare(
+      `UPDATE chats SET jid = ? WHERE jid = ?`
+    ).run(next, old);
+    // Also update any children whose JID starts with the old prefix.
+    db.prepare(
+      `UPDATE chats SET jid = ? || substr(jid, ?) WHERE jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+    if ((chatsRows as any)?.changes > 0) updated.push("chats");
+
+    // --- messages -------------------------------------------------------
+    const msgRows = db.prepare(
+      `UPDATE messages SET chat_jid = ? WHERE chat_jid = ?`
+    ).run(next, old);
+    db.prepare(
+      `UPDATE messages SET chat_jid = ? || substr(chat_jid, ?) WHERE chat_jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+    if ((msgRows as any)?.changes > 0) updated.push("messages");
+
+    // --- chat_cursors ---------------------------------------------------
+    const cursorRows = db.prepare(
+      `UPDATE chat_cursors SET chat_jid = ? WHERE chat_jid = ?`
+    ).run(next, old);
+    db.prepare(
+      `UPDATE chat_cursors SET chat_jid = ? || substr(chat_jid, ?) WHERE chat_jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+    if ((cursorRows as any)?.changes > 0) updated.push("chat_cursors");
+
+    // --- chat_branches (chat_jid + root_chat_jid) ----------------------
+    db.prepare(
+      `UPDATE chat_branches SET chat_jid = ?, root_chat_jid = CASE WHEN root_chat_jid = ? THEN ? ELSE root_chat_jid END, updated_at = ? WHERE chat_jid = ?`
+    ).run(next, old, next, now, old);
+    // Children: update chat_jid prefix and root_chat_jid if it pointed to old.
+    db.prepare(
+      `UPDATE chat_branches
+         SET chat_jid = ? || substr(chat_jid, ?),
+             root_chat_jid = CASE WHEN root_chat_jid = ? THEN ? ELSE root_chat_jid END,
+             updated_at = ?
+       WHERE chat_jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, old, next, now, childPrefix + "*");
+    updated.push("chat_branches");
+
+    // --- token_usage ----------------------------------------------------
+    db.prepare(
+      `UPDATE token_usage SET chat_jid = ? WHERE chat_jid = ?`
+    ).run(next, old);
+    db.prepare(
+      `UPDATE token_usage SET chat_jid = ? || substr(chat_jid, ?) WHERE chat_jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+    updated.push("token_usage");
+
+    // --- scheduled_tasks ------------------------------------------------
+    db.prepare(
+      `UPDATE scheduled_tasks SET chat_jid = ? WHERE chat_jid = ?`
+    ).run(next, old);
+    db.prepare(
+      `UPDATE scheduled_tasks SET chat_jid = ? || substr(chat_jid, ?) WHERE chat_jid GLOB ?`
+    ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+
+    // --- config tables (ssh, proxmox, portainer) -----------------------
+    for (const tbl of ["ssh_configs", "proxmox_configs", "portainer_configs"]) {
+      db.prepare(
+        `UPDATE ${tbl} SET chat_jid = ? WHERE chat_jid = ?`
+      ).run(next, old);
+      db.prepare(
+        `UPDATE ${tbl} SET chat_jid = ? || substr(chat_jid, ?) WHERE chat_jid GLOB ?`
+      ).run(childNextPrefix, childPrefix.length + 1, childPrefix + "*");
+    }
+
+    db.exec("COMMIT");
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+
+  // Rebuild the FTS index for the renamed rows so full-text search stays
+  // accurate. The content-sync FTS5 table reads through to `messages`, so
+  // after the UPDATE above the shadow table chat_jid column is stale.
+  // A targeted rebuild is safest:
+  try {
+    db.exec(`INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')`);
+  } catch (_ftsErr) {
+    // Non-fatal: search may lag until the next natural rebuild.
+  }
+
+  return {
+    oldJid: old,
+    newJid: next,
+    branch: getChatBranchByChatJid(next)!,
+    updatedTables: updated,
+  };
+}
+
 export function restoreChatBranchIdentity(input: {
   chat_jid: string;
   agent_name?: string | null;

@@ -15,10 +15,15 @@ import {
   getChatBranchByChatJid,
   listChatBranches,
   renameChatBranchIdentity,
+  renameChatJid as renameChatJidDb,
   restoreChatBranchIdentity,
   storeChatMetadata,
   type ChatBranchRecord,
 } from "../db.js";
+import { SESSIONS_DIR } from "../core/config.js";
+import { sanitiseJid } from "./session.js";
+import { existsSync, renameSync } from "fs";
+import { join } from "path";
 import { createUuid } from "../utils/ids.js";
 import { createDeferredBranchSeed, writeDeferredBranchSeed } from "./branch-seeding.js";
 import type { PoolEntry } from "./session-manager.js";
@@ -149,7 +154,106 @@ export class AgentBranchManager {
       }
     }
 
+    // Auto-rename the JID to web:<agent_name> so @-mentions work naturally.
+    const desiredJid = `web:${renamed.agent_name}`;
+    if (renamed.chat_jid !== desiredJid) {
+      try {
+        const jidResult = await this.renameChatJid(renamed.chat_jid, desiredJid);
+        return jidResult.branch;
+      } catch (err) {
+        this.options.onWarn?.("JID auto-rename after agent rename failed; agent_name updated but JID unchanged", {
+          operation: "rename_chat_branch.auto_rename_jid",
+          chatJid: renamed.chat_jid,
+          desiredJid,
+          err,
+        });
+      }
+    }
+
     return renamed;
+  }
+
+  /**
+   * Rename a chat's JID across DB and session directories.
+   *
+   * The session is evicted from the in-memory pool first, then the DB is
+   * migrated in a single transaction, and finally session directories are
+   * renamed on disk.
+   */
+  async renameChatJid(
+    oldJid: string,
+    newJid: string,
+  ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
+    const old = String(oldJid || "").trim();
+    const next = String(newJid || "").trim();
+    if (!old) throw new Error("Old JID is required.");
+    if (!next) throw new Error("New JID is required.");
+    if (old === next) throw new Error("Old and new JID are identical.");
+
+    if (this.options.isActive(old)) {
+      throw new Error("Cannot rename a chat while it has an active turn.");
+    }
+
+    // 1. Evict from in-memory pools.
+    const mainEntry = this.options.pool.get(old);
+    if (mainEntry) {
+      try { await mainEntry.runtime.dispose(); } catch (_) { /* best-effort */ }
+      this.options.pool.delete(old);
+    }
+    const sideEntry = this.options.sidePool.get(old);
+    if (sideEntry) {
+      try { await sideEntry.runtime.dispose(); } catch (_) { /* best-effort */ }
+      this.options.sidePool.delete(old);
+    }
+    this.options.activeForkBaseLeafByChat.delete(old);
+    this.options.cancelSessionWarmup?.(old);
+
+    // Also evict any child branches that live under old + ":branch:".
+    const childPrefix = old + ":branch:";
+    for (const [jid, entry] of this.options.pool) {
+      if (jid.startsWith(childPrefix)) {
+        try { await entry.runtime.dispose(); } catch (_) { /* best-effort */ }
+        this.options.pool.delete(jid);
+      }
+    }
+    for (const [jid, entry] of this.options.sidePool) {
+      if (jid.startsWith(childPrefix)) {
+        try { await entry.runtime.dispose(); } catch (_) { /* best-effort */ }
+        this.options.sidePool.delete(jid);
+      }
+    }
+
+    // 2. Migrate all DB tables in a single transaction.
+    const result = renameChatJidDb(old, next);
+
+    // 3. Rename session directories on disk.
+    const oldDir = join(SESSIONS_DIR, sanitiseJid(old));
+    const newDir = join(SESSIONS_DIR, sanitiseJid(next));
+    if (existsSync(oldDir) && !existsSync(newDir)) {
+      renameSync(oldDir, newDir);
+    }
+    // Rename the btw-side directory if it exists.
+    const oldSideDir = oldDir + "__btw-side";
+    const newSideDir = newDir + "__btw-side";
+    if (existsSync(oldSideDir) && !existsSync(newSideDir)) {
+      renameSync(oldSideDir, newSideDir);
+    }
+    // Rename child branch session directories.
+    const oldDirPrefix = sanitiseJid(old) + "_branch_";
+    const newDirPrefix = sanitiseJid(next) + "_branch_";
+    try {
+      const { readdirSync } = await import("fs");
+      for (const entry of readdirSync(SESSIONS_DIR)) {
+        if (entry.startsWith(oldDirPrefix)) {
+          const suffix = entry.slice(oldDirPrefix.length);
+          const src = join(SESSIONS_DIR, entry);
+          const dst = join(SESSIONS_DIR, newDirPrefix + suffix);
+          if (!existsSync(dst)) renameSync(src, dst);
+        }
+      }
+    } catch (_) { /* best-effort */ }
+
+    return result;
   }
 
   async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {

@@ -133,6 +133,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
   },
   {
     method: "POST",
+    path: "/agent/rename-jid",
+    handle: (channel, req) => channel.handleAgentRenameJid(req),
+  },
+  {
+    method: "POST",
     path: "/agent/branch-prune",
     handle: (channel, req) => channel.handleAgentBranchPrune(req),
   },

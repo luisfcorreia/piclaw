@@ -243,6 +243,16 @@ export async function pruneChatBranch(chatJid) {
 }
 
 /**
+ * Rename a chat's JID across all tables and session directories.
+ */
+export async function renameChatJid(oldJid, newJid) {
+    return request('/agent/rename-jid', {
+        method: 'POST',
+        body: JSON.stringify({ old_jid: oldJid, new_jid: newJid }),
+    });
+}
+
+/**
  * Restore/reopen an archived branch into active discovery.
  */
 export async function restoreChatBranch(chatJid, options = {}) {

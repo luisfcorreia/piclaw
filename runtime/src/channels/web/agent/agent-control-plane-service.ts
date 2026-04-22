@@ -38,6 +38,7 @@ type ControlPlaneAgentPool = AgentPool & {
   queueStreamingMessage?: (chatJid: string, content: string, mode: "steer") => Promise<{ queued: boolean }>;
   createForkedChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
   renameChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
+  renameChatJid?: (oldJid: string, newJid: string) => Promise<unknown>;
   pruneChatBranch?: (chatJid: string) => Promise<unknown>;
   restoreChatBranch?: (chatJid: string, options?: { agentName?: string | null }) => Promise<unknown>;
 };
@@ -400,6 +401,28 @@ export class WebAgentControlPlaneService {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error || "Failed to rename branch.");
       return this.options.json({ error: message || "Failed to rename branch." }, 400);
+    }
+  }
+
+  async handleAgentRenameJid(req: Request): Promise<Response> {
+    const parsed = await parseJsonObjectRequest(req);
+    if (!parsed.ok) return this.options.json({ error: parsed.error }, 400);
+
+    const payload = parsed.payload as { old_jid?: string; new_jid?: string; chat_jid?: string };
+    const oldJid = String(payload.old_jid || payload.chat_jid || "").trim();
+    const newJid = String(payload.new_jid || "").trim();
+    if (!oldJid) return this.options.json({ error: "Missing old_jid (or chat_jid)" }, 400);
+    if (!newJid) return this.options.json({ error: "Missing new_jid" }, 400);
+
+    try {
+      const result = await this.options.agentPool.renameChatJid?.(oldJid, newJid);
+      if (!result) {
+        return this.options.json({ error: "JID renaming is not available." }, 501);
+      }
+      return this.options.json({ status: "ok", ...result }, 200);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "Failed to rename JID.");
+      return this.options.json({ error: message || "Failed to rename JID." }, 400);
     }
   }
 

@@ -84,6 +84,9 @@ export interface RenameCurrentBranchOptions {
   renameChatBranch: (chatJid: string, payload: { agentName: string }) => Promise<{ branch?: BranchRecord | null }>;
   refreshActiveChatAgents?: () => Promise<unknown> | unknown;
   refreshCurrentChatBranches?: () => Promise<unknown> | unknown;
+  navigate?: NavigateFn;
+  baseHref?: string;
+  chatOnlyMode?: boolean;
   showIntentToast?: ToastFn;
   closeRenameForm?: () => void;
   now?: () => number;
@@ -103,6 +106,9 @@ export async function renameCurrentBranch(options: RenameCurrentBranchOptions): 
     renameChatBranch,
     refreshActiveChatAgents,
     refreshCurrentChatBranches,
+    navigate,
+    baseHref,
+    chatOnlyMode,
     showIntentToast,
     closeRenameForm,
     now = () => Date.now(),
@@ -146,6 +152,12 @@ export async function renameCurrentBranch(options: RenameCurrentBranchOptions): 
       refreshCurrentChatBranches?.(),
     ]);
     const savedHandle = response?.branch?.agent_name || nextAgentName || currentHandle;
+    // If the server renamed the JID (agent_name → web:<agent>), navigate to it.
+    const newChatJid = response?.branch?.chat_jid;
+    if (newChatJid && newChatJid !== currentBranchRecord.chat_jid) {
+      const nextUrl = buildChatWindowUrl(baseHref, newChatJid, { chatOnly: chatOnlyMode });
+      navigate?.(nextUrl);
+    }
     showIntentToast?.('Branch renamed', `@${savedHandle}`, 'info', 3500);
     closeRenameForm?.();
     return true;

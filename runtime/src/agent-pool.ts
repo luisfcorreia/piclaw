@@ -459,6 +459,13 @@ export class AgentPool {
     return this.branchManager.pruneChatBranch(chatJid);
   }
 
+  async renameChatJid(
+    oldJid: string,
+    newJid: string,
+  ): Promise<{ oldJid: string; newJid: string; branch: ChatBranchRecord }> {
+    return this.branchManager.renameChatJid(oldJid, newJid);
+  }
+
   async restoreChatBranch(
     chatJid: string,
     options: { agentName?: string | null } = {},

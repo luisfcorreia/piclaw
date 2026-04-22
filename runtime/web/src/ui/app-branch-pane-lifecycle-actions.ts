@@ -127,6 +127,9 @@ export interface RenameCurrentBranchActionOptions {
   renameChatBranch: (chatJid: string, name: string) => Promise<any>;
   refreshActiveChatAgents: () => void;
   refreshCurrentChatBranches: () => void;
+  navigate?: (url: string, options?: unknown) => void;
+  baseHref?: string;
+  chatOnlyMode?: boolean;
   showIntentToast: (title: string, detail?: string | null, kind?: string, durationMs?: number) => void;
   closeRenameForm: () => void;
   hasWindow?: boolean;
@@ -644,10 +647,13 @@ export function useBranchPaneLifecycle(options: UseBranchPaneLifecycleOptions) {
       renameChatBranch,
       refreshActiveChatAgents,
       refreshCurrentChatBranches,
+      navigate,
+      baseHref: '',
+      chatOnlyMode,
       showIntentToast,
       closeRenameForm: closeRenameCurrentBranchForm,
     });
-  }, [closeRenameCurrentBranchForm, currentBranchRecord, getFormLock, openRenameCurrentBranchForm, refreshActiveChatAgents, refreshCurrentChatBranches, renameBranchInFlightRef, renameBranchLockUntilRef, renameChatBranch, setIsRenamingBranch, showIntentToast]);
+  }, [closeRenameCurrentBranchForm, currentBranchRecord, chatOnlyMode, getFormLock, navigate, openRenameCurrentBranchForm, refreshActiveChatAgents, refreshCurrentChatBranches, renameBranchInFlightRef, renameBranchLockUntilRef, renameChatBranch, setIsRenamingBranch, showIntentToast]);
 
   const handlePruneCurrentBranch = useCallback(async (targetChatJid: string | null = null) => {
     await pruneCurrentBranchAction({

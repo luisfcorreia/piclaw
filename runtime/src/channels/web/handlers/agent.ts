@@ -24,6 +24,7 @@ import { handleUiThemeCommand } from "../theming/ui-theme-commands.js";
 import { handleUiMetersCommand } from "../ui-meters-commands.js";
 import {
   beginChatRun,
+  clearFailedRun,
   endChatRun,
   getChatCursor,
   getFailedRun,
@@ -1064,6 +1065,22 @@ export async function processChat(
 
   const unresolvedFailedRun = getFailedRun(chatJid);
   if (unresolvedFailedRun && unresolvedFailedRun.messageId === currentMessage.id) {
+    // If newer user messages arrived after the failed one, auto-recover:
+    // advance the cursor past the failure and process the next message.
+    if (messages.length > 1) {
+      log.info("processChat auto-recovering failed run — newer messages arrived", {
+        operation: "process_chat.auto_recover_failed_run",
+        chatJid,
+        failedMessageId: unresolvedFailedRun.messageId,
+        failedTs: unresolvedFailedRun.failedTs,
+        pendingMessageCount: messages.length,
+      });
+      clearFailedRun(chatJid);
+      setChatCursor(chatJid, currentMessage.timestamp);
+      // Re-enter with the cursor advanced past the failed message.
+      channel.resumeChat(chatJid);
+      return;
+    }
     log.info("processChat paused on unresolved failed run", {
       operation: "process_chat.blocked_failed_run",
       chatJid,
