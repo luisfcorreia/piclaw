@@ -28,6 +28,8 @@ export interface RecoveryAttemptSnapshot {
   hadCompletedTurnOutput?: boolean;
   compactionErrorMessage?: string | null;
   sawCompactionIntent?: boolean;
+  sawAssistantToolCall?: boolean;
+  onlyReadOnlyToolActivity?: boolean;
 }
 
 export interface RecoveryDecision {
@@ -143,6 +145,19 @@ export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryD
         classifier: "context_pressure",
         strategy: "compact_then_retry",
         reason: "Failure looks context-related despite tool activity; compacting before retrying.",
+      };
+    }
+    if (
+      input.snapshot.onlyReadOnlyToolActivity
+      && input.snapshot.sawAssistantToolCall
+      && !input.snapshot.hadCompletedTurnOutput
+      && /without emitting an assistant reply before finalization|provider stopped after tool use without a final assistant reply/i.test(errorText)
+    ) {
+      return {
+        recover: true,
+        classifier: "transient",
+        strategy: "retry",
+        reason: "Provider stopped after a read-only tool call without sending a final reply; retrying once is safe.",
       };
     }
     return {

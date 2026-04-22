@@ -1183,6 +1183,99 @@ test("runAgentPrompt ignores commentary-only aborted output", async () => {
   expect(result.attachments).toBeUndefined();
 });
 
+test("runAgentPrompt retries when provider stops after a read-only tool call without a final reply", async () => {
+  const restoreEnv = setEnv({
+    PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",
+    PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS: "2",
+    PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS: "30000",
+  });
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-1" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    promptCalls = 0;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      this.promptCalls += 1;
+      if (this.promptCalls === 1) {
+        for (const listener of this.listeners) {
+          listener({
+            type: "message_end",
+            message: {
+              role: "assistant",
+              stopReason: "toolUse",
+              content: [{ type: "toolCall", id: "tool-1", name: "read", arguments: { path: "/tmp/x" } }],
+            },
+          });
+          listener({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "read", args: { path: "/tmp/x" } });
+          listener({ type: "tool_execution_end", toolCallId: "tool-1", toolName: "read", isError: false });
+          listener({
+            type: "message_end",
+            message: {
+              role: "assistant",
+              stopReason: "stop",
+              content: [],
+            },
+          });
+        }
+        return;
+      }
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "draft restored" } });
+      }
+    }
+    async abort() {}
+  }
+
+  try {
+    const session = new StubSession();
+    const recoveryEvents: string[] = [];
+    const turnCoordinator = new AgentTurnCoordinator({
+      takeAttachments: () => [],
+      touchSession: () => {},
+      recordMessageUsage: () => {},
+    });
+
+    const result = await runAgentPrompt("show me the draft", "web:default", {
+      timeoutMs: 0,
+      onEvent: (event) => {
+        if (event.type === "recovery_start" || event.type === "recovery_end") {
+          recoveryEvents.push(String(event.type));
+        }
+      },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {},
+      takeAttachments: () => [],
+      logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {},
+      clearActiveForkBaseLeaf: () => {},
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.result).toBe("draft restored");
+    expect(result.recovery).toEqual(expect.objectContaining({
+      attemptsUsed: 1,
+      recovered: true,
+      lastClassifier: "transient",
+      strategyHistory: ["retry"],
+    }));
+    expect(session.promptCalls).toBe(2);
+    expect(recoveryEvents).toEqual(["recovery_start", "recovery_end"]);
+  } finally {
+    restoreEnv();
+  }
+});
+
 test("runAgentPrompt disarms the prompt timeout as soon as prompt() resolves", async () => {
   let abortCalls = 0;
 

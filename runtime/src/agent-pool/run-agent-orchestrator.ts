@@ -460,6 +460,8 @@ async function runPromptAttempt(
   let hadCompletedTurnOutput = false;
   let compactionErrorMessage: string | null = null;
   let sawCompactionIntent = false;
+  let sawAssistantToolCallMessage = false;
+  let onlyReadOnlyToolActivity = true;
   const sessionEntryBaseline = snapshotSessionEntryCount(session);
 
   const originalOnTurnComplete = runOptions.onTurnComplete;
@@ -471,6 +473,14 @@ async function runPromptAttempt(
     : undefined;
 
   const tracker = options.turnCoordinator.createTracker(chatJid, onTurnComplete);
+  const isRetrySafeToolName = (toolName: unknown): boolean => typeof toolName === "string" && [
+    "read",
+    "read_attachment",
+    "search_workspace",
+    "introspect_sql",
+    "list_tools",
+    "list_scripts",
+  ].includes(toolName);
   const wrappedOnEvent = (event: AgentSessionEvent) => {
     if (event.type === "message_update") {
       const messageEvent = (event as { assistantMessageEvent?: { type?: string; delta?: string } }).assistantMessageEvent;
@@ -484,6 +494,17 @@ async function runPromptAttempt(
       || event.type === "tool_execution_end"
     ) {
       hadToolActivity = true;
+      const toolName = (event as { toolName?: unknown }).toolName;
+      if (!isRetrySafeToolName(toolName)) {
+        onlyReadOnlyToolActivity = false;
+      }
+    }
+    if (event.type === "message_end") {
+      const message = (event as { message?: { role?: unknown; content?: unknown } }).message;
+      if (message?.role === "assistant" && Array.isArray(message.content)) {
+        sawAssistantToolCallMessage = sawAssistantToolCallMessage
+          || message.content.some((block) => block && typeof block === "object" && (block as { type?: unknown }).type === "toolCall");
+      }
     }
     if (event.type === "compaction_start") {
       sawCompactionIntent = true;
@@ -536,6 +557,7 @@ async function runPromptAttempt(
   hadPartialOutput = hadPartialOutput || !!finalText;
   const finalAttachments = options.takeAttachments(chatJid);
   const timedOut = timedOutRef.value;
+  const lastAssistantState = tracker.getLastAssistantState();
   const latentStateError = !finalText ? getSessionStateErrorMessage(session) : null;
 
   let output: AgentOutput;
@@ -566,9 +588,15 @@ async function runPromptAttempt(
             blankTurnDelta,
           });
         } else {
+          const providerStoppedAfterToolUse = hadToolActivity
+            && sawAssistantToolCallMessage
+            && lastAssistantState?.stopReason === "stop"
+            && !lastAssistantState?.hadTextContent;
           detail = [
+            providerStoppedAfterToolUse ? "provider stopped after tool use without a final assistant reply" : null,
             hadPartialOutput ? "partial output seen" : null,
             hadToolActivity ? "tool activity seen" : null,
+            lastAssistantState?.stopReason ? `last stop reason: ${lastAssistantState.stopReason}` : null,
             blankTurnDelta ? `session delta: ${blankTurnDelta.appendedEntryCount} appended entries` : null,
           ].filter(Boolean).join(", ") || "no completed assistant turn was emitted";
           options.onWarn?.("Prompt resolved without a completed assistant reply", {
@@ -615,6 +643,8 @@ async function runPromptAttempt(
       hadCompletedTurnOutput,
       compactionErrorMessage,
       sawCompactionIntent,
+      sawAssistantToolCall: sawAssistantToolCallMessage,
+      onlyReadOnlyToolActivity,
     },
   };
 }
