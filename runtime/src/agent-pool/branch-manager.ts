@@ -262,11 +262,12 @@ export class AgentBranchManager {
   async pruneChatBranch(chatJid: string): Promise<ChatBranchRecord> {
     const session = this.options.pool.get(chatJid)?.runtime.session ?? null;
     const existing = this.ensureBranchRegistration(chatJid, session);
-    if (existing.chat_jid === existing.root_chat_jid) {
-      throw new Error("Cannot prune the root chat branch.");
+    const isRootChat = existing.chat_jid === existing.root_chat_jid;
+    if (isRootChat && existing.chat_jid === "web:default") {
+      throw new Error("Cannot archive the default chat session.");
     }
     if (this.options.isActive(chatJid)) {
-      throw new Error("Cannot prune a branch while it is active.");
+      throw new Error(isRootChat ? "Cannot archive a session while it is active." : "Cannot prune a branch while it is active.");
     }
 
     const archived = archiveChatBranch(chatJid);

@@ -841,6 +841,7 @@ export function ComposeBox({
         currentSessionAgent
         && currentSessionAgent.chat_jid === (currentSessionAgent.root_chat_jid || currentSessionAgent.chat_jid)
     );
+    const isCurrentDefaultRootSession = Boolean(isCurrentRootSession && (currentSessionAgent?.chat_jid || currentChatJid) === 'web:default');
     const switchableChatAgents = useMemo(() => {
         const seen = new Set();
         const chats = [];
@@ -860,7 +861,7 @@ export function ComposeBox({
     const renameInProgress = Boolean(isRenameSessionInProgress || renameSessionInProgressRef.current);
     const canRenameSession = !searchMode && typeof onRenameSession === 'function' && !renameInProgress;
     const canCreateSession = !searchMode && typeof onCreateSession === 'function';
-    const canDeleteSession = !searchMode && typeof onDeleteSession === 'function' && !isCurrentRootSession;
+    const canDeleteSession = !searchMode && typeof onDeleteSession === 'function' && !isCurrentDefaultRootSession;
     const showSessionSwitcherButton = !searchMode && (canSwitchSession || canRestoreSession || canRenameSession || canCreateSession || canDeleteSession);
     const modelPickerState = resolveComposeModelPickerState(activeModel, agentModelsPayload);
     const showModelPickerHint = modelPickerState.showPicker;

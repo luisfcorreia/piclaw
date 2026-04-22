@@ -229,8 +229,23 @@ export function archiveChatBranch(chatJid: string): ChatBranchRecord {
 
   const existing = getChatBranchByChatJid(normalizedChatJid);
   if (!existing) throw new Error(`Unknown chat branch: ${normalizedChatJid}`);
-  if (existing.chat_jid === existing.root_chat_jid) {
-    throw new Error("Cannot prune the root chat branch.");
+
+  const isRootChat = existing.chat_jid === existing.root_chat_jid;
+  if (isRootChat && existing.chat_jid === "web:default") {
+    throw new Error("Cannot archive the default chat session.");
+  }
+  if (isRootChat) {
+    const db = getDb();
+    const row = db.prepare(
+      `SELECT COUNT(*) AS count
+         FROM chat_branches
+        WHERE root_chat_jid = ?
+          AND chat_jid != ?
+          AND archived_at IS NULL`
+    ).get(existing.chat_jid, existing.chat_jid) as { count?: number } | undefined;
+    if (Number(row?.count || 0) > 0) {
+      throw new Error("Cannot archive a root chat session while it still has active branch sessions.");
+    }
   }
   if (existing.archived_at) {
     return existing;
