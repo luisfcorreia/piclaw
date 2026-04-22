@@ -137,6 +137,7 @@ describe("core config", () => {
         expect(config.getRemoteInteropConfig()).toEqual({
           enabled: true,
           allowHttp: true,
+          allowPrivateNetwork: false,
           shortCircuitEnabled: true,
           instanceName: "relay",
           decisionModel: "openai/gpt-4o",

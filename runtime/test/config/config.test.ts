@@ -654,6 +654,7 @@ test("remote interop env flags and metadata load into the typed remote config ob
     expect(snapshot.REMOTE_INTEROP_CONFIG).toEqual({
       enabled: true,
       allowHttp: true,
+      allowPrivateNetwork: false,
       shortCircuitEnabled: true,
       instanceName: "remote-a",
       decisionModel: "decision-model-a",
@@ -681,6 +682,7 @@ test("typed remote interop config getter returns the frozen shared object", asyn
       expect(cfg.REMOTE_INTEROP_CONFIG).toEqual({
         enabled: true,
         allowHttp: false,
+        allowPrivateNetwork: false,
         shortCircuitEnabled: true,
         instanceName: "remote-b",
         decisionModel: "decision-model-b",

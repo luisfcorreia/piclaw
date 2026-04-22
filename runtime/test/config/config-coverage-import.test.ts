@@ -131,6 +131,7 @@ test("plain import covers config module init branches with isolated argv and env
         expect(cfg.REMOTE_INTEROP_CONFIG).toEqual({
           enabled: true,
           allowHttp: false,
+          allowPrivateNetwork: false,
           shortCircuitEnabled: true,
           instanceName: "remote-c",
           decisionModel: "decision-model-c",
