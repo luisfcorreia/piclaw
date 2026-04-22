@@ -50,6 +50,8 @@ type RuntimeFollowupRuntimeState = Pick<
   | "updateThoughtBuffer"
   | "updateDraftBuffer"
   | "getBuffer"
+  | "setContextUsage"
+  | "getContextUsage"
 >;
 
 export interface WebChannelRuntimeFollowupFacadeServiceDeps {

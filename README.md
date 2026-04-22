@@ -12,7 +12,7 @@ It is for people who want one stateful agent workspace they can run locally or i
 
 - **One workspace, one app** — chat, editor, terminal, viewers, boards, uploads, and automation in the same web UI
 - **Persistent state** — SQLite-backed messages, media, tasks, token usage, encrypted keychain, and session-scoped SSH / Proxmox / Portainer profiles
-- **Practical built-ins** — code editing, Office/PDF/CSV/image/video viewing, draw.io, VNC, browser automation, image processing, MCP, and infra tools
+- **Practical built-ins** — code editing, Office/PDF/CSV/image/video viewing, draw.io, VNC, browser automation, image processing, MCP, infra tools, and optional cross-instance IPC for paired remote peers
 - **Agent-first workflows** — steering, queued follow-ups, side prompts, autoresearch loops, scheduled tasks, and visual artifact generation
 - **Context conservation** — small always-active tool baseline with staged discovery via `list_tools` / `list_scripts`
 - **Optional auth/channels** — passkeys/TOTP for the web UI, plus optional WhatsApp integration

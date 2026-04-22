@@ -37,6 +37,8 @@ type WebChannelRuntimePublicSurfaceFollowupFacade = Pick<
   | "updateThoughtBuffer"
   | "updateDraftBuffer"
   | "getBuffer"
+  | "setContextUsage"
+  | "getContextUsage"
 >;
 
 type WebChannelRuntimePublicSurfaceStorage = Pick<

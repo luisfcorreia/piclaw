@@ -107,6 +107,9 @@ Configuration details live in [configuration.md](configuration.md).
   DOM clicking, JS evaluation, and screenshots
 - **`mcp` via `pi-mcp-adapter`** — token-efficient MCP access through
   `.pi/mcp.json`
+- **Cross-instance IPC** — pair trusted piclaw instances, exchange signed
+  prompts, review mediated proposals, and use the built-in `remote-peer`
+  skill for remote queries and approvals
 - **Experimental `m365` extension** — opt-in Microsoft 365 browser-auth
   automation for Teams, Graph, OneDrive, SharePoint, and calendar flows
 - **`win_*` tools** — Windows-only desktop automation via Win32 FFI
@@ -117,6 +120,8 @@ Configuration details live in [configuration.md](configuration.md).
   knobs, and workspace env hook
 - [tools-and-skills.md](tools-and-skills.md) — internal tools, skills, and
   slash commands
+- [cross-instance-ipc.md](cross-instance-ipc.md) — pairing, signatures,
+  mediation, permissions, and remote-peer workflows
 - [runtime-flows.md](runtime-flows.md) — session lifecycle, reconnect behavior,
   recovery, and timeout handling
 - [web-pane-extensions.md](web-pane-extensions.md) — pane extension model

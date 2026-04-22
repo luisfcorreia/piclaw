@@ -108,11 +108,11 @@ build-web: ## Build web JS/CSS bundles (+ sourcemaps) into static/dist/ (include
 		runtime/web/static/dist/login.bundle.js.map \
 		runtime/web/static/dist/login.bundle.css
 
-build-ts: ## Type-check TypeScript (generated/dist is build output only; bun runs .ts directly)
+build-ts: ## Type-check TypeScript / validate emit (generated/dist is cleaned up after the run)
 	cd runtime && bun run build
-# NOTE: generated/dist/ is produced by tsc for validation/inspection, but the
-# entry and main field both point to src/index.ts. Consider switching to
-# `tsc --noEmit` (typecheck only) and excluding generated/dist/ from release artifacts.
+# NOTE: generated/dist/ is produced transiently by tsc for validation, then
+# removed immediately because Bun runs runtime/src/*.ts directly and release
+# artifacts only need runtime/web/static/dist/ bundles plus packaged sources.
 
 build-piclaw: build-web build-ts ## Full build: vendor + web + ts
 

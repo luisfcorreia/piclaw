@@ -89,6 +89,20 @@ function previewLanguageFromAttachment(info, filename) {
     if (normalizedName.endsWith('.go') || normalizedType === 'text/x-go') {
         return 'go';
     }
+    if (
+        normalizedName.endsWith('.c++')
+        || normalizedName.endsWith('.cc')
+        || normalizedName.endsWith('.cp')
+        || normalizedName.endsWith('.cpp')
+        || normalizedName.endsWith('.cxx')
+        || normalizedName.endsWith('.hh')
+        || normalizedName.endsWith('.hpp')
+        || normalizedName.endsWith('.hxx')
+        || normalizedType === 'text/x-c++src'
+        || normalizedType === 'text/x-c++hdr'
+    ) {
+        return 'cpp';
+    }
     if (normalizedName.endsWith('.rb') || normalizedType === 'text/x-ruby') {
         return 'ruby';
     }

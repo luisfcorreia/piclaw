@@ -193,7 +193,7 @@ function getSessionStateErrorMessage(session: AgentSession): string | null {
   return typeof errorMessage === "string" && errorMessage.trim() ? errorMessage.trim() : null;
 }
 
-const DEFAULT_COMPACTION_TIMEOUT_MS = 90_000;
+const DEFAULT_COMPACTION_TIMEOUT_MS = 180_000;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(String(value || "").trim(), 10);

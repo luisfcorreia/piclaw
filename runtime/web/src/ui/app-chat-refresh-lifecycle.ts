@@ -196,46 +196,6 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
     });
   }, [appShellRef, loadAgents, readStoredNumber, sidebarWidthRef]);
 
-  useEffect(() => {
-    noteAppChatActivation({ chatJid: currentChatJid });
-
-    // Reset model/context state immediately so stale values from the
-    // previous chat don't linger while async refreshes are in flight.
-    setActiveModel(null);
-    setActiveThinkingLevel(null);
-    setSupportsThinking(false);
-    setActiveModelUsage(null);
-    setHasLoadedAgentModels(false);
-    setAgentModelsPayload(null);
-    setExtensionWorkingState({ message: null, indicator: null });
-
-    // Restore the last known context usage for this chat from localStorage
-    // so the context indicator shows immediately without waiting for the API.
-    const stored = restoreContextUsage(currentChatJid);
-    if (stored) {
-      setContextUsage(stored);
-    } else {
-      setContextUsage(null);
-    }
-    void refreshModelState();
-  }, [currentChatJid, refreshModelState, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setExtensionWorkingState, setHasLoadedAgentModels, setSupportsThinking]);
-
-  const updateAgentProfile = useCallback((payload: any) => {
-    updateAgentProfileFromEvent({
-      payload,
-      agentsRef,
-      setAgents,
-      applyBranding,
-    });
-  }, [agentsRef, applyBranding, setAgents]);
-
-  const updateUserProfile = useCallback((payload: any) => {
-    updateUserProfileFromEvent({
-      payload,
-      setUserProfile,
-    });
-  }, [setUserProfile]);
-
   const applyModelState = useCallback((payload: any) => {
     applyModelStatePayload({
       payload,
@@ -309,6 +269,46 @@ export function useChatRefreshLifecycle(options: UseChatRefreshLifecycleOptions)
       },
     });
   }, [activeChatJidRef, applyModelState, currentChatJid, getAgentContext, getAgentModels, getThreadSwitchTraceId, setContextUsage]);
+
+  useEffect(() => {
+    noteAppChatActivation({ chatJid: currentChatJid });
+
+    // Reset model/context state immediately so stale values from the
+    // previous chat don't linger while async refreshes are in flight.
+    setActiveModel(null);
+    setActiveThinkingLevel(null);
+    setSupportsThinking(false);
+    setActiveModelUsage(null);
+    setHasLoadedAgentModels(false);
+    setAgentModelsPayload(null);
+    setExtensionWorkingState({ message: null, indicator: null });
+
+    // Restore the last known context usage for this chat from localStorage
+    // so the context indicator shows immediately without waiting for the API.
+    const stored = restoreContextUsage(currentChatJid);
+    if (stored) {
+      setContextUsage(stored);
+    } else {
+      setContextUsage(null);
+    }
+    void refreshModelState();
+  }, [currentChatJid, refreshModelState, setActiveModel, setActiveModelUsage, setActiveThinkingLevel, setAgentModelsPayload, setContextUsage, setExtensionWorkingState, setHasLoadedAgentModels, setSupportsThinking]);
+
+  const updateAgentProfile = useCallback((payload: any) => {
+    updateAgentProfileFromEvent({
+      payload,
+      agentsRef,
+      setAgents,
+      applyBranding,
+    });
+  }, [agentsRef, applyBranding, setAgents]);
+
+  const updateUserProfile = useCallback((payload: any) => {
+    updateUserProfileFromEvent({
+      payload,
+      setUserProfile,
+    });
+  }, [setUserProfile]);
 
   const refreshActiveChatAgents = useCallback((options?: {
     prewarmRecent?: boolean;
