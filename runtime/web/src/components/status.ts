@@ -4,7 +4,7 @@ import { addToWhitelist, getWorkspaceBranch, respondToAgentRequest } from '../ap
 import { renderThinkingMarkdown } from '../markdown.js';
 import { getTurnColor } from '../ui/agent-utils.js';
 import { buildTurnDotClass, resolveRunningStatusIndicator, shouldShowRunningStatusDot } from '../ui/status-dot.js';
-import { getStatusElapsedLabel, getStatusRetryCountdownLabel, isCompactionStatus, parseStatusLastEventAt, resolveStatusPanelTitle } from '../ui/status-duration.js';
+import { getStatusElapsedLabel, getStatusRetryCountdownLabel, isCompactionStatus, parseStatusLastEventAt, parseStatusStartedAt, resolveStatusPanelTitle } from '../ui/status-duration.js';
 import { extractToolContextPath } from '../ui/tool-git-context.js';
 import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 
@@ -30,6 +30,8 @@ const CLOCK_ICON_SVG = html`
         <path d="M12 7v5l3 2"></path>
     </svg>
 `;
+
+const STATUS_TIME_HINT_THRESHOLD_MS = 10_000;
 
 export function normalizeStatusHints(value) {
     const source = Array.isArray(value)
@@ -90,12 +92,29 @@ export function shouldTickStatusActivityAge(status) {
     return parseStatusLastEventAt(status) !== null;
 }
 
+export function shouldTickIntentElapsed(status) {
+    if (!status || typeof status !== 'object') return false;
+    return status.type === 'intent' && parseStatusStartedAt(status) !== null;
+}
+
+function hasMetStatusTimeHintThreshold(timestampMs, nowMs = Date.now()) {
+    if (!Number.isFinite(timestampMs)) return false;
+    return nowMs - timestampMs >= STATUS_TIME_HINT_THRESHOLD_MS;
+}
+
 export function resolveStatusActivityAgeLabel(status, nowMs = Date.now()) {
     if (!shouldTickStatusActivityAge(status)) return null;
     const lastEventAtMs = parseStatusLastEventAt(status);
-    if (lastEventAtMs === null) return null;
+    if (lastEventAtMs === null || !hasMetStatusTimeHintThreshold(lastEventAtMs, nowMs)) return null;
     const ageLabel = formatElapsed(new Date(lastEventAtMs).toISOString(), nowMs);
     return ageLabel ? `${ageLabel} ago` : null;
+}
+
+export function resolveIntentElapsedLabel(status, nowMs = Date.now()) {
+    if (!shouldTickIntentElapsed(status)) return null;
+    const startedAtMs = parseStatusStartedAt(status);
+    if (startedAtMs === null || !hasMetStatusTimeHintThreshold(startedAtMs, nowMs)) return null;
+    return getStatusElapsedLabel(status, nowMs);
 }
 
 export function resolveAgentStatusContent(status, options = {}) {
@@ -261,31 +280,27 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         () => shouldTickStatusActivityAge(status),
         [status],
     );
+    const shouldTickIntentAge = useMemo(
+        () => shouldTickIntentElapsed(status),
+        [status],
+    );
     const toolContextPath = useMemo(
         () => extractToolContextPath(status?.tool_name, status?.tool_args),
         [status?.tool_name, status?.tool_args],
     );
     const [toolRepoContext, setToolRepoContext] = useState(null);
     useEffect(() => {
-        if (!statusIsCompaction) return;
+        const shouldTick = Boolean(
+            shouldTickIntentAge
+            || status?.retry_at
+            || status?.retryAt
+            || shouldTickActivityAge,
+        );
+        if (!shouldTick) return;
         setNowMs(Date.now());
         const timer = setInterval(() => setNowMs(Date.now()), 1000);
         return () => clearInterval(timer);
-    }, [statusIsCompaction, status?.started_at, status?.startedAt]);
-
-    useEffect(() => {
-        if (!(status?.retry_at || status?.retryAt)) return;
-        setNowMs(Date.now());
-        const timer = setInterval(() => setNowMs(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, [status?.retry_at, status?.retryAt]);
-
-    useEffect(() => {
-        if (!shouldTickActivityAge) return;
-        setNowMs(Date.now());
-        const timer = setInterval(() => setNowMs(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, [shouldTickActivityAge, status?.last_event_at, status?.lastEventAt, status?.started_at, status?.startedAt, status?.type, status?.tool_name, status?.tool_args]);
+    }, [shouldTickActivityAge, shouldTickIntentAge, status?.retry_at, status?.retryAt, status?.last_event_at, status?.lastEventAt, status?.started_at, status?.startedAt, status?.type, status?.tool_name, status?.tool_args]);
 
     useEffect(() => {
         const isToolStatus = status?.type === 'tool_call' || status?.type === 'tool_status';
@@ -413,7 +428,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
 
     const pendingTitle = pendingRequest?.tool_call?.title;
     const pendingMessage = pendingTitle ? `Awaiting approval: ${pendingTitle}` : 'Awaiting approval';
-    const compactionElapsedLabel = statusIsCompaction ? getStatusElapsedLabel(status, nowMs) : null;
+    const statusIntentElapsedLabel = resolveIntentElapsedLabel(status, nowMs);
     const renderIntentPanel = (payload, color, elapsedLabel = null) => {
         const titleText = resolveStatusPanelTitle(payload);
         const retryCountdownLabel = getStatusRetryCountdownLabel(payload, nowMs);
@@ -751,7 +766,7 @@ export function AgentStatus({ status, draft, plan, thought, pendingRequest, inte
         <div class="agent-status-panel">
             ${showCorePanels && intent && renderIntentPanel(intent, intentColor)}
             ${showExtensionPanels && Array.isArray(extensionPanels) && extensionPanels.map((panel) => renderExtensionPanel(panel))}
-            ${showCorePanels && status?.type === 'intent' && renderIntentPanel(status, statusIntentColor, compactionElapsedLabel)}
+            ${showCorePanels && status?.type === 'intent' && renderIntentPanel(status, statusIntentColor, statusIntentElapsedLabel)}
             ${showCorePanels && pendingRequest && html`
                 <div class="agent-status agent-status-request" aria-live="polite" style=${turnColor ? `--turn-color: ${turnColor};` : ''}>
                     ${pendingIndicatorMode === 'dot' && html`<span class=${dotClass} aria-hidden="true"></span>`}

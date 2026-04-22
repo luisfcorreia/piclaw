@@ -29,7 +29,9 @@ Current behavior:
 - recent-activity restore keeps the last meaningful status payload when the web
   UI reconnects or when you return to an active chat
 - tool-status rows can show an age hint in the meta row, alongside git/status
-  metadata, using a small clock icon and labels like `5s ago` or `2m 3s ago`
+  metadata, using a small clock icon and labels like `10s ago` or `2m 3s ago`
+- intent panels can also show an elapsed-time hint once they have been active
+  for at least 10 seconds
 - recovered turns can render a compact `recovered` chip in the message metadata
   row
 - timed-out turns can render a compact `timeout` chip in the message metadata

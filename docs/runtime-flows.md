@@ -136,7 +136,8 @@ Separately, the live status surface now keeps more operator-useful context visib
 
 - active `tool_call` / `tool_status` rows are preserved during silence probing instead of being replaced immediately by generic waiting copy
 - recent-activity restore preserves the last meaningful status payload when possible
-- tool status rows can show an `x ago` hint in the lower metadata row, alongside git/status metadata
+- tool status rows can show an `x ago` hint in the lower metadata row, alongside git/status metadata, once the row has been active for at least 10 seconds
+- intent panels can show an elapsed timer once the intent has been active for at least 10 seconds
 
 That means the user-facing surface is no longer a silent binary of “worked” vs “mysteriously resumed somehow” — successful recovery leaves a visible breadcrumb, timed-out salvage leaves an explicit breadcrumb, and live status keeps the most recent tool context visible for longer.
 

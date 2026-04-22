@@ -387,6 +387,7 @@ const groupDefinitions: GroupDefinition[] = [
           "popup-typeahead.test.ts",
           "queue-state.test.ts",
           "status-dot.test.ts",
+          "status-content.test.ts",
           "status-panel-shortcuts.test.ts",
           "tool-git-context.test.ts",
           "status-duration.test.ts",
