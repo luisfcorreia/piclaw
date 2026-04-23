@@ -11,6 +11,7 @@ import { getStatusElapsedLabel, isCompactionStatus, resolveStatusPanelTitle } fr
 import { useConnectionStatusPresentation } from '../ui/connection-status.js';
 import { FilePill } from './file-pill.js';
 import { refreshAgentModelStateBestEffort } from './compose-model-refresh.js';
+import { renderMarkdown } from '../markdown.js';
 
 /**
  * Slash command definitions for autocomplete.
@@ -1963,7 +1964,7 @@ export function ComposeBox({
             `}
             ${submitNotice && html`
                 <div class="compose-inline-status compose-command-notice" role="status" aria-live="polite">
-                    <div class="compose-inline-status-detail compose-command-notice-text">${submitNotice}</div>
+                    <div class="compose-inline-status-detail compose-command-notice-text" dangerouslySetInnerHTML=${{ __html: renderMarkdown(submitNotice) }}></div>
                 </div>
             `}
             <div
