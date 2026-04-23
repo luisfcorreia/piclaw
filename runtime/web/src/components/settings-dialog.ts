@@ -326,18 +326,26 @@ function AddonsSection() {
             ${error && html`<div class="settings-addon-error">⚠ ${error}</div>`}
             ${message && html`<div class="settings-addon-message">✓ ${message}</div>`}
             <table class="settings-table settings-borderless">
-                <thead><tr><th>Add-on</th><th>Version</th><th>Description</th><th>Tags</th><th style="text-align:right">Actions</th></tr></thead>
+                <thead><tr><th>Add-on</th><th>Version</th><th>Description</th><th>Bundled</th><th style="text-align:right">Actions</th></tr></thead>
                 <tbody>
                     ${addons.map(a => html`
                         <tr class=${a.installed ? 'settings-row-active' : ''}>
-                            <td><strong>${a.slug}</strong></td>
+                            <td>
+                                <strong>${a.slug}</strong>
+                                <div class="settings-addon-tags">
+                                    ${(a.tags || []).map(t => html`<span class="settings-tag">${t}</span>`)}
+                                </div>
+                            </td>
                             <td class="settings-addon-version">
                                 ${a.installed
                                     ? html`<span>${a.installedVersion || '?'}</span>${a.hasUpdate ? html` → <strong>${a.version}</strong>` : ''}`
                                     : html`<span>${a.version || '—'}</span>`}
                             </td>
                             <td>${a.description}</td>
-                            <td class="settings-addon-tags">${(a.tags || []).map(t => html`<span class="settings-tag">${t}</span>`)}</td>
+                            <td class="settings-addon-bundled">
+                                <span class="settings-tag">${a.type || 'extension'}</span>
+                                ${(a.skills || []).map(s => html`<span class="settings-tag settings-tag-skill">${s}</span>`)}
+                            </td>
                             <td class="settings-addon-actions">
                                 ${a.installed ? html`
                                     ${a.hasUpdate && html`

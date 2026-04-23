@@ -386,6 +386,17 @@
     color: var(--accent-color, #1d9bf0);
 }
 
+.settings-tag-skill {
+    background: color-mix(in srgb, var(--success-color, #00ba7c) 12%, transparent);
+    color: var(--success-color, #00ba7c);
+}
+
+.settings-addon-bundled {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+}
+
 /* ── Add-on actions ────────────────────────────────────────────────────── */
 
 .settings-addon-version {
