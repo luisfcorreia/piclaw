@@ -319,6 +319,20 @@
     border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.15));
 }
 
+.settings-toolset-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.settings-toolset-toggle input[type="checkbox"] {
+    margin: 0;
+    accent-color: var(--accent-color, #1d9bf0);
+    cursor: pointer;
+}
+
 .settings-toolset-header strong {
     font-size: 0.9em;
     text-transform: capitalize;
@@ -367,6 +381,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.settings-tool-source {
+    margin-left: auto;
+    font-size: 0.78em;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-transform: capitalize;
 }
 
 /* ── Add-on tags ───────────────────────────────────────────────────────── */
