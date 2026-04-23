@@ -279,12 +279,10 @@ function ToolsSection({ toolsets }) {
 
 // ── Add-ons ─────────────────────────────────────────────────────────────────
 
-function AddonsSection() {
+function AddonsSection({ setStatus }) {
     const [addons, setAddons] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [busy, setBusy] = useState(null); // slug of addon being installed/uninstalled
-    const [error, setError] = useState(null);
-    const [message, setMessage] = useState(null);
+    const [busy, setBusy] = useState(null);
 
     const loadAddons = useCallback(async () => {
         try {
@@ -294,45 +292,47 @@ function AddonsSection() {
             setAddons(data.addons || []);
         } catch (e) {
             setAddons(null);
-            setError(String(e.message || e));
+            setStatus?.(String(e.message || e), 'error');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [setStatus]);
 
     useEffect(() => { loadAddons(); }, []);
 
     const installAddon = useCallback(async (slug) => {
         if (busy) return;
-        setBusy(slug); setError(null); setMessage(null);
+        setBusy(slug);
+        setStatus?.(`Installing ${slug}\u2026`, 'info');
         try {
             const resp = await fetch('/agent/addons/install', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slug }),
             });
             const data = await resp.json();
-            if (data.error) { setError(data.error); return; }
-            setMessage(data.message);
+            if (data.error) { setStatus?.(data.error, 'error'); return; }
+            setStatus?.(data.message, 'success');
             await loadAddons();
-        } catch (e) { setError(String(e.message || e)); }
+        } catch (e) { setStatus?.(String(e.message || e), 'error'); }
         finally { setBusy(null); }
-    }, [busy, loadAddons]);
+    }, [busy, loadAddons, setStatus]);
 
     const uninstallAddon = useCallback(async (slug) => {
         if (busy) return;
-        setBusy(slug); setError(null); setMessage(null);
+        setBusy(slug);
+        setStatus?.(`Removing ${slug}\u2026`, 'info');
         try {
             const resp = await fetch('/agent/addons/uninstall', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ slug }),
             });
             const data = await resp.json();
-            if (data.error) { setError(data.error); return; }
-            setMessage(data.message);
+            if (data.error) { setStatus?.(data.error, 'error'); return; }
+            setStatus?.(data.message, 'success');
             await loadAddons();
-        } catch (e) { setError(String(e.message || e)); }
+        } catch (e) { setStatus?.(String(e.message || e), 'error'); }
         finally { setBusy(null); }
-    }, [busy, loadAddons]);
+    }, [busy, loadAddons, setStatus]);
 
     if (loading) return html`<div class="settings-loading">Fetching add-ons…</div>`;
     if (!addons) return html`
@@ -344,8 +344,6 @@ function AddonsSection() {
         <div class="settings-section">
             <h3>Add-ons</h3>
             <p class="settings-hint">From <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>. Restart required after install/uninstall.</p>
-            ${error && html`<div class="settings-addon-error">⚠ ${error}</div>`}
-            ${message && html`<div class="settings-addon-message">✓ ${message}</div>`}
             <table class="settings-table settings-borderless">
                 <thead><tr><th>Add-on</th><th>Version</th><th>Description</th><th>Bundled</th><th style="text-align:right">Actions</th></tr></thead>
                 <tbody>
@@ -405,6 +403,7 @@ const SECTIONS = [
 function SettingsDialogContent({ onClose }) {
     const [activeSection, setActiveSection] = useState('general');
     const [settingsData, setSettingsData] = useState(null);
+    const [statusMessage, setStatusMessage] = useState(null); // { text, type: 'info'|'success'|'error' }
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -416,6 +415,10 @@ function SettingsDialogContent({ onClose }) {
         fetch('/agent/settings-data').then(r => r.json()).then(setSettingsData).catch(() => setSettingsData({}));
     }, []);
 
+    const setStatus = useCallback((text, type = 'info') => {
+        setStatusMessage(text ? { text, type } : null);
+    }, []);
+
     const renderSection = () => {
         switch (activeSection) {
             case 'general': return html`<${GeneralSection} assistantName=${settingsData?.assistantName} />`;
@@ -423,7 +426,7 @@ function SettingsDialogContent({ onClose }) {
             case 'models': return html`<${ModelsSection} />`;
             case 'theme': return html`<${ThemeSection} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
             case 'tools': return html`<${ToolsSection} toolsets=${settingsData?.toolsets} />`;
-            case 'addons': return html`<${AddonsSection} />`;
+            case 'addons': return html`<${AddonsSection} setStatus=${setStatus} />`;
             default: return null;
         }
     };
@@ -449,6 +452,15 @@ function SettingsDialogContent({ onClose }) {
                         ${settingsData === null ? html`<div class="settings-loading">Loading…</div>` : renderSection()}
                     </main>
                 </div>
+                ${statusMessage && html`
+                    <div class=${`settings-status-bar settings-status-bar-${statusMessage.type}`}>
+                        ${statusMessage.type === 'info' && html`<span class="settings-spinner"></span>`}
+                        <span>${statusMessage.text}</span>
+                        ${statusMessage.type !== 'info' && html`
+                            <button class="settings-status-dismiss" onClick=${() => setStatusMessage(null)}>✕</button>
+                        `}
+                    </div>
+                `}
             </div>
         </div>
     `;
