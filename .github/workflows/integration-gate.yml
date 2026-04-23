@@ -28,7 +28,7 @@ jobs:
         run: bunx playwright install chromium --only-shell
 
       - name: Install Playwright system dependencies
-        run: sudo bunx playwright install-deps chromium-headless-shell
+        run: sudo env PATH="$PATH" bunx playwright install-deps chromium-headless-shell
 
       - name: Run full integration suite
         run: make ci-integration
