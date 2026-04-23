@@ -123,9 +123,16 @@
 }
 
 .settings-nav-icon {
-    font-size: 1.05em;
+    display: flex;
+    align-items: center;
     width: 20px;
     text-align: center;
+    flex-shrink: 0;
+}
+
+.settings-nav-icon svg {
+    width: 16px;
+    height: 16px;
 }
 
 .settings-content {
@@ -177,6 +184,7 @@
     color: var(--text-primary);
     font-size: 0.84em;
     cursor: pointer;
+    min-width: 70px;
 }
 
 .settings-row button:hover {
@@ -195,6 +203,12 @@
     border-radius: 3px;
     font-size: 0.92em;
 }
+
+.settings-hint a {
+    color: var(--accent-color, #1d9bf0);
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────────── */
 
 .settings-table {
     width: 100%;
@@ -219,34 +233,61 @@
     background: color-mix(in srgb, var(--accent-color) 8%, transparent);
 }
 
-.settings-theme-grid {
+/* ── Theme table with color swatches ───────────────────────────────────── */
+
+.settings-theme-table {
+    font-size: 0.82em;
+}
+
+.settings-theme-table th,
+.settings-theme-table td {
+    padding: 4px 6px;
+    white-space: nowrap;
+}
+
+.settings-swatch-header {
+    font-size: 0.78em;
+    text-transform: capitalize;
+}
+
+.settings-color-swatch {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    vertical-align: middle;
+}
+
+.settings-theme-table input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--accent-color, #1d9bf0);
+}
+
+/* ── Add-on tags ───────────────────────────────────────────────────────── */
+
+.settings-addon-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin: 10px 0;
+    gap: 4px;
 }
 
-.settings-theme-btn {
-    padding: 5px 12px;
-    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
-    border-radius: 6px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 0.84em;
-    cursor: pointer;
-    transition: all 0.15s;
+.settings-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.78em;
+    background: color-mix(in srgb, var(--accent-color, #1d9bf0) 12%, transparent);
+    color: var(--accent-color, #1d9bf0);
 }
 
-.settings-theme-btn:hover {
-    border-color: var(--accent-color);
+.settings-table input[type="checkbox"]:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
-.settings-theme-btn.active {
-    border-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 12%, transparent);
-    color: var(--accent-color);
-    font-weight: 600;
-}
+/* ── Loading ───────────────────────────────────────────────────────────── */
 
 .settings-loading {
     padding: 20px;
@@ -254,7 +295,8 @@
     font-size: 0.88em;
 }
 
-/* Settings gear in workspace explorer header */
+/* ── Workspace gear + floating gear ───────────────────────────────────── */
+
 .workspace-settings {
     display: flex;
     align-items: center;
@@ -279,7 +321,6 @@
     height: 15px;
 }
 
-/* Floating settings button when workspace is collapsed */
 .settings-floating-btn {
     position: absolute;
     top: 8px;

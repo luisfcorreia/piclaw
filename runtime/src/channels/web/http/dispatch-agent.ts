@@ -3,6 +3,8 @@
  */
 
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
+import { getIdentityConfig } from "../../../core/config.js";
+import { THEME_PRESETS, THEME_LIST_COLOR_KEYS } from "../theming/ui-theme-data.js";
 import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
@@ -195,6 +197,28 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     method: "POST",
     path: "/agent/whitelist",
     handle: (channel) => channel.json({ error: "Not found" }, 404),
+  },
+  {
+    method: "GET",
+    path: "/agent/settings-data",
+    handle: (channel) => {
+      const identity = getIdentityConfig();
+      const themes = THEME_PRESETS.map((p) => {
+        const palette = p.mode === "dark" ? p.dark : p.mode === "light" ? p.light : (p.light || p.dark);
+        const colors: Record<string, string> = {};
+        if (palette) {
+          for (const key of THEME_LIST_COLOR_KEYS) {
+            if (palette[key]) colors[key] = palette[key];
+          }
+        }
+        return { name: p.name, label: p.label, mode: p.mode, colors };
+      });
+      return channel.json({
+        assistantName: identity.assistantName || "PiClaw",
+        themes,
+        colorKeys: [...THEME_LIST_COLOR_KEYS],
+      });
+    },
   },
 ];
 

@@ -7,20 +7,26 @@
  * Escape key or backdrop click closes it.
  */
 
-import { html, useState, useEffect, useCallback } from '../vendor/preact-htm.js';
+import { html, useState, useEffect, useCallback, useRef } from '../vendor/preact-htm.js';
 import { BodyPortal } from './body-portal.js';
 import { getAgentModels } from '../api.js';
 
-function GeneralSection() {
-    const [assistantName, setAssistantName] = useState('');
-    const [loaded, setLoaded] = useState(false);
+// ── SVG nav icons (inline, no emoji) ────────────────────────────────────────
 
-    useEffect(() => {
-        fetch('/agent/branding').then(r => r.json()).then(data => {
-            setAssistantName(data?.assistant_name || 'PiClaw');
-            setLoaded(true);
-        }).catch(() => setLoaded(true));
-    }, []);
+const iconGeneral = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+const iconModels = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/><path d="M9 15c.83.67 2 1 3 1s2.17-.33 3-1"/></svg>`;
+const iconAppearance = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="19" cy="13.5" r="2.5"/><circle cx="13.5" cy="20.5" r="2.5"/><circle cx="5" cy="13.5" r="2.5"/><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" stroke="none"/><path d="M12 2a10 10 0 0 0 0 20" stroke-dasharray="4 2"/></svg>`;
+const iconTools = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
+const iconAddons = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`;
+
+// ── Sections ────────────────────────────────────────────────────────────────
+
+function GeneralSection({ assistantName: initialName }) {
+    const [assistantName, setAssistantName] = useState(initialName || '');
+    const [saved, setSaved] = useState(false);
+
+    // Sync when parent data loads
+    useEffect(() => { if (initialName) setAssistantName(initialName); }, [initialName]);
 
     const save = useCallback(async () => {
         await fetch('/post', {
@@ -28,17 +34,18 @@ function GeneralSection() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ content: `/agent-name ${assistantName}` }),
         });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
     }, [assistantName]);
-
-    if (!loaded) return html`<div class="settings-loading">Loading…</div>`;
 
     return html`
         <div class="settings-section">
             <h3>General</h3>
             <div class="settings-row">
                 <label>Assistant name</label>
-                <input type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} />
-                <button onClick=${save}>Save</button>
+                <input type="text" value=${assistantName}
+                    onInput=${e => { setAssistantName(e.target.value); setSaved(false); }} />
+                <button onClick=${save}>${saved ? '✓ Saved' : 'Save'}</button>
             </div>
         </div>
     `;
@@ -78,18 +85,12 @@ function ModelsSection() {
     `;
 }
 
-function ThemeSection() {
+function ThemeSection({ themes, colorKeys }) {
     const [currentTheme, setCurrentTheme] = useState('');
 
     useEffect(() => {
         setCurrentTheme(document.documentElement.dataset.colorTheme || 'default');
     }, []);
-
-    const themes = [
-        'default', 'solarized', 'github', 'dracula', 'catppuccin', 'nord',
-        'gruvbox', 'tokyo', 'monokai', 'monokai-pro', 'ristretto', 'miasma',
-        'gotham', 'xterm', 'tango',
-    ];
 
     const apply = useCallback((name) => {
         fetch('/post', {
@@ -100,17 +101,41 @@ function ThemeSection() {
         setCurrentTheme(name);
     }, []);
 
+    const keys = colorKeys || [];
+    const presets = themes || [];
+
     return html`
         <div class="settings-section">
             <h3>Appearance</h3>
-            <div class="settings-theme-grid">
-                ${themes.map(t => html`
-                    <button
-                        class=${`settings-theme-btn ${t === currentTheme ? 'active' : ''}`}
-                        onClick=${() => apply(t)}
-                    >${t}</button>
-                `)}
-            </div>
+            <table class="settings-table settings-theme-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Theme</th>
+                        <th>Mode</th>
+                        ${keys.map(k => html`<th class="settings-swatch-header">${k.replace(/([A-Z])/g, ' $1').trim()}</th>`)}
+                    </tr>
+                </thead>
+                <tbody>
+                    ${presets.map(t => html`
+                        <tr class=${t.name === currentTheme ? 'settings-row-active' : ''}>
+                            <td>
+                                <input type="radio" name="settings-theme"
+                                    checked=${t.name === currentTheme}
+                                    onChange=${() => apply(t.name)} />
+                            </td>
+                            <td><strong>${t.label}</strong></td>
+                            <td>${t.mode}</td>
+                            ${keys.map(k => {
+                                const c = t.colors?.[k];
+                                return html`<td>
+                                    ${c ? html`<span class="settings-color-swatch" style=${'background:' + c} title=${c}></span>` : '—'}
+                                </td>`;
+                            })}
+                        </tr>
+                    `)}
+                </tbody>
+            </table>
         </div>
     `;
 }
@@ -140,22 +165,25 @@ function AddonsSection() {
     if (!catalog) return html`
         <div class="settings-section">
             <h3>Add-ons</h3>
-            <p>Could not load add-on catalog from <code>rcarmo/piclaw-addons</code>.</p>
+            <p class="settings-hint">Could not load add-on catalog from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>.</p>
         </div>
     `;
+
+    const addons = catalog.addons || [];
 
     return html`
         <div class="settings-section">
             <h3>Add-ons</h3>
-            <p class="settings-hint">Available from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a></p>
+            <p class="settings-hint">Available from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>. Install support coming soon.</p>
             <table class="settings-table">
-                <thead><tr><th>Add-on</th><th>Description</th><th>Tags</th></tr></thead>
+                <thead><tr><th style="width:36px"></th><th>Add-on</th><th>Description</th><th>Tags</th></tr></thead>
                 <tbody>
-                    ${(catalog.addons || []).map(a => html`
+                    ${addons.map(a => html`
                         <tr>
+                            <td><input type="checkbox" disabled title="Install support coming soon" /></td>
                             <td><strong>${a.slug}</strong></td>
                             <td>${a.description}</td>
-                            <td>${(a.tags || []).join(', ')}</td>
+                            <td class="settings-addon-tags">${(a.tags || []).map(t => html`<span class="settings-tag">${t}</span>`)}</td>
                         </tr>
                     `)}
                 </tbody>
@@ -165,15 +193,16 @@ function AddonsSection() {
 }
 
 const SECTIONS = [
-    { id: 'general', label: 'General', icon: '⚙️' },
-    { id: 'models', label: 'Models & Providers', icon: '🤖' },
-    { id: 'theme', label: 'Appearance', icon: '🎨' },
-    { id: 'tools', label: 'Tools', icon: '🔧' },
-    { id: 'addons', label: 'Add-ons', icon: '📦' },
+    { id: 'general', label: 'General', icon: iconGeneral },
+    { id: 'models', label: 'Models & Providers', icon: iconModels },
+    { id: 'theme', label: 'Appearance', icon: iconAppearance },
+    { id: 'tools', label: 'Tools', icon: iconTools },
+    { id: 'addons', label: 'Add-ons', icon: iconAddons },
 ];
 
 function SettingsDialogContent({ onClose }) {
     const [activeSection, setActiveSection] = useState('general');
+    const [settingsData, setSettingsData] = useState(null);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -181,11 +210,18 @@ function SettingsDialogContent({ onClose }) {
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
+    useEffect(() => {
+        fetch('/agent/settings-data')
+            .then(r => r.json())
+            .then(setSettingsData)
+            .catch(() => setSettingsData({}));
+    }, []);
+
     const renderSection = () => {
         switch (activeSection) {
-            case 'general': return html`<${GeneralSection} />`;
+            case 'general': return html`<${GeneralSection} assistantName=${settingsData?.assistantName} />`;
             case 'models': return html`<${ModelsSection} />`;
-            case 'theme': return html`<${ThemeSection} />`;
+            case 'theme': return html`<${ThemeSection} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
             case 'tools': return html`<${ToolsSection} />`;
             case 'addons': return html`<${AddonsSection} />`;
             default: return null;
@@ -212,7 +248,9 @@ function SettingsDialogContent({ onClose }) {
                         `)}
                     </nav>
                     <main class="settings-content">
-                        ${renderSection()}
+                        ${settingsData === null
+                            ? html`<div class="settings-loading">Loading…</div>`
+                            : renderSection()}
                     </main>
                 </div>
             </div>
