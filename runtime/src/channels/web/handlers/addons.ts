@@ -2,16 +2,17 @@
  * web/handlers/addons.ts — Backend add-on management endpoints.
  *
  * GET  /agent/addons          — fetch catalog + local install state
- * POST /agent/addons/install  — install an addon by slug
+ * POST /agent/addons/install  — install an addon by slug (clone repo, install from local path)
  * POST /agent/addons/uninstall — uninstall an addon by slug
  */
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, rmSync, mkdirSync } from "fs";
 import { join } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 
 const CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
-const CATALOG_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+const REPO_URL = "https://github.com/rcarmo/piclaw-addons.git";
+const CATALOG_CACHE_MS = 5 * 60 * 1000;
 
 let catalogCache: { data: unknown; ts: number } | null = null;
 
@@ -36,17 +37,37 @@ function getExtensionsDir(): string {
   return join(WORKSPACE_DIR, ".pi", "extensions");
 }
 
-function getInstalledVersion(packageName: string): string | null {
-  const extDir = getExtensionsDir();
-  const pkgJsonPath = join(extDir, "node_modules", packageName, "package.json");
-  try {
-    if (!existsSync(pkgJsonPath)) return null;
-    const raw = readFileSync(pkgJsonPath, "utf-8");
-    const pkg = JSON.parse(raw);
-    return typeof pkg.version === "string" ? pkg.version : null;
-  } catch {
-    return null;
+function getAddonsDir(): string {
+  return join(WORKSPACE_DIR, ".pi", "addons");
+}
+
+/** Ensure .pi/addons has a package.json for bun add/remove. */
+function ensureAddonsDir(): string {
+  const addonsDir = getAddonsDir();
+  const pkgJson = join(addonsDir, "package.json");
+  if (!existsSync(pkgJson)) {
+    mkdirSync(addonsDir, { recursive: true });
+    Bun.write(pkgJson, JSON.stringify({ private: true, dependencies: {} }));
   }
+  return addonsDir;
+}
+
+function getAddonsCacheDir(): string {
+  return join(WORKSPACE_DIR, ".piclaw", "tmp", "addons-repo");
+}
+
+function getInstalledVersion(packageName: string): string | null {
+  // Check addons dir first, then extensions dir
+  for (const dir of [getAddonsDir(), getExtensionsDir()]) {
+    const pkgJsonPath = join(dir, "node_modules", packageName, "package.json");
+    try {
+      if (!existsSync(pkgJsonPath)) continue;
+      const raw = readFileSync(pkgJsonPath, "utf-8");
+      const pkg = JSON.parse(raw);
+      if (typeof pkg.version === "string") return pkg.version;
+    } catch { /* continue */ }
+  }
+  return null;
 }
 
 async function fetchCatalog(): Promise<CatalogData | null> {
@@ -63,6 +84,31 @@ async function fetchCatalog(): Promise<CatalogData | null> {
   } catch {
     return catalogCache?.data as CatalogData ?? null;
   }
+}
+
+/** Clone or update the addons repo to a local cache directory. */
+async function ensureRepoClone(): Promise<string> {
+  const cacheDir = getAddonsCacheDir();
+  if (existsSync(join(cacheDir, ".git"))) {
+    // Pull latest
+    const pull = Bun.spawn(["git", "pull", "--ff-only"], {
+      cwd: cacheDir, stdout: "pipe", stderr: "pipe",
+    });
+    await pull.exited;
+  } else {
+    // Fresh clone
+    if (existsSync(cacheDir)) rmSync(cacheDir, { recursive: true, force: true });
+    mkdirSync(cacheDir, { recursive: true });
+    const clone = Bun.spawn(["git", "clone", "--depth", "1", REPO_URL, cacheDir], {
+      stdout: "pipe", stderr: "pipe",
+    });
+    const exitCode = await clone.exited;
+    if (exitCode !== 0) {
+      const stderr = await new Response(clone.stderr).text();
+      throw new Error(`Git clone failed: ${stderr.slice(0, 500)}`);
+    }
+  }
+  return cacheDir;
 }
 
 export async function handleGetAddons(
@@ -113,11 +159,19 @@ export async function handleInstallAddon(
   const addon = catalog?.addons?.find((a) => a.slug === slug);
   if (!addon) return json({ error: `Add-on "${slug}" not found in catalog` }, 404);
 
-  const extDir = getExtensionsDir();
-  const installSpec = `github:rcarmo/piclaw-addons/${addon.path}`;
+  const extDir = ensureAddonsDir();
 
   try {
-    const proc = Bun.spawn(["bun", "add", installSpec], {
+    // Clone/update the addons repo locally
+    const repoDir = await ensureRepoClone();
+    const addonLocalPath = join(repoDir, addon.path || `addons/${slug}`);
+
+    if (!existsSync(addonLocalPath)) {
+      return json({ error: `Add-on path not found in repo: ${addon.path}` }, 404);
+    }
+
+    // Install from local path
+    const proc = Bun.spawn(["bun", "add", addonLocalPath], {
       cwd: extDir,
       stdout: "pipe",
       stderr: "pipe",
@@ -166,7 +220,7 @@ export async function handleUninstallAddon(
   const addon = catalog?.addons?.find((a) => a.slug === slug);
   if (!addon) return json({ error: `Add-on "${slug}" not found in catalog` }, 404);
 
-  const extDir = getExtensionsDir();
+  const extDir = ensureAddonsDir();
 
   try {
     const proc = Bun.spawn(["bun", "remove", addon.name], {
