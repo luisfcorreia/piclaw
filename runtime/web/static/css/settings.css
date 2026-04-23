@@ -386,6 +386,85 @@
     color: var(--accent-color, #1d9bf0);
 }
 
+/* ── Add-on actions ────────────────────────────────────────────────────── */
+
+.settings-addon-version {
+    white-space: nowrap;
+    font-size: 0.88em;
+    color: var(--text-secondary);
+}
+
+.settings-addon-actions {
+    text-align: right;
+    white-space: nowrap;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.settings-addon-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 5px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.8em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.settings-addon-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-color);
+}
+
+.settings-addon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.settings-addon-btn-install {
+    background: color-mix(in srgb, var(--accent-color, #1d9bf0) 10%, var(--bg-primary));
+    border-color: color-mix(in srgb, var(--accent-color, #1d9bf0) 30%, transparent);
+    color: var(--accent-color, #1d9bf0);
+    font-weight: 600;
+}
+
+.settings-addon-btn-upgrade {
+    background: color-mix(in srgb, var(--success-color, #00ba7c) 10%, var(--bg-primary));
+    border-color: color-mix(in srgb, var(--success-color, #00ba7c) 30%, transparent);
+    color: var(--success-color, #00ba7c);
+}
+
+.settings-addon-btn-remove {
+    color: var(--danger-color, #ef4444);
+}
+
+.settings-addon-btn-remove:hover {
+    border-color: var(--danger-color, #ef4444);
+    background: color-mix(in srgb, var(--danger-color, #ef4444) 8%, var(--bg-primary));
+}
+
+.settings-addon-error {
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    font-size: 0.84em;
+    background: color-mix(in srgb, var(--danger-color, #ef4444) 8%, transparent);
+    color: var(--danger-color, #ef4444);
+    border: 1px solid color-mix(in srgb, var(--danger-color, #ef4444) 25%, transparent);
+}
+
+.settings-addon-message {
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    font-size: 0.84em;
+    background: color-mix(in srgb, var(--success-color, #00ba7c) 8%, transparent);
+    color: var(--success-color, #00ba7c);
+    border: 1px solid color-mix(in srgb, var(--success-color, #00ba7c) 25%, transparent);
+}
+
 /* ── Thinking slider ─────────────────────────────────────────────────── */
 
 .settings-thinking-slider {

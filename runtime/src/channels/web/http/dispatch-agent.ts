@@ -7,6 +7,7 @@ import { getIdentityConfig } from "../../../core/config.js";
 import { THEME_PRESETS, THEME_LIST_COLOR_KEYS } from "../theming/ui-theme-data.js";
 import { TOOLSETS } from "../../../extensions/tool-activation.js";
 import { getToolCapability } from "../../../extensions/tool-capabilities.js";
+import { handleGetAddons, handleInstallAddon, handleUninstallAddon } from "../handlers/addons.js";
 import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
@@ -229,6 +230,21 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         })),
       });
     },
+  },
+  {
+    method: "GET",
+    path: "/agent/addons",
+    handle: (channel) => handleGetAddons((body, status) => channel.json(body, status)),
+  },
+  {
+    method: "POST",
+    path: "/agent/addons/install",
+    handle: (channel, req) => handleInstallAddon(req, (body, status) => channel.json(body, status)),
+  },
+  {
+    method: "POST",
+    path: "/agent/addons/uninstall",
+    handle: (channel, req) => handleUninstallAddon(req, (body, status) => channel.json(body, status)),
   },
 ];
 

@@ -259,33 +259,101 @@ function ToolsSection({ toolsets }) {
 // ── Add-ons ─────────────────────────────────────────────────────────────────
 
 function AddonsSection() {
-    const [catalog, setCatalog] = useState(null);
+    const [addons, setAddons] = useState(null);
     const [loading, setLoading] = useState(true);
-    useEffect(() => {
-        fetch('https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json')
-            .then(r => r.json())
-            .then(data => { setCatalog(data); setLoading(false); })
-            .catch(() => { setCatalog(null); setLoading(false); });
+    const [busy, setBusy] = useState(null); // slug of addon being installed/uninstalled
+    const [error, setError] = useState(null);
+    const [message, setMessage] = useState(null);
+
+    const loadAddons = useCallback(async () => {
+        try {
+            const resp = await fetch('/agent/addons');
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+            setAddons(data.addons || []);
+        } catch (e) {
+            setAddons(null);
+            setError(String(e.message || e));
+        } finally {
+            setLoading(false);
+        }
     }, []);
-    if (loading) return html`<div class="settings-loading">Fetching add-on catalog…</div>`;
-    if (!catalog) return html`
+
+    useEffect(() => { loadAddons(); }, []);
+
+    const installAddon = useCallback(async (slug) => {
+        if (busy) return;
+        setBusy(slug); setError(null); setMessage(null);
+        try {
+            const resp = await fetch('/agent/addons/install', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug }),
+            });
+            const data = await resp.json();
+            if (data.error) { setError(data.error); return; }
+            setMessage(data.message);
+            await loadAddons();
+        } catch (e) { setError(String(e.message || e)); }
+        finally { setBusy(null); }
+    }, [busy, loadAddons]);
+
+    const uninstallAddon = useCallback(async (slug) => {
+        if (busy) return;
+        setBusy(slug); setError(null); setMessage(null);
+        try {
+            const resp = await fetch('/agent/addons/uninstall', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slug }),
+            });
+            const data = await resp.json();
+            if (data.error) { setError(data.error); return; }
+            setMessage(data.message);
+            await loadAddons();
+        } catch (e) { setError(String(e.message || e)); }
+        finally { setBusy(null); }
+    }, [busy, loadAddons]);
+
+    if (loading) return html`<div class="settings-loading">Fetching add-ons…</div>`;
+    if (!addons) return html`
         <div class="settings-section"><h3>Add-ons</h3>
-            <p class="settings-hint">Could not load catalog from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>.</p>
+            <p class="settings-hint">Could not load add-ons. ${error || ''}</p>
         </div>`;
-    const addons = catalog.addons || [];
+
     return html`
         <div class="settings-section">
             <h3>Add-ons</h3>
-            <p class="settings-hint">Available from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>. Install support coming soon.</p>
+            <p class="settings-hint">From <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>. Restart required after install/uninstall.</p>
+            ${error && html`<div class="settings-addon-error">⚠ ${error}</div>`}
+            ${message && html`<div class="settings-addon-message">✓ ${message}</div>`}
             <table class="settings-table settings-borderless">
-                <thead><tr><th style="width:36px"></th><th>Add-on</th><th>Description</th><th>Tags</th></tr></thead>
+                <thead><tr><th>Add-on</th><th>Version</th><th>Description</th><th>Tags</th><th style="text-align:right">Actions</th></tr></thead>
                 <tbody>
                     ${addons.map(a => html`
-                        <tr>
-                            <td><input type="checkbox" disabled title="Install support coming soon" /></td>
+                        <tr class=${a.installed ? 'settings-row-active' : ''}>
                             <td><strong>${a.slug}</strong></td>
+                            <td class="settings-addon-version">
+                                ${a.installed
+                                    ? html`<span>${a.installedVersion || '?'}</span>${a.hasUpdate ? html` → <strong>${a.version}</strong>` : ''}`
+                                    : html`<span>${a.version || '—'}</span>`}
+                            </td>
                             <td>${a.description}</td>
                             <td class="settings-addon-tags">${(a.tags || []).map(t => html`<span class="settings-tag">${t}</span>`)}</td>
+                            <td class="settings-addon-actions">
+                                ${a.installed ? html`
+                                    ${a.hasUpdate && html`
+                                        <button class="settings-addon-btn settings-addon-btn-upgrade"
+                                            disabled=${busy === a.slug} onClick=${() => installAddon(a.slug)}
+                                        >${busy === a.slug ? '…' : '⬆ Upgrade'}</button>
+                                    `}
+                                    <button class="settings-addon-btn settings-addon-btn-remove"
+                                        disabled=${busy === a.slug} onClick=${() => uninstallAddon(a.slug)}
+                                    >${busy === a.slug ? '…' : '🗑 Remove'}</button>
+                                ` : html`
+                                    <button class="settings-addon-btn settings-addon-btn-install"
+                                        disabled=${busy === a.slug} onClick=${() => installAddon(a.slug)}
+                                    >${busy === a.slug ? 'Installing…' : 'Install'}</button>
+                                `}
+                            </td>
                         </tr>
                     `)}
                 </tbody>
