@@ -4,6 +4,7 @@ import { OobePanel } from '../components/oobe-panel.js';
 import { BtwPanel } from '../components/btw-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
+import { SettingsDialog } from '../components/settings-dialog.js';
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
 import { Timeline } from '../components/timeline.js';
 import { WorkspaceExplorer } from '../components/workspace-explorer.js';
@@ -499,6 +500,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onClose=${() => setAttachmentPreview(null)}
           />
         `}
+        <${SettingsDialog} />
         <${AgentStatus}
           extensionPanels=${Array.from(extensionStatusPanels.values())}
           pendingPanelActions=${pendingExtensionPanelActions}

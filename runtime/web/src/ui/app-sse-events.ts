@@ -210,6 +210,10 @@ export function handleAppSseEvent(
   if (eventType === 'ui_open_tab') {
     const path = typeof data?.path === 'string' ? data.path.trim() : '';
     const label = typeof data?.label === 'string' ? data.label.trim() : undefined;
+    if (path === 'piclaw://settings') {
+      window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
+      return;
+    }
     if (path && typeof openEditor === 'function') {
       openEditor(path, label ? { label } : undefined);
     }

@@ -1,34 +1,99 @@
-/* Settings pane styles */
-.settings-pane-host {
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
+/* Settings dialog — floating overlay */
+.settings-portal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2400;
 }
 
-.settings-pane {
+.settings-dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
-    width: 100%;
-    height: 100%;
+    align-items: center;
+    justify-content: center;
+    animation: settings-fade-in 0.15s ease-out;
+}
+
+@keyframes settings-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.settings-dialog {
+    width: min(900px, 92vw);
+    height: min(640px, 85vh);
+    background: var(--bg-primary, #fff);
+    border: 1px solid var(--border-color, rgba(128,128,128,0.2));
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
-    font-family: var(--font-family, system-ui, -apple-system, sans-serif);
+    animation: settings-slide-up 0.2s ease-out;
+}
+
+@keyframes settings-slide-up {
+    from { transform: translateY(16px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.settings-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.2));
+    background: var(--bg-secondary, var(--bg-primary));
+    border-radius: 12px 12px 0 0;
+    flex-shrink: 0;
+}
+
+.settings-dialog-title {
+    font-size: 1.05em;
+    font-weight: 700;
     color: var(--text-primary);
-    background: var(--bg-primary);
+}
+
+.settings-dialog-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1.1em;
+    cursor: pointer;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+}
+
+.settings-dialog-close:hover {
+    background: var(--bg-hover, rgba(128,128,128,0.15));
+    color: var(--text-primary);
+}
+
+.settings-dialog-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
 }
 
 .settings-nav {
-    width: 200px;
-    min-width: 200px;
+    width: 190px;
+    min-width: 190px;
     border-right: 1px solid var(--border-color, rgba(128,128,128,0.2));
-    padding: 16px 0;
+    padding: 12px 0;
     overflow-y: auto;
     background: var(--bg-secondary, var(--bg-primary));
-}
-
-.settings-nav-title {
-    padding: 0 16px 12px;
-    font-size: 1.1em;
-    font-weight: 700;
-    color: var(--text-primary);
 }
 
 .settings-nav-item {
@@ -40,7 +105,7 @@
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.9em;
+    font-size: 0.88em;
     cursor: pointer;
     text-align: left;
     transition: background 0.15s, color 0.15s;
@@ -58,7 +123,7 @@
 }
 
 .settings-nav-icon {
-    font-size: 1.1em;
+    font-size: 1.05em;
     width: 20px;
     text-align: center;
 }
@@ -66,17 +131,17 @@
 .settings-content {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 32px;
+    padding: 20px 28px;
 }
 
 .settings-section h3 {
-    margin: 0 0 16px;
-    font-size: 1.15em;
+    margin: 0 0 14px;
+    font-size: 1.1em;
     font-weight: 600;
 }
 
 .settings-section {
-    margin-bottom: 32px;
+    margin-bottom: 28px;
 }
 
 .settings-row {
@@ -87,21 +152,21 @@
 }
 
 .settings-row label {
-    min-width: 140px;
+    min-width: 130px;
     font-weight: 500;
-    font-size: 0.9em;
+    font-size: 0.88em;
     color: var(--text-secondary);
 }
 
 .settings-row input[type="text"] {
     flex: 1;
-    max-width: 300px;
+    max-width: 280px;
     padding: 6px 10px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 0.9em;
+    font-size: 0.88em;
 }
 
 .settings-row button {
@@ -110,7 +175,7 @@
     border-radius: 6px;
     background: var(--bg-hover, var(--bg-secondary));
     color: var(--text-primary);
-    font-size: 0.85em;
+    font-size: 0.84em;
     cursor: pointer;
 }
 
@@ -119,7 +184,7 @@
 }
 
 .settings-hint {
-    font-size: 0.85em;
+    font-size: 0.84em;
     color: var(--text-secondary);
     margin: 8px 0;
 }
@@ -134,13 +199,13 @@
 .settings-table {
     width: 100%;
     border-collapse: collapse;
-    margin: 12px 0;
-    font-size: 0.88em;
+    margin: 10px 0;
+    font-size: 0.86em;
 }
 
 .settings-table th,
 .settings-table td {
-    padding: 6px 12px;
+    padding: 5px 10px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.2));
     text-align: left;
 }
@@ -158,16 +223,16 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin: 12px 0;
+    margin: 10px 0;
 }
 
 .settings-theme-btn {
-    padding: 6px 14px;
+    padding: 5px 12px;
     border: 1px solid var(--border-color, rgba(128,128,128,0.3));
     border-radius: 6px;
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 0.85em;
+    font-size: 0.84em;
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -184,7 +249,7 @@
 }
 
 .settings-loading {
-    padding: 24px;
+    padding: 20px;
     color: var(--text-secondary);
-    font-size: 0.9em;
+    font-size: 0.88em;
 }
