@@ -83,7 +83,13 @@ function parseFrontmatter(text: string): Record<string, unknown> {
       inList = true;
     } else {
       if (inList && currentKey) { fm[currentKey] = [...list]; list.length = 0; inList = false; }
-      if (keyVal) { currentKey = keyVal[1]; fm[currentKey] = keyVal[2].trim().replace(/^["']|["']$/g, ""); inList = false; }
+      if (keyVal) {
+        currentKey = keyVal[1];
+        const val = keyVal[2].trim();
+        // Handle inline empty list: blocked-by: []
+        if (val === "[]" || val === "[ ]") { fm[currentKey] = []; inList = false; }
+        else { fm[currentKey] = val.replace(/^["']|["']$/g, ""); inList = false; }
+      }
     }
   }
   if (inList && currentKey) fm[currentKey] = [...list];
@@ -106,7 +112,7 @@ function buildLabels(fm: Record<string, unknown>): string[] {
     if (TAG_TO_TYPE[tag]) labels.push(TAG_TO_TYPE[tag]);
   }
   const blockedBy = Array.isArray(fm["blocked-by"]) ? fm["blocked-by"] as string[] : [];
-  if (blockedBy.length > 0 && blockedBy.some(b => b.trim())) labels.push("blocked");
+  if (blockedBy.length > 0 && blockedBy.some((b: string) => b.trim())) labels.push("blocked");
   return [...new Set(labels)];
 }
 
