@@ -1,7 +1,8 @@
 // @ts-nocheck
 /**
  * timeline-menu.ts — Hamburger menu identical to the workspace hamburger,
- * pinned to the right edge of the timeline when workspace is collapsed.
+ * pinned to the top-right of the timeline. Always visible; when workspace
+ * is collapsed it includes a "Show workspace" item.
  */
 
 import { html, useState, useEffect, useRef, useCallback } from '../vendor/preact-htm.js';
@@ -41,8 +42,6 @@ export function TimelineMenu({
         fn?.();
     }, []);
 
-    if (workspaceOpen) return null;
-
     return html`
         <div class="timeline-menu-wrap">
             <button
@@ -63,9 +62,16 @@ export function TimelineMenu({
             </button>
             ${open && html`
                 <div class="workspace-menu-dropdown timeline-menu-dropdown" ref=${menuRef} role="menu" aria-label="Menu">
-                    <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
-                        Show workspace
-                    </button>
+                    ${!workspaceOpen && html`
+                        <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
+                            Show workspace
+                        </button>
+                    `}
+                    ${workspaceOpen && html`
+                        <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
+                            Hide workspace
+                        </button>
+                    `}
 
                     ${(onOpenTerminalTab || onOpenVncTab || onToggleTerminal) && html`<div class="workspace-menu-separator"></div>`}
                     ${onOpenTerminalTab && html`
