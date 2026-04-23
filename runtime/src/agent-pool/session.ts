@@ -502,7 +502,10 @@ export async function createSessionInDir(
       services,
       sessionManager,
       sessionStartEvent,
-      tools: options.tools?.length ? options.tools : undefined,
+      // Do not pass `tools` here — pi-coding-agent ≥0.68 treats it as an
+      // allowlist that silently blocks every extension tool not listed.
+      // The tool-activation extension sets the correct default-active set
+      // via its session_start handler instead.
       customTools: options.customTools as any,
     });
 
