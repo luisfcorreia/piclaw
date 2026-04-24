@@ -10,8 +10,8 @@
  * spec is unavailable or package install fails.
  */
 
-import { existsSync, readFileSync, rmSync, mkdirSync, writeFileSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync } from "fs";
+import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
 
@@ -50,8 +50,29 @@ interface CatalogData {
   addons: CatalogAddon[];
 }
 
-function getAddonsDir(): string {
-  return join(WORKSPACE_DIR, ".pi", "addons");
+interface AddonPackageManifest {
+  name?: string;
+  main?: string;
+  pi?: {
+    extensions?: string[];
+    web?: {
+      entries?: string[];
+    };
+  };
+}
+
+interface InstalledAddonWebEntry {
+  packageName: string;
+  entry: string;
+  url: string;
+}
+
+function getWorkspaceDir(): string {
+  return process.env.PICLAW_WORKSPACE || WORKSPACE_DIR;
+}
+
+function getAddonsDir(workspaceDir = getWorkspaceDir()): string {
+  return join(workspaceDir, ".pi", "addons");
 }
 
 function ensureAddonsDir(): string {
@@ -69,7 +90,8 @@ function ensureAddonsDir(): string {
 }
 
 function getInstalledVersion(packageName: string): string | null {
-  for (const dir of [getAddonsDir(), join(WORKSPACE_DIR, ".pi", "extensions")]) {
+  const workspaceDir = getWorkspaceDir();
+  for (const dir of [getAddonsDir(workspaceDir), join(workspaceDir, ".pi", "extensions")]) {
     const pkgJsonPath = join(dir, "node_modules", packageName, "package.json");
     try {
       if (!existsSync(pkgJsonPath)) continue;
@@ -79,6 +101,120 @@ function getInstalledVersion(packageName: string): string | null {
     } catch (e) { /* package.json unreadable — skip */ void e; }
   }
   return null;
+}
+
+function listAddonPackageDirs(addonsNodeModulesDir: string): string[] {
+  if (!existsSync(addonsNodeModulesDir)) return [];
+  const results: string[] = [];
+  for (const entry of readdirSync(addonsNodeModulesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const entryPath = join(addonsNodeModulesDir, entry.name);
+    if (entry.name.startsWith('@')) {
+      for (const scoped of readdirSync(entryPath, { withFileTypes: true })) {
+        if (scoped.isDirectory()) results.push(join(entryPath, scoped.name));
+      }
+      continue;
+    }
+    results.push(entryPath);
+  }
+  return results;
+}
+
+function getInstalledAddonPackageDir(packageName: string, workspaceDir = getWorkspaceDir()): string | null {
+  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'addons', 'node_modules');
+  const packageDir = join(addonsNodeModulesDir, packageName);
+  return existsSync(packageDir) ? packageDir : null;
+}
+
+export function getInstalledAddonWebEntries(workspaceDir = getWorkspaceDir()): InstalledAddonWebEntry[] {
+  const addonsNodeModulesDir = join(workspaceDir, '.pi', 'addons', 'node_modules');
+  const entries: InstalledAddonWebEntry[] = [];
+  for (const packageDir of listAddonPackageDirs(addonsNodeModulesDir)) {
+    const packageJsonPath = join(packageDir, 'package.json');
+    if (!existsSync(packageJsonPath)) continue;
+    try {
+      const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as AddonPackageManifest;
+      const packageName = typeof manifest.name === 'string' ? manifest.name.trim() : '';
+      const webEntries = Array.isArray(manifest?.pi?.web?.entries)
+        ? manifest.pi.web.entries.filter((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+        : [];
+      if (!packageName || webEntries.length === 0) continue;
+      for (const entry of webEntries) {
+        const normalizedEntry = entry.replace(/^\.\//, '');
+        const fullPath = join(packageDir, normalizedEntry);
+        if (!existsSync(fullPath)) continue;
+        entries.push({
+          packageName,
+          entry: normalizedEntry,
+          url: `/agent/addons/assets/${encodeURIComponent(packageName)}/${normalizedEntry.split('/').map((segment) => encodeURIComponent(segment)).join('/')}`,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+  return entries;
+}
+
+function parseAddonAssetRequestPath(pathname: string): { packageName: string; relativePath: string } | null {
+  const prefix = '/agent/addons/assets/';
+  if (!pathname.startsWith(prefix)) return null;
+  const rest = pathname.slice(prefix.length).split('/').filter(Boolean).map((segment) => decodeURIComponent(segment));
+  if (rest.length < 2) return null;
+  const packageName = rest[0].startsWith('@')
+    ? rest[0].includes('/')
+      ? rest[0]
+      : rest.length >= 3
+        ? `${rest[0]}/${rest[1]}`
+        : ''
+    : rest[0];
+  const relativeSegments = rest[0].startsWith('@')
+    ? rest[0].includes('/')
+      ? rest.slice(1)
+      : rest.slice(2)
+    : rest.slice(1);
+  const relativePath = relativeSegments.join('/');
+  if (!packageName || !relativePath) return null;
+  return { packageName, relativePath };
+}
+
+function getAddonAssetMimeType(assetPath: string): string {
+  switch (extname(assetPath).toLowerCase()) {
+    case '.ts':
+    case '.tsx':
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+    case '.cjs':
+      return 'text/javascript; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.html':
+      return 'text/html; charset=utf-8';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function maybeTranspileAddonAsset(assetPath: string, source: string): string {
+  const extension = extname(assetPath).toLowerCase();
+  if (extension === '.tsx') {
+    return new Bun.Transpiler({ loader: 'tsx' }).transformSync(source);
+  }
+  if (extension === '.jsx') {
+    return new Bun.Transpiler({ loader: 'jsx' }).transformSync(source);
+  }
+  if (extension === '.js' || extension === '.mjs' || extension === '.cjs') {
+    return new Bun.Transpiler({ loader: 'js' }).transformSync(source);
+  }
+  if (extension === '.ts') {
+    return new Bun.Transpiler({ loader: 'ts' }).transformSync(source);
+  }
+  return source;
 }
 
 async function fetchCatalog(catalogUrl?: string): Promise<CatalogData | null> {
@@ -202,6 +338,54 @@ export async function handleGetAddons(
   });
 
   return json({ addons, source: catalog.source || "" });
+}
+
+export async function handleGetAddonWebEntries(
+  json: (body: unknown, status?: number) => Response,
+): Promise<Response> {
+  return json({ entries: getInstalledAddonWebEntries() });
+}
+
+export async function handleAddonAssetRequest(
+  req: Request,
+  pathname: string,
+): Promise<Response | null> {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null;
+  const parsed = parseAddonAssetRequestPath(pathname);
+  if (!parsed) return null;
+  const packageDir = getInstalledAddonPackageDir(parsed.packageName);
+  if (!packageDir) return new Response('Not Found', { status: 404 });
+
+  const resolvedPath = resolve(packageDir, parsed.relativePath);
+  const packageRoot = resolve(packageDir);
+  if (resolvedPath !== packageRoot && !resolvedPath.startsWith(`${packageRoot}/`)) {
+    return new Response('Not Found', { status: 404 });
+  }
+  if (!existsSync(resolvedPath)) {
+    return new Response('Not Found', { status: 404 });
+  }
+
+  const mimeType = getAddonAssetMimeType(resolvedPath);
+  const headers = {
+    'Content-Type': mimeType,
+    'Cache-Control': 'no-store',
+  } as Record<string, string>;
+
+  if (req.method === 'HEAD') {
+    return new Response(null, { headers });
+  }
+
+  if (mimeType.startsWith('text/javascript')) {
+    const source = readFileSync(resolvedPath, 'utf8');
+    const code = maybeTranspileAddonAsset(resolvedPath, source);
+    return new Response(code, { headers });
+  }
+
+  if (mimeType.includes('charset=utf-8')) {
+    return new Response(readFileSync(resolvedPath, 'utf8'), { headers });
+  }
+
+  return new Response(readFileSync(resolvedPath), { headers });
 }
 
 export async function handleInstallAddon(

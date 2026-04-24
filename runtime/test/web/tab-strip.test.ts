@@ -1,8 +1,21 @@
-import { expect, test } from 'bun:test';
+import { afterEach, expect, test } from 'bun:test';
 
 import { getStandaloneTabUrl } from '../../web/src/components/tab-strip.js';
+import {
+  registerAddonStandaloneTabUrlResolver,
+  resetAddonWebRegistriesForTests,
+} from '../../web/src/ui/addon-web-extensions.ts';
 
-test('getStandaloneTabUrl keeps drawio tabs on the pane-popout path when window detaching is available', () => {
+afterEach(() => {
+  resetAddonWebRegistriesForTests();
+});
+
+test('getStandaloneTabUrl honors addon-provided drawio standalone routes', () => {
+  registerAddonStandaloneTabUrlResolver((path, { hasPopOutTab } = {}) => {
+    if (!/\.drawio(\.xml|\.svg|\.png)?$/i.test(String(path || '')) || hasPopOutTab) return null;
+    return '/drawio/edit?path=' + encodeURIComponent(path);
+  });
+
   expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: true })).toBeNull();
   expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: false })).toBe('/drawio/edit?path=%2Fworkspace%2Ffoo.drawio');
 });

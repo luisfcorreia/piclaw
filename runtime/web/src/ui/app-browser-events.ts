@@ -59,8 +59,8 @@ export function watchPaneOpenEvents(callbacks: PaneOpenEventCallbacks, runtime: 
   };
 
   const openTabEvents = [
+    'pane:open-tab',
     'office-viewer:open-tab',
-    'drawio:open-tab',
     'csv-viewer:open-tab',
     'pdf-viewer:open-tab',
     'image-viewer:open-tab',

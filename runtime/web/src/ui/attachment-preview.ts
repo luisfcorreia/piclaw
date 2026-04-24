@@ -25,22 +25,13 @@ const OFFICE_PREVIEW_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 
-const DRAWIO_PREVIEW_TYPES = new Set([
-  "application/vnd.jgraph.mxfile",
-]);
+import {
+  getAddonAttachmentPreviewLabel,
+  resolveAddonAttachmentPreview,
+} from './addon-web-extensions.js';
 
 function normalize(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function isDrawioFilename(filename: unknown): boolean {
-  const name = normalize(filename);
-  return !!name && (
-    name.endsWith(".drawio")
-    || name.endsWith(".drawio.xml")
-    || name.endsWith(".drawio.svg")
-    || name.endsWith(".drawio.png")
-  );
 }
 
 function isPdfFilename(filename: unknown): boolean {
@@ -90,11 +81,12 @@ function isTextFilename(filename: unknown): boolean {
   );
 }
 
-export type AttachmentPreviewKind = "image" | "video" | "pdf" | "office" | "drawio" | "html" | "text" | "archive" | "unsupported";
+export type AttachmentPreviewKind = "image" | "video" | "pdf" | "office" | "html" | "text" | "archive" | "unsupported" | string;
 
 export function getAttachmentPreviewKind(contentType: unknown, filename?: unknown): AttachmentPreviewKind {
+  const addonPreview = resolveAddonAttachmentPreview(contentType, filename);
+  if (addonPreview?.id) return addonPreview.id;
   const normalized = normalize(contentType);
-  if (isDrawioFilename(filename) || DRAWIO_PREVIEW_TYPES.has(normalized)) return "drawio";
   if (isPdfFilename(filename) || normalized === "application/pdf") return "pdf";
   if (isOfficeFilename(filename) || OFFICE_PREVIEW_TYPES.has(normalized)) return "office";
   if (isArchiveFilename(filename) || ARCHIVE_PREVIEW_TYPES.has(normalized)) return "archive";
@@ -122,8 +114,6 @@ export function getAttachmentPreviewLabel(kind: AttachmentPreviewKind): string {
       return "PDF preview";
     case "office":
       return "Office viewer";
-    case "drawio":
-      return "Draw.io preview (read-only)";
     case "html":
       return "HTML preview";
     case "text":
@@ -131,6 +121,6 @@ export function getAttachmentPreviewLabel(kind: AttachmentPreviewKind): string {
     case "archive":
       return "ZIP archive preview";
     default:
-      return "Preview unavailable";
+      return getAddonAttachmentPreviewLabel(kind) || "Preview unavailable";
   }
 }

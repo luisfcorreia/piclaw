@@ -10,7 +10,14 @@ import { homedir } from "node:os";
 import { THEME_PRESETS, THEME_LIST_COLOR_KEYS } from "../theming/ui-theme-data.js";
 import { TOOLSETS } from "../../../extensions/tool-activation.js";
 import { getToolCapability } from "../../../extensions/tool-capabilities.js";
-import { handleGetAddons, handleInstallAddon, handleRestartAddonRuntime, handleUninstallAddon } from "../handlers/addons.js";
+import {
+  handleAddonAssetRequest,
+  handleGetAddons,
+  handleGetAddonWebEntries,
+  handleInstallAddon,
+  handleRestartAddonRuntime,
+  handleUninstallAddon,
+} from "../handlers/addons.js";
 import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
@@ -321,6 +328,11 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
     handle: (channel, req, url) => handleGetAddons((body, status) => channel.json(body, status), url),
   },
   {
+    method: "GET",
+    path: "/agent/addons/web-entries",
+    handle: (channel) => handleGetAddonWebEntries((body, status) => channel.json(body, status)),
+  },
+  {
     method: "POST",
     path: "/agent/addons/install",
     handle: (channel, req, url) => handleInstallAddon(req, (body, status) => channel.json(body, status), url),
@@ -353,6 +365,10 @@ export async function handleAgentRoutes(
 ): Promise<Response | null> {
   if (req.method === "POST" && pathname.startsWith("/agent/") && pathname.endsWith("/message")) {
     return await channel.handleAgentMessage(req, pathname);
+  }
+
+  if ((req.method === "GET" || req.method === "HEAD") && pathname.startsWith("/agent/addons/assets/")) {
+    return await handleAddonAssetRequest(req, pathname);
   }
 
   const route = EXACT_AGENT_ROUTES.find((candidate) => candidate.method === req.method && candidate.path === pathname);
