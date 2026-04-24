@@ -40,10 +40,8 @@ describe("bundled extension gating by channel/platform", () => {
       const whatsappSession: any = whatsappRuntime.session;
 
       expect(webSession._toolRegistry.has("open_office_viewer")).toBe(true);
-      expect(webSession._toolRegistry.has("open_drawio_editor")).toBe(false);
 
       expect(whatsappSession._toolRegistry.has("open_office_viewer")).toBe(false);
-      expect(whatsappSession._toolRegistry.has("open_drawio_editor")).toBe(false);
 
       expect(webSession._toolRegistry.has("powershell")).toBe(false);
       expect(whatsappSession._toolRegistry.has("powershell")).toBe(false);

@@ -51,10 +51,10 @@ test('resolveAddonInstallSpec falls back to bare npm package name when version i
 
 test('getInstalledAddonWebEntries discovers addon browser entrypoints', async () => {
   await withTempWorkspaceEnv('piclaw-addon-web-entries-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-drawio-editor');
+    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
     mkdirSync(join(addonDir, 'web'), { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
-      name: 'piclaw-addon-drawio-editor',
+      name: 'piclaw-addon-example',
       version: '0.1.0',
       type: 'module',
       pi: {
@@ -63,13 +63,13 @@ test('getInstalledAddonWebEntries discovers addon browser entrypoints', async ()
       },
     }, null, 2));
     writeFileSync(join(addonDir, 'index.ts'), 'export default function noop() {}\n');
-    writeFileSync(join(addonDir, 'web', 'index.ts'), 'globalThis.__drawioWebLoaded = true;\n');
+    writeFileSync(join(addonDir, 'web', 'index.ts'), 'globalThis.__exampleAddonLoaded = true;\n');
 
     expect(getInstalledAddonWebEntries(workspace.workspace)).toEqual([
       {
-        packageName: 'piclaw-addon-drawio-editor',
+        packageName: 'piclaw-addon-example',
         entry: 'web/index.ts',
-        url: '/agent/addons/assets/piclaw-addon-drawio-editor/web/index.ts',
+        url: '/agent/addons/assets/piclaw-addon-example/web/index.ts',
       },
     ]);
   });
@@ -77,10 +77,10 @@ test('getInstalledAddonWebEntries discovers addon browser entrypoints', async ()
 
 test('handleAddonAssetRequest serves transpiled addon browser modules', async () => {
   await withTempWorkspaceEnv('piclaw-addon-web-asset-', {}, async (workspace) => {
-    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-drawio-editor');
+    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
     mkdirSync(join(addonDir, 'web'), { recursive: true });
     writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
-      name: 'piclaw-addon-drawio-editor',
+      name: 'piclaw-addon-example',
       version: '0.1.0',
       type: 'module',
       pi: {
@@ -91,8 +91,8 @@ test('handleAddonAssetRequest serves transpiled addon browser modules', async ()
     writeFileSync(join(addonDir, 'web', 'index.ts'), 'const answer: number = 42;\nexport default answer;\n');
 
     const response = await handleAddonAssetRequest(
-      new Request('http://localhost/agent/addons/assets/piclaw-addon-drawio-editor/web/index.ts', { method: 'GET' }),
-      '/agent/addons/assets/piclaw-addon-drawio-editor/web/index.ts',
+      new Request('http://localhost/agent/addons/assets/piclaw-addon-example/web/index.ts', { method: 'GET' }),
+      '/agent/addons/assets/piclaw-addon-example/web/index.ts',
     );
 
     expect(response?.status).toBe(200);

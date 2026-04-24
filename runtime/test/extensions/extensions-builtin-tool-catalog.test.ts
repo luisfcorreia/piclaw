@@ -201,7 +201,7 @@ describe("built-in extension tool catalog regression", () => {
       "keychain", "ssh", "proxmox", "portainer",     // packaged integrations
       "bun_run", "exec_batch", "search_tool_output", // packaged integrations
       "cdp_browser",                                  // packaged browser extension
-      "open_drawio_editor", "open_office_viewer",     // packaged viewer extensions
+      "open_office_viewer",                            // packaged viewer extensions
       "office_read", "office_write",                  // packaged office tools
       "schedule_task",                                // registered by task scheduler, not extension factory
     ]);

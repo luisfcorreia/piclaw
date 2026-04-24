@@ -27,7 +27,7 @@ const TOOL_EXTENSION = {
     get_model_state: 'model-control', list_models: 'model-control', switch_model: 'model-control', switch_thinking: 'model-control',
     messages: 'messages-crud', introspect_sql: 'sql-introspect', keychain: 'keychain-tools',
     search_workspace: 'workspace-search', refresh_workspace_index: 'workspace-search',
-    open_drawio_editor: 'drawio-editor', open_office_viewer: 'office-viewer', office_read: 'office-viewer', office_write: 'office-viewer',
+    open_office_viewer: 'office-viewer', office_read: 'office-viewer', office_write: 'office-viewer',
     open_workspace_file: 'open-workspace-file', image_process: 'image-processing',
     schedule_task: 'scheduled-tasks', scheduled_tasks: 'scheduled-tasks',
     bun_run: 'bun-runner', exec_batch: 'exec-batch', search_tool_output: 'search-tool-output',

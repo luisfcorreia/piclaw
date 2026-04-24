@@ -425,7 +425,6 @@ const groupDefinitions: GroupDefinition[] = [
           "adaptive-card-submission.test.ts",
           "attachment-preview.test.ts",
           "csv-viewer-pane.test.ts",
-          "drawio-pane.test.ts",
           "editor-extension.test.ts",
           "editor-popout-transfer.test.ts",
           "editor-safety.test.ts",

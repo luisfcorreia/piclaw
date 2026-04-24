@@ -9,7 +9,6 @@ const SCHEDULE_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24
 const SEARCH_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="8"></circle><path d="M21 21l-4.35-4.35"></path></svg>`;
 
 const ATTACH_FILE_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>`;
-const DRAWIO_STATUS_ICON_SVG = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="2" width="13" height="13" rx="1.5"></rect><circle cx="16" cy="16" r="6.5"></circle></svg>`;
 
 const SPECIFIC_ICONS: Record<string, string> = {
   messages: MESSAGES_STATUS_ICON_SVG,
@@ -28,7 +27,6 @@ const TOOLS_WITH_SPECIFIC_PROVIDERS = new Set([
   "cdp_browser",
   "office_read", "office_write",
   "open_office_viewer",
-  "open_drawio_editor",
 ]);
 
 function isWinTool(name: string): boolean {
@@ -38,24 +36,6 @@ function isWinTool(name: string): boolean {
 function isM365Tool(name: string): boolean {
   return name.startsWith("m365_");
 }
-
-registerToolStatusHintProvider({
-  id: "generic_drawio_hint",
-  buildHints: ({ toolName, args }) => {
-    if (toolName !== "open_drawio_editor") return null;
-    const path = typeof (args as Record<string, unknown> | null)?.path === "string"
-      ? String((args as Record<string, unknown>).path || "").trim()
-      : "";
-    if (!path) return null;
-    return {
-      key: "open_drawio_editor",
-      icon_svg: DRAWIO_STATUS_ICON_SVG,
-      label: path,
-      title: `Draw.io editor • ${path}`,
-      kind: "file",
-    };
-  },
-});
 
 registerToolStatusHintProvider({
   id: "generic_tool_fallback",

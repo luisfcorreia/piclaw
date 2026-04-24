@@ -10,17 +10,17 @@ afterEach(() => {
   resetAddonWebRegistriesForTests();
 });
 
-test('getStandaloneTabUrl honors addon-provided drawio standalone routes', () => {
+test('getStandaloneTabUrl honors addon-provided standalone routes', () => {
   registerAddonStandaloneTabUrlResolver((path, { hasPopOutTab } = {}) => {
-    if (!/\.drawio(\.xml|\.svg|\.png)?$/i.test(String(path || '')) || hasPopOutTab) return null;
-    return '/drawio/edit?path=' + encodeURIComponent(path);
+    if (!/\.example$/i.test(String(path || '')) || hasPopOutTab) return null;
+    return '/example-addon/view?path=' + encodeURIComponent(path);
   });
 
-  expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: true })).toBeNull();
-  expect(getStandaloneTabUrl('/workspace/foo.drawio', { hasPopOutTab: false })).toBe('/drawio/edit?path=%2Fworkspace%2Ffoo.drawio');
+  expect(getStandaloneTabUrl('/workspace/foo.example', { hasPopOutTab: true })).toBeNull();
+  expect(getStandaloneTabUrl('/workspace/foo.example', { hasPopOutTab: false })).toBe('/example-addon/view?path=%2Fworkspace%2Ffoo.example');
 });
 
-test('getStandaloneTabUrl still resolves standalone viewer routes for non-drawio files', () => {
+test('getStandaloneTabUrl still resolves standalone viewer routes for non-addon files', () => {
   expect(getStandaloneTabUrl('/workspace/report.docx', { hasPopOutTab: true })).toBe(
     '/office-viewer/?url=' + encodeURIComponent('/workspace/raw?path=%2Fworkspace%2Freport.docx') + '&name=report.docx',
   );

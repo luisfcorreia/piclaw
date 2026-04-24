@@ -23,6 +23,10 @@ import type { RemotePeerProfile } from "../db/remote-interop.js";
  *  - tool self-escalation (activate_tools / reset_active_tools)
  *  - heavy background automation
  */
+function isEditorOpenTool(toolName: string): boolean {
+  return /^open_[a-z0-9_]+_editor$/i.test(String(toolName || ""));
+}
+
 export const RESTRICTED_TOOL_DENYLIST: ReadonlySet<string> = new Set([
   // shell / script execution
   "bash",
@@ -34,7 +38,6 @@ export const RESTRICTED_TOOL_DENYLIST: ReadonlySet<string> = new Set([
   "write",
   "export_attachment",
   "office_write",
-  "open_drawio_editor",
   "refresh_workspace_index",
   // privileged data access
   "keychain",
@@ -76,5 +79,5 @@ export function getToolCeilingFilter(profile: RemotePeerProfile): ((toolName: st
   }
 
   // restricted + custom (custom deferred: falls back to restricted ceiling)
-  return (name: string) => !RESTRICTED_TOOL_DENYLIST.has(name);
+  return (name: string) => !RESTRICTED_TOOL_DENYLIST.has(name) && !isEditorOpenTool(name);
 }

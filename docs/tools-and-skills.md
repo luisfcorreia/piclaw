@@ -219,7 +219,6 @@ You can extend that baseline with `.piclaw/config.json`:
 - `activate_tools` — activate one or more available tools for the current session
 - `reset_active_tools` — restore the configured default active-tool set for the current session
 - `open_office_viewer` — open an Office document (`.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`) in the built-in JS Office viewer (`/office-viewer/*`)
-- `open_drawio_editor` — open a `.drawio` diagram file in the self-hosted draw.io editor (creates the file if it doesn't exist)
 - `send_adaptive_card` — post an agent-owned Adaptive Card message in the web UI timeline
 - `send_dashboard_widget` — post an interactive widget with agent-authored HTML to the web timeline (opens in floating pane with piclawWidget bridge; vendored libs: Babylon.js, ECharts, D3). See [vendored-widget-libraries.md](vendored-widget-libraries.md) for API reference.
 

@@ -189,7 +189,6 @@ In addition to the inline factories, piclaw ships **packaged runtime extensions*
 | per-session `ssh-core` session extension | Created per session by `AgentPool` | Wraps `read`/`write`/`edit`/`bash` with session-scoped local-or-remote SSH execution |
 | `browser/cdp-browser/` | Always loaded | Cross-platform Chromium CDP browser control tool (`cdp_browser`) |
 | `platform/windows/win-ui/` | Always loaded (runtime no-op off Windows) | Windows desktop automation via bun:ffi + IAccessible (`win_*` tools) |
-| `drawio` web surface | Add-on provided when `piclaw-addon-drawio-editor` is installed | Self-hosted draw.io editor with extension route, save endpoint, and workspace export |
 | `viewers/office-viewer/` | Always loaded | Lightweight JS Office document viewer with extension route |
 
 These packaged runtime extensions use relative imports into `runtime/src/...` where needed. Piclaw also loads selected bundled Pi-package extensions from `node_modules/` (currently `pi-mcp-adapter`). A `node_modules` symlink next to the `extensions/` directory is created automatically at startup so jiti can resolve deep package imports for both the local packaged extension tree and bundled npm/Pi-package extensions. `runtime/src/extensions/` remains a separate built-in factory surface and should not be confused with the filesystem-backed packaged extension tree.
@@ -240,7 +239,6 @@ The web UI uses a separate **pane extension** system for content-area components
 | Extension | Placement | Location |
 |-----------|-----------|----------|
 | `editor` | tabs | `runtime/extensions/viewers/editor/editor-extension.ts` |
-| `drawio` | tabs | `runtime/web/src/panes/drawio-pane.ts` |
 | `office-viewer` | tabs | `runtime/web/src/panes/office-viewer-pane.ts` |
 | `csv-viewer` | tabs | `runtime/web/src/panes/csv-viewer-pane.ts` |
 | `pdf-viewer` | tabs | `runtime/web/src/panes/pdf-viewer-pane.ts` |
@@ -250,7 +248,7 @@ The web UI uses a separate **pane extension** system for content-area components
 | `terminal-tab` | tabs | `runtime/web/src/panes/terminal-pane.ts` |
 | `vnc-viewer` | tabs | `runtime/web/src/panes/vnc-pane.ts` |
 
-The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, ~1.57 MB) on first file open. Specialized viewers (draw.io, office, CSV, PDF, image) use route-backed iframes served through the extension route system, and their workspace-preview affordances now normalize around explicit “Edit/Open in Tab” promotion actions. See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract and [extension-ui-contract.md](extension-ui-contract.md) for how pane extensions fit alongside timeline-native UI and the lower-level `extension_ui_*` bridge.
+The editor extension is lazy-loaded as a separate bundle (`editor.bundle.js`, ~1.57 MB) on first file open. Specialized viewers (office, CSV, PDF, image) use route-backed iframes served through the extension route system, and their workspace-preview affordances now normalize around explicit “Edit/Open in Tab” promotion actions. See [web-pane-extensions.md](web-pane-extensions.md) for the pane contract and [extension-ui-contract.md](extension-ui-contract.md) for how pane extensions fit alongside timeline-native UI and the lower-level `extension_ui_*` bridge.
 
 ## Web UI loading sequence
 

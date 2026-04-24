@@ -284,15 +284,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       nouns: ["index", "workspace index", "fts"],
     }),
   },
-  open_drawio_editor: {
-    kind: "mutating",
-    weight: "standard",
-    recommend: rec({
-      domains: ["workspace", "diagrams"],
-      verbs: ["open", "edit"],
-      nouns: ["drawio", "diagram"],
-    }),
-  },
   open_office_viewer: {
     kind: "read-only",
     weight: "standard",

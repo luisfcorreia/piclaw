@@ -18,8 +18,8 @@ afterEach(() => {
 
 test('addon web registries support pane, standalone URL, and attachment preview registration', () => {
   registerAddonPane({
-    id: 'drawio-editor',
-    label: 'Draw.io Editor',
+    id: 'example-addon-pane',
+    label: 'Example Addon Pane',
     capabilities: ['edit'],
     placement: 'tabs',
     canHandle: () => 60,
@@ -33,26 +33,26 @@ test('addon web registries support pane, standalone URL, and attachment preview 
     },
   });
   registerAddonStandaloneTabUrlResolver((path, { hasPopOutTab } = {}) => {
-    if (!/\.drawio$/i.test(String(path || '')) || hasPopOutTab) return null;
-    return '/drawio/edit?path=' + encodeURIComponent(path);
+    if (!/\.example$/i.test(String(path || '')) || hasPopOutTab) return null;
+    return '/example-addon/view?path=' + encodeURIComponent(path);
   });
   registerAddonAttachmentPreview({
-    id: 'drawio',
-    label: 'Draw.io preview (read-only)',
+    id: 'example-preview',
+    label: 'Example add-on preview',
     match(contentType, filename) {
-      return String(contentType || '').toLowerCase() === 'application/vnd.jgraph.mxfile' || /\.drawio$/i.test(String(filename || ''));
+      return String(contentType || '').toLowerCase() === 'application/x-example' || /\.example$/i.test(String(filename || ''));
     },
     buildFrameUrl(mediaId, filename) {
-      return `/drawio/edit.html?media=${encodeURIComponent(String(mediaId))}&name=${encodeURIComponent(filename || 'diagram.drawio')}&readonly=1`;
+      return `/example-addon/view?media=${encodeURIComponent(String(mediaId))}&name=${encodeURIComponent(filename || 'sample.example')}`;
     },
-    note: 'Draw.io preview is read-only. Editing tools are disabled in this preview.',
+    note: 'Example add-on preview note.',
   });
 
-  expect(paneRegistry.get('drawio-editor')).toBeTruthy();
-  expect(resolveAddonStandaloneTabUrl('/workspace/diagram.drawio', { hasPopOutTab: false })).toBe('/drawio/edit?path=%2Fworkspace%2Fdiagram.drawio');
-  expect(resolveAddonStandaloneTabUrl('/workspace/diagram.drawio', { hasPopOutTab: true })).toBeNull();
-  expect(getAttachmentPreviewKind('application/vnd.jgraph.mxfile', 'diagram.drawio')).toBe('drawio');
-  expect(getAttachmentPreviewLabel('drawio')).toBe('Draw.io preview (read-only)');
-  expect(buildAddonAttachmentPreviewFrameUrl('drawio', 7, 'diagram.drawio')).toContain('/drawio/edit.html?media=7');
-  expect(getAddonAttachmentPreviewNote('drawio')).toContain('read-only');
+  expect(paneRegistry.get('example-addon-pane')).toBeTruthy();
+  expect(resolveAddonStandaloneTabUrl('/workspace/sample.example', { hasPopOutTab: false })).toBe('/example-addon/view?path=%2Fworkspace%2Fsample.example');
+  expect(resolveAddonStandaloneTabUrl('/workspace/sample.example', { hasPopOutTab: true })).toBeNull();
+  expect(getAttachmentPreviewKind('application/x-example', 'sample.example')).toBe('example-preview');
+  expect(getAttachmentPreviewLabel('example-preview')).toBe('Example add-on preview');
+  expect(buildAddonAttachmentPreviewFrameUrl('example-preview', 7, 'sample.example')).toContain('/example-addon/view?media=7');
+  expect(getAddonAttachmentPreviewNote('example-preview')).toContain('Example add-on preview note.');
 });

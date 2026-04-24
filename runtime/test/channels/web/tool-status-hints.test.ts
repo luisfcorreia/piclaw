@@ -289,14 +289,6 @@ test('resolveToolStatusHints covers local core tools, powershell, keychain, bun_
     expect.objectContaining({ key: 'open_office_viewer', label: 'docs/roadmap.xlsx', title: 'Office viewer • docs/roadmap.xlsx', kind: 'file' }),
   ]);
 
-  expect(resolveToolStatusHints({
-    chatJid: 'web:drawio',
-    toolName: 'open_drawio_editor',
-    args: { path: 'diagrams/infra.drawio' },
-    payload: {},
-  })).toEqual([
-    expect.objectContaining({ key: 'open_drawio_editor', label: 'diagrams/infra.drawio', title: 'Draw.io editor • diagrams/infra.drawio', kind: 'file' }),
-  ]);
 });
 
 test('local MCP wrapper resolves server hints for proxy and direct MCP tools', () => {
