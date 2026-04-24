@@ -518,11 +518,26 @@ export function parseQueuedContent(value) {
     };
 }
 
+export function buildReturnedQueuedDraft(value) {
+    const parsed = parseQueuedContent(value);
+    const attachmentBlock = parsed.attachmentRefs.length > 0
+        ? `Attachments:\n${parsed.attachmentRefs.map((attachment) => `- ${attachment.raw}`).join('\n')}`
+        : '';
+    const text = String(parsed.text || '').trim();
+    return {
+        content: [text, attachmentBlock].filter(Boolean).join('\n\n').trim(),
+        fileRefs: [...parsed.fileRefs],
+        messageRefs: [...parsed.messageRefs],
+        attachmentRefs: [...parsed.attachmentRefs],
+    };
+}
+
 export function QueuedFollowupStack({
     items = [],
     onInjectQueuedFollowup,
     onRemoveQueuedFollowup,
     onMoveQueuedFollowup,
+    onReturnQueuedFollowup,
     onOpenFilePill,
 }) {
     if (!Array.isArray(items) || items.length === 0) return null;
@@ -534,6 +549,7 @@ export function QueuedFollowupStack({
                 if (!parsed.text.trim() && parsed.fileRefs.length === 0 && parsed.messageRefs.length === 0 && parsed.attachmentRefs.length === 0) return null;
                 const canMoveUp = index > 0;
                 const canMoveDown = index < items.length - 1;
+                const canReturnToEditor = index === items.length - 1;
                 return html`
                     <div class="compose-queue-stack-item" role="listitem">
                         <div class="compose-queue-stack-content" title=${rowText}>
@@ -589,10 +605,18 @@ export function QueuedFollowupStack({
                                 <button
                                     class="compose-queue-stack-move-btn"
                                     type="button"
-                                    title="Move down"
-                                    aria-label="Move down in queue"
-                                    disabled=${!canMoveDown}
-                                    onClick=${() => canMoveDown && onMoveQueuedFollowup?.(index, index + 1)}
+                                    title=${canReturnToEditor ? 'Return to editor' : 'Move down'}
+                                    aria-label=${canReturnToEditor ? 'Return queued message to editor' : 'Move down in queue'}
+                                    disabled=${!canMoveDown && !canReturnToEditor}
+                                    onClick=${() => {
+                                        if (canMoveDown) {
+                                            onMoveQueuedFollowup?.(index, index + 1);
+                                            return;
+                                        }
+                                        if (canReturnToEditor) {
+                                            onReturnQueuedFollowup?.(item);
+                                        }
+                                    }}
                                 >
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="6 9 12 15 18 9"></polyline>
@@ -1402,6 +1426,27 @@ export function ComposeBox({
         onInjectQueuedFollowup?.(queuedItem);
     };
 
+    const handleReturnQueuedFollowup = (queuedItem) => {
+        if (!queuedItem) return;
+        const restored = buildReturnedQueuedDraft(queuedItem?.content || '');
+        setSubmitError(null);
+        setSubmitNotice(null);
+        setMediaFiles([]);
+        onSetFileRefs?.(restored.fileRefs);
+        onSetMessageRefs?.(restored.messageRefs);
+        setContent(restored.content);
+        onRemoveQueuedFollowup?.(queuedItem);
+        requestAnimationFrame(() => {
+            resizeTextarea();
+            const textarea = textareaRef.current;
+            if (!textarea) return;
+            const len = restored.content.length;
+            textarea.selectionStart = len;
+            textarea.selectionEnd = len;
+            textarea.focus();
+        });
+    };
+
     const handlePopupKeyboardEvent = useCallback((e) => {
         if (searchMode || (!showModelPopup && !showSessionPopup) || e?.isComposing) return false;
         const consume = () => {
@@ -1966,6 +2011,7 @@ export function ComposeBox({
                     onInjectQueuedFollowup=${handleInjectQueuedFollowup}
                     onRemoveQueuedFollowup=${onRemoveQueuedFollowup}
                     onMoveQueuedFollowup=${onMoveQueuedFollowup}
+                    onReturnQueuedFollowup=${handleReturnQueuedFollowup}
                     onOpenFilePill=${onOpenFilePill}
                 />
             `}

@@ -9,6 +9,7 @@ import {
   normalizeModelPickerOptions,
   resolveComposeExtensionWorkingDisplay,
   resolveComposeModelPickerState,
+  buildReturnedQueuedDraft,
   parseQueuedContent,
   resolveComposePrefillRequest,
   resolveComposeSubmitButtonState,
@@ -135,6 +136,33 @@ test('parseQueuedContent extracts file, message, and attachment refs from transc
   expect(parsed.attachmentRefs).toEqual([
     { id: '784', label: 'image.png', raw: 'attachment:784 (image.png)' },
   ]);
+});
+
+test('buildReturnedQueuedDraft restores refs and preserves attachment markers in compose text', () => {
+  const restored = buildReturnedQueuedDraft([
+    'Channel: web',
+    '',
+    'Rui Carmo @ 2026-04-13T08:40:35.008Z:',
+    '  Please check this later.',
+    '  ',
+    '  Files:',
+    '  - notes/todo.md',
+    '  ',
+    '  Referenced messages:',
+    '  - message:23123',
+    '  ',
+    '  Attachments:',
+    '  - attachment:784 (image.png)',
+  ].join('\n'));
+
+  expect(restored).toEqual({
+    content: 'Please check this later.\n\nAttachments:\n- attachment:784 (image.png)',
+    fileRefs: ['notes/todo.md'],
+    messageRefs: ['23123'],
+    attachmentRefs: [
+      { id: '784', label: 'image.png', raw: 'attachment:784 (image.png)' },
+    ],
+  });
 });
 
 test('model picker helpers expose searchable names and formatted context windows', () => {
