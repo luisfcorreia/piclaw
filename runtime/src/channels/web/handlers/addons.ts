@@ -179,8 +179,8 @@ export async function handleInstallAddon(
       return json({ error: `Add-on path not found in repo: ${addon.path}` }, 404);
     }
 
-    // Install from local path
-    const proc = Bun.spawn(["bun", "add", addonLocalPath], {
+    // Install from local path (--force to handle stale cache permission issues)
+    const proc = Bun.spawn(["bun", "add", "--force", addonLocalPath], {
       cwd: extDir,
       stdout: "pipe",
       stderr: "pipe",
@@ -191,6 +191,17 @@ export async function handleInstallAddon(
     const stderr = await new Response(proc.stderr).text();
 
     if (exitCode !== 0) {
+      // Check if the addon itself was installed despite dependency errors
+      const partialInstall = getInstalledVersion(addon.name);
+      if (partialInstall) {
+        return json({
+          ok: true,
+          slug,
+          name: addon.name,
+          installedVersion: partialInstall,
+          message: `Installed ${addon.name}@${partialInstall} (some optional dependencies may have failed). Restart required to load.`,
+        });
+      }
       return json({
         error: `Install failed (exit ${exitCode})`,
         detail: (stderr || stdout).slice(0, 1000),
