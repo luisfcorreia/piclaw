@@ -217,8 +217,8 @@ export async function withOverlayIsolation<T>(
   const overlay = createOverlayWorkspace(baseDir, "piclaw-isolated-");
   const store = join(overlay.merged, ".piclaw", "store");
   const data = join(overlay.merged, ".piclaw", "data");
-  try { mkdirSync(store, { recursive: true }); } catch {}
-  try { mkdirSync(data, { recursive: true }); } catch {}
+  try { mkdirSync(store, { recursive: true }); } catch (e) { void e; }
+  try { mkdirSync(data, { recursive: true }); } catch (e) { void e; }
 
   const prev = {
     PICLAW_WORKSPACE: process.env.PICLAW_WORKSPACE,

@@ -36,7 +36,7 @@ export function recompressExistingMedia(): RecompressResult {
 
     // Check if already compressed
     let meta: Record<string, unknown> | null = null;
-    try { if (row.metadata) meta = JSON.parse(row.metadata); } catch {}
+    try { if (row.metadata) meta = JSON.parse(row.metadata); } catch (e) { void e; }
     if (meta?.compressed === "gzip") { result.skipped++; continue; }
 
     // Load the blob

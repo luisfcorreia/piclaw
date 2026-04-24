@@ -66,6 +66,13 @@ describe("core config", () => {
           PICLAW_WEB_VNC_TARGETS: undefined,
           PICLAW_VNC_TARGETS: undefined,
           PICLAW_TRUST_PROXY: "0",
+          // Unset remote interop env vars so the config file values are authoritative
+          PICLAW_REMOTE_INTEROP_ENABLED: undefined,
+          PICLAW_REMOTE_INTEROP_ALLOW_HTTP: undefined,
+          PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
+          PICLAW_REMOTE_SHORT_CIRCUIT_ENABLED: undefined,
+          PICLAW_REMOTE_INSTANCE_NAME: undefined,
+          PICLAW_REMOTE_INTEROP_DECISION_MODEL: undefined,
         },
         dotEnv: [
           "PICLAW_LOG_LEVEL=debug",

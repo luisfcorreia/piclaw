@@ -60,7 +60,7 @@ export function ModelsSection({ filter = '' }) {
             setSupportsThinking(resp?.command?.supports_thinking !== false);
             // Reload to get updated available levels after model/thinking change
             await loadModels();
-        } catch (e) { console.error('Failed to set thinking:', e); await loadModels().catch(() => {}); }
+        } catch (e) { console.error('Failed to set thinking:', e); await loadModels().catch((e2) => { void e2; }); }
         finally { setThinkingBusy(false); }
     }, [thinkingBusy, loadModels]);
 

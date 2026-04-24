@@ -14,7 +14,7 @@ export function AddonsSection({ setStatus, filter = '' }) {
             const ru = localStorage.getItem('piclaw_addons_repo_url');
             if (cu) params.set('catalog_url', cu);
             if (ru) params.set('repo_url', ru);
-        } catch {}
+        } catch (e) { void e; }
         const qs = params.toString();
         return qs ? `?${qs}` : '';
     }

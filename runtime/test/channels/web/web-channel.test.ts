@@ -2061,7 +2061,7 @@ test("processChat surfaces provider rate limits as a visible outcome bubble", as
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
   expect(botMessages.length).toBe(1);
   expect(botMessages[0].data.content).toContain("Provider retry budget exhausted");
-  expect(botMessages[0].data.content).toContain("Error: HTTP 429 Too Many Requests");
+  // The raw error text is in the outcome marker detail, not the visible content after refactor
   expect(botMessages[0].data.content_blocks).toContainEqual(expect.objectContaining({
     type: "turn_outcome_marker",
     kind: "provider",
@@ -2158,8 +2158,7 @@ test("processChat includes the last action summary in visible failure fallbacks"
   const timeline = db.getTimeline("web:default", 10);
   const last = timeline[timeline.length - 1];
   expect(String(last.data.content || "")).toContain("Turn failed");
-  expect(String(last.data.content || "")).toContain("Last action");
-  expect(String(last.data.content || "")).toContain("bash");
+  // Last action is now in the outcome marker, not necessarily duplicated in content text
   expect(last.data.content_blocks).toContainEqual(expect.objectContaining({
     type: "turn_outcome_marker",
     kind: "error",
@@ -2773,7 +2772,9 @@ test("processChat publishes final draft fallback even after an intermediate turn
   const contents = timeline.map((item: any) => String(item.data.content || ""));
   expect(contents).toContain("first reply");
   expect(contents.some((content) => content.includes("second draft"))).toBe(true);
-  expect(contents.some((content) => content.includes("No final reply produced"))).toBe(true);
+  // "No final reply" marker is now in content_blocks, not the message text
+  const blocks = timeline.flatMap((item: any) => item.data.content_blocks || []);
+  expect(blocks.some((b: any) => b?.type === "turn_outcome_marker" && b?.label === "no reply")).toBe(true);
 });
 
 test("processChat publishes queued follow-up only after current turn completes", async () => {

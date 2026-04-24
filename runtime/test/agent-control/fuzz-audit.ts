@@ -58,6 +58,7 @@ const ROUTING_SAMPLES: Record<string, string> = {
   "/restart": "/restart",
   "/exit": "/exit",
   "/login": "/login",
+  "/settings": "/settings",
   "/logout": "/logout",
   "/commands": "/commands",
 };

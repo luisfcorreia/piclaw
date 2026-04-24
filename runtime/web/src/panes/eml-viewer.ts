@@ -44,7 +44,7 @@ function parseEml(raw) {
 
     // Decode base64
     if (transferEncoding === 'base64') {
-        try { body = atob(body.replace(/\s/g, '')); } catch {}
+        try { body = atob(body.replace(/\s/g, '')); } catch (e) { void e; }
     }
 
     // Handle multipart

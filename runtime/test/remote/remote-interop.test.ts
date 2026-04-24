@@ -199,7 +199,16 @@ describe("remote interop", () => {
 
     resetInteropIdentityForTests();
     initDatabase();
-    service = new RemoteInteropService();
+    // Explicitly set allowPrivateNetwork: false so tests are isolated from
+    // the container's injected PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK env var.
+    service = new RemoteInteropService(undefined, {
+      enabled: true,
+      allowHttp: false,
+      allowPrivateNetwork: false,
+      shortCircuitEnabled: false,
+      instanceName: "test",
+      decisionModel: "",
+    });
     originalFetch = globalThis.fetch;
   });
 

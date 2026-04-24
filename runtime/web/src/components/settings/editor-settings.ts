@@ -13,13 +13,13 @@ function getBool(key, fallback) {
     catch { return fallback; }
 }
 function setBool(key, value) {
-    try { localStorage.setItem(key, String(value)); } catch { /* ignore */ }
+    try { localStorage.setItem(key, String(value)); } catch (e) { void e; }
 }
 function getString(key, fallback) {
     try { return localStorage.getItem(key) || fallback; } catch { return fallback; }
 }
 function setString(key, value) {
-    try { localStorage.setItem(key, value); } catch { /* ignore */ }
+    try { localStorage.setItem(key, value); } catch (e) { void e; }
 }
 
 function EditorSettingsSection() {

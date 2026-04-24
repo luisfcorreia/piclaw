@@ -98,7 +98,7 @@ export function createOverlayWorkspace(
         isOverlay: true,
         upperDir: upper,
         cleanup: () => {
-          try { spawnSync("sudo", ["umount", "-l", merged], { timeout: 5000, stdio: "pipe" }); } catch {}
+          try { spawnSync("sudo", ["umount", "-l", merged], { timeout: 5000, stdio: "pipe" }); } catch (e) { void e; }
           sudoRm(tmpBase);
         },
       };

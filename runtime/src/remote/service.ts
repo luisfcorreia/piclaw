@@ -88,6 +88,7 @@ export class RemoteInteropService {
       pairConfirmLimiter: this.pairConfirmLimiter,
       callbackLimiter: this.callbackLimiter,
       nonceCache: this.nonceCache,
+      remoteConfig: this.remoteConfig,
       notify: this.notify.bind(this),
     };
   }

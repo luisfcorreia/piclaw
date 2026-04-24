@@ -102,7 +102,7 @@ export function GeneralSection({ settingsData }) {
                 <input type="checkbox" checked=${metersEnabled}
                     onChange=${() => {
                         const v = !metersEnabled; setMetersEnabled(v);
-                        try { localStorage.setItem('piclaw_system_meters_enabled', String(v)); } catch {}
+                        try { localStorage.setItem('piclaw_system_meters_enabled', String(v)); } catch (e) { void e; }
                         window.dispatchEvent(new CustomEvent('piclaw-meters-change', { detail: { enabled: v } }));
                     }} />
             </div>

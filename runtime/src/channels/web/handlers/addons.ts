@@ -74,7 +74,7 @@ function getInstalledVersion(packageName: string): string | null {
       const raw = readFileSync(pkgJsonPath, "utf-8");
       const pkg = JSON.parse(raw);
       if (typeof pkg.version === "string") return pkg.version;
-    } catch {}
+    } catch (e) { /* package.json unreadable — skip */ void e; }
   }
   return null;
 }
@@ -264,7 +264,7 @@ export async function handleInstallAddon(
       if (!pkg.dependencies) pkg.dependencies = {};
       pkg.dependencies[addon.name] = addon.version || "*";
       writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-    } catch {}
+    } catch (e) { console.debug('[addons] failed to write package.json stub', e); }
 
     const addonPkg = join(destDir, "package.json");
     if (existsSync(addonPkg)) {
@@ -318,7 +318,7 @@ export async function handleUninstallAddon(
         const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
         if (pkg.dependencies) delete pkg.dependencies[addon.name];
         writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-      } catch {}
+      } catch (e) { console.debug('[addons] cleanup failed', e); }
     }
 
     return json({

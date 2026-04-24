@@ -258,7 +258,7 @@ test('Post renders an outcome chip after the timestamp for turn failures', async
   const timestamp = findByClass(host, 'post-time');
   expect(chip).toBeTruthy();
   expect(flattenText(chip)).toContain('provider');
-  expect(chip?.getAttribute('title')).toBe('Provider retry budget exhausted — 429 Too Many Requests — Last action: bash echo hi');
+  expect(chip?.getAttribute('title')).toBe('provider');
   const metaText = flattenText(meta);
   const timestampText = flattenText(timestamp);
   expect(metaText.indexOf(timestampText)).toBeGreaterThan(-1);

@@ -40,6 +40,7 @@ export interface RemotePairingHandlersContext {
   pairConfirmLimiter: SlidingWindowLimiter;
   callbackLimiter: SlidingWindowLimiter;
   nonceCache: RemoteNonceCache;
+  remoteConfig?: Readonly<import("../core/config.js").RemoteInteropConfig>;
   validateCallbackUrl?: typeof validateCallbackUrl;
   /** Optional fire-and-forget callback to notify the local chat of an inbound pair request. */
   notify?: (text: string) => void;
@@ -91,7 +92,7 @@ export async function handlePairRequest(req: Request, context: RemotePairingHand
     return jsonResponse({ error: "Pairing rate limit exceeded." }, 429);
   }
 
-  const callbackCheck = await (context.validateCallbackUrl ?? validateCallbackUrl)(callbackUrl);
+  const callbackCheck = await (context.validateCallbackUrl ?? validateCallbackUrl)(callbackUrl, undefined, context.remoteConfig);
   if (!callbackCheck.ok) {
     return jsonResponse({ error: callbackCheck.error }, 400);
   }

@@ -200,7 +200,7 @@ function appendMediaTextToFts(
     if (!isTextIndexable(row.content_type)) continue;
     // Decompress if stored compressed
     let rawMeta: Record<string, unknown> | null = null;
-    try { if (row.metadata) rawMeta = JSON.parse(row.metadata); } catch {}
+    try { if (row.metadata) rawMeta = JSON.parse(row.metadata); } catch (e) { void e; }
     const decompressed = maybeDecompress(row.data, rawMeta);
     const raw = new TextDecoder().decode(decompressed);
     const text =

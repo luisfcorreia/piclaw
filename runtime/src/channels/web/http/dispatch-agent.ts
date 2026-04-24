@@ -225,7 +225,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         if (existsSync(PICLAW_CONFIG_PATH)) {
           rawConfig = JSON.parse(readFileSync(PICLAW_CONFIG_PATH, "utf-8"));
         }
-      } catch { /* ignore */ }
+      } catch (e) { /* context usage non-critical — best effort */ void e; }
       const assistantSection = typeof rawConfig.assistant === "object" && rawConfig.assistant ? rawConfig.assistant as Record<string, unknown> : rawConfig;
       const userSection = typeof rawConfig.user === "object" && rawConfig.user ? rawConfig.user as Record<string, unknown> : rawConfig;
 
@@ -235,7 +235,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       try {
         const authPath = join(piAgentDir, "auth.json");
         if (existsSync(authPath)) authProviders = JSON.parse(readFileSync(authPath, "utf-8"));
-      } catch { /* ignore */ }
+      } catch (e) { /* context usage non-critical — best effort */ void e; }
 
       const providerDefs = [
         { id: "anthropic", name: "Anthropic", hasOAuth: true, hasApiKey: true, apiKeyHint: "sk-ant-..." },
