@@ -589,14 +589,25 @@
 
 /* ── Timeline menu ───────────────────────────────────────────────────── */
 
-/* Timeline menu — direct child of .app-shell (position: relative).
-   Appears only when workspace is collapsed (component returns null otherwise).
-   Positioned at top-right, overlaying the chat container. */
+/* Timeline menu — direct child of .app-shell.
+   Repositions based on workspace open/closed state. */
 .timeline-menu-wrap {
     position: absolute;
     z-index: 200;
+}
+
+/* Workspace closed: top-right over the chat area */
+.timeline-menu-wrap.in-chat {
     top: var(--spacing-sm, 8px);
     right: var(--spacing-md, 12px);
+    left: auto;
+}
+
+/* Workspace open: top-left, aligned with the workspace header */
+.timeline-menu-wrap.in-workspace {
+    top: var(--spacing-sm, 8px);
+    left: var(--spacing-sm, 8px);
+    right: auto;
 }
 
 .timeline-menu-wrap .workspace-menu-button {
@@ -610,9 +621,20 @@
     height: 16px;
 }
 
-.timeline-menu-dropdown {
+/* Dropdown anchor depends on position */
+.timeline-menu-wrap.in-chat .timeline-menu-dropdown {
     right: 0;
     left: auto;
+}
+
+.timeline-menu-wrap.in-workspace .timeline-menu-dropdown {
+    left: 0;
+    right: auto;
+}
+
+/* Hide the workspace explorer's own hamburger — replaced by timeline menu */
+.workspace-header-left > .workspace-menu-wrap {
+    display: none;
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────── */

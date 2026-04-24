@@ -1,8 +1,10 @@
 // @ts-nocheck
 /**
- * timeline-menu.ts — Hamburger menu that appears at the top-right of the
- * chat area when the workspace is collapsed. When workspace is open, the
- * workspace header's own hamburger is visible instead.
+ * timeline-menu.ts — Single hamburger menu that lives in the app-shell.
+ * CSS repositions it based on workspace state:
+ *   - Workspace closed → top-right of chat area
+ *   - Workspace open → top-left of workspace header area
+ * Menu items adapt to context.
  */
 
 import { html, useState, useEffect, useRef, useCallback } from '../vendor/preact-htm.js';
@@ -37,8 +39,8 @@ export function TimelineMenu({
         return () => document.removeEventListener('keydown', onKey);
     }, [open]);
 
-    // Hide when workspace opens
-    if (workspaceOpen) return null;
+    // Close when workspace state changes
+    useEffect(() => { setOpen(false); }, [workspaceOpen]);
 
     const run = useCallback((fn) => {
         setOpen(false);
@@ -46,7 +48,7 @@ export function TimelineMenu({
     }, []);
 
     return html`
-        <div class="timeline-menu-wrap">
+        <div class=${`timeline-menu-wrap${workspaceOpen ? ' in-workspace' : ' in-chat'}`}>
             <button
                 ref=${btnRef}
                 class=${`workspace-menu-button${open ? ' active' : ''}`}
@@ -66,7 +68,7 @@ export function TimelineMenu({
             ${open && html`
                 <div class="workspace-menu-dropdown timeline-menu-dropdown" ref=${menuRef} role="menu" aria-label="Menu">
                     <button class="workspace-menu-item" role="menuitem" onClick=${() => run(toggleWorkspace)}>
-                        Show workspace
+                        ${workspaceOpen ? 'Hide workspace' : 'Show workspace'}
                     </button>
 
                     ${(onOpenTerminalTab || onOpenVncTab || onToggleTerminal) && html`<div class="workspace-menu-separator"></div>`}
