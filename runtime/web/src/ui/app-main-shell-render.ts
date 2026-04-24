@@ -432,15 +432,15 @@ export function renderMainShell(options: MainShellRenderOptions): any {
         </div>
         <div class="editor-splitter" onMouseDown=${handleEditorSplitterMouseDown} onTouchStart=${handleEditorSplitterTouchStart}></div>
       `}
+      <${TimelineMenu}
+        workspaceOpen=${workspaceOpen}
+        toggleWorkspace=${toggleWorkspace}
+        onOpenTerminalTab=${openTerminalTab}
+        onOpenVncTab=${openVncTab}
+        onToggleTerminal=${hasDockPanes ? toggleDock : undefined}
+        terminalVisible=${Boolean(hasDockPanes && dockVisible)}
+      />
       <div class="container">
-        <${TimelineMenu}
-          workspaceOpen=${workspaceOpen}
-          toggleWorkspace=${toggleWorkspace}
-          onOpenTerminalTab=${openTerminalTab}
-          onOpenVncTab=${openVncTab}
-          onToggleTerminal=${hasDockPanes ? toggleDock : undefined}
-          terminalVisible=${Boolean(hasDockPanes && dockVisible)}
-        />
         ${searchQuery && isIOSDevice() && html`<div class="search-results-spacer"></div>`}
         ${(currentHashtag || searchQuery) && html`
           <div class="hashtag-header">
