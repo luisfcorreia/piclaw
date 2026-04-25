@@ -118,7 +118,6 @@ const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "platform", "windows", "win-ui", "index.ts"), platforms: ["win32"] },
   { path: resolve(EXTENSIONS_DIR, "viewers", "office-viewer-tool", "index.ts"), channels: ["web"] },
   { path: resolve(EXTENSIONS_DIR, "integrations", "office-tools-tool", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "cheapskate", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "experimental", "m365", "index.ts"), envGate: "PICLAW_ENABLE_M365_EXPERIMENTAL" },
 ];
 
