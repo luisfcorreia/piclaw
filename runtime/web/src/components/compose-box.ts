@@ -353,9 +353,13 @@ export function getModelPickerOptionSearchLabel(option) {
 export function resolveComposeModelPickerState(activeModel, agentModelsPayload) {
     const modelLabel = typeof activeModel === 'string' ? activeModel.trim() : '';
     if (modelLabel) {
+        // If the model has a name (e.g. cheapskate shows backend info), use it as subtitle
+        const options = normalizeModelPickerOptions(agentModelsPayload);
+        const match = options.find((o) => o.label === modelLabel);
+        const displayLabel = match?.name ? `${modelLabel} — ${match.name}` : modelLabel;
         return {
             showPicker: true,
-            label: modelLabel,
+            label: displayLabel,
             hasAvailableModels: true,
         };
     }
@@ -2174,6 +2178,7 @@ export function ComposeBox({
                                 ${!loadingModels && modelOptions.map((modelOption, index) => {
                                     const modelLabel = typeof modelOption?.label === 'string' ? modelOption.label : '';
                                     const contextWindowLabel = formatModelPickerContextWindow(modelOption?.contextWindow);
+                                    const modelDisplayName = modelOption?.name || null;
                                     return html`
                                         <button
                                             key=${modelLabel}
@@ -2182,9 +2187,9 @@ export function ComposeBox({
                                             class=${`compose-model-popup-item compose-model-popup-model-item${modelPopupIndex === index ? ' active' : ''}${activeModel === modelLabel ? ' current-model' : ''}`}
                                             onClick=${() => { void handleSelectModel(modelOption); }}
                                             disabled=${switchingModel}
-                                            title=${[modelLabel, contextWindowLabel].filter(Boolean).join(' • ')}
+                                            title=${[modelLabel, modelDisplayName, contextWindowLabel].filter(Boolean).join(' • ')}
                                         >
-                                            <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}</span>
+                                            <span class="compose-model-popup-model-label">${formatModelPickerDisplayLabel(modelLabel, modelOption?.contextWindow)}${modelDisplayName ? html` <span class="compose-model-popup-model-subtitle">${modelDisplayName}</span>` : ''}</span>
                                         </button>
                                     `;
                                 })}

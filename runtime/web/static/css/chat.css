@@ -912,6 +912,12 @@
     white-space: nowrap;
 }
 
+.compose-model-popup-model-subtitle {
+    font-size: 0.85em;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+
 
 .compose-model-popup-item:hover,
 .compose-model-popup-item:focus-visible {
