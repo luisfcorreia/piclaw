@@ -29,26 +29,16 @@ function AvatarField({ label, value, onChange }) {
         reader.readAsDataURL(file);
     }, [onChange]);
 
-    const handleUrlChange = useCallback((e) => {
-        const url = e.target.value;
-        setPreview(resolveAvatarPreview(url));
-        onChange?.(url);
-    }, [onChange]);
-
     return html`
         <div class="settings-avatar-field">
             <label>${label}</label>
             <div class="settings-avatar-row">
-                <div class="settings-avatar-preview" onClick=${() => inputRef.current?.click()}>
+                <div class="settings-avatar-preview settings-avatar-clickable" onClick=${() => inputRef.current?.click()} title="Click to upload a new avatar">
                     ${preview
                         ? html`<img src=${preview} alt="avatar" />`
                         : html`<span class="settings-avatar-placeholder">+</span>`}
                 </div>
-                <div class="settings-avatar-inputs">
-                    <input type="text" value=${value || ''} onInput=${handleUrlChange} placeholder="URL or path" />
-                    <input type="file" accept="image/*" ref=${inputRef} style="display:none" onChange=${handleFileSelect} />
-                    <button class="settings-avatar-upload-btn" onClick=${() => inputRef.current?.click()}>Upload</button>
-                </div>
+                <input type="file" accept="image/*" ref=${inputRef} style="display:none" onChange=${handleFileSelect} />
             </div>
         </div>
     `;
@@ -80,9 +70,16 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
     const [composeUploadLimitMb, setComposeUploadLimitMb] = useState(32);
     const [workspaceUploadLimitMb, setWorkspaceUploadLimitMb] = useState(512);
     const [toolUseBudget, setToolUseBudget] = useState(64);
-    const [saving, setSaving] = useState(false);
     const [metersEnabled, setMetersEnabled] = useState(() => readStoredMetersEnabled(false));
+    const [appliedHint, setAppliedHint] = useState(false);
     const savedSnapshotRef = useRef('');
+    const saveTimerRef = useRef(null);
+    const mountedRef = useRef(true);
+
+    useEffect(() => {
+        mountedRef.current = true;
+        return () => { mountedRef.current = false; };
+    }, []);
 
     const applyIncoming = useCallback((data) => {
         const next = normalizeGeneralSettings(data);
@@ -112,79 +109,39 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
     }, []);
 
     const currentSnapshot = useMemo(() => JSON.stringify(normalizeGeneralSettings({
-        userName,
-        userAvatar,
-        assistantName,
-        assistantAvatar,
-        sessionAutoRotate,
-        sessionMaxSizeMb,
-        webTerminalEnabled,
-        composeUploadLimitMb,
-        workspaceUploadLimitMb,
-        toolUseBudget,
+        userName, userAvatar, assistantName, assistantAvatar,
+        sessionAutoRotate, sessionMaxSizeMb, webTerminalEnabled,
+        composeUploadLimitMb, workspaceUploadLimitMb, toolUseBudget,
     })), [
-        userName,
-        userAvatar,
-        assistantName,
-        assistantAvatar,
-        sessionAutoRotate,
-        sessionMaxSizeMb,
-        webTerminalEnabled,
-        composeUploadLimitMb,
-        workspaceUploadLimitMb,
-        toolUseBudget,
+        userName, userAvatar, assistantName, assistantAvatar,
+        sessionAutoRotate, sessionMaxSizeMb, webTerminalEnabled,
+        composeUploadLimitMb, workspaceUploadLimitMb, toolUseBudget,
     ]);
-    const dirty = currentSnapshot !== savedSnapshotRef.current;
 
-    const save = useCallback(async () => {
-        if (saving) return;
-        setSaving(true);
-        setStatus?.('Saving general settings…', 'info');
-        try {
-            const response = await fetch('/agent/settings/general', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userName,
-                    userAvatar,
-                    assistantName,
-                    assistantAvatar,
-                    sessionAutoRotate,
-                    sessionMaxSizeMb,
-                    webTerminalEnabled,
-                    composeUploadLimitMb,
-                    workspaceUploadLimitMb,
-                    toolUseBudget,
-                }),
-            });
-            const payload = await response.json().catch(() => ({}));
-            if (!response.ok || !payload?.ok || !payload?.settings) {
-                throw new Error(payload?.error || `HTTP ${response.status}`);
-            }
-            applyIncoming(payload.settings);
-            mergeSettingsData?.(payload.settings);
-            setStatus?.('General settings saved. New turns use the updated values.', 'success');
-        } catch (e) {
-            setStatus?.(String(e?.message || e), 'error');
-        } finally {
-            setSaving(false);
-        }
-    }, [
-        saving,
-        setStatus,
-        userName,
-        userAvatar,
-        assistantName,
-        assistantAvatar,
-        sessionAutoRotate,
-        sessionMaxSizeMb,
-        webTerminalEnabled,
-        composeUploadLimitMb,
-        workspaceUploadLimitMb,
-        toolUseBudget,
-        applyIncoming,
-        mergeSettingsData,
-    ]);
+    // Auto-save on every change with debounce
+    useEffect(() => {
+        if (currentSnapshot === savedSnapshotRef.current) return;
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = setTimeout(async () => {
+            if (!mountedRef.current) return;
+            try {
+                const parsed = JSON.parse(currentSnapshot);
+                const response = await fetch('/agent/settings/general', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: currentSnapshot,
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!mountedRef.current) return;
+                if (!response.ok || !payload?.ok || !payload?.settings) return;
+                savedSnapshotRef.current = currentSnapshot;
+                mergeSettingsData?.(payload.settings);
+                setAppliedHint(true);
+                setTimeout(() => { if (mountedRef.current) setAppliedHint(false); }, 4000);
+            } catch { /* silent */ }
+        }, 600);
+        return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    }, [currentSnapshot, mergeSettingsData]);
 
     const totpSetup = settingsData?.instanceTotp || {
         configured: false,
@@ -197,6 +154,11 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
 
     return html`
         <div class="settings-section">
+            ${appliedHint && html`
+                <div class="settings-general-applied-notice" role="status" aria-live="polite">
+                    Settings applied. Changes take effect on the next turn.
+                </div>
+            `}
             <h3>Identity</h3>
             <div class="settings-row">
                 <label>User name</label>
@@ -312,14 +274,6 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                         </div>
                     </div>
                 ` : null}
-            </div>
-            <div class="settings-row" style="margin-top:16px; align-items:center; gap:10px;">
-                <button class="settings-addon-btn settings-addon-btn-install" disabled=${saving || !dirty} onClick=${save}>
-                    ${saving ? 'Saving…' : 'Save & apply'}
-                </button>
-                <span class="settings-hint" style="margin:0">
-                    Identity, session rotation, upload limits, terminal availability, and tool budget apply to new turns immediately.
-                </span>
             </div>
         </div>
     `;

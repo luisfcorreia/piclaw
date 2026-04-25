@@ -1258,11 +1258,12 @@
     justify-content: center;
     background: var(--bg-secondary);
     flex-shrink: 0;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .settings-avatar-preview:hover {
     border-color: var(--accent-color, #1d9bf0);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color, #1d9bf0) 20%, transparent);
 }
 
 .settings-avatar-preview img {
@@ -1277,41 +1278,20 @@
     opacity: 0.5;
 }
 
-.settings-avatar-inputs {
+.settings-general-applied-notice {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 0;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--success-color, #00ba7c) 28%, transparent);
+    background: color-mix(in srgb, var(--success-color, #00ba7c) 9%, transparent);
+    color: var(--success-color, #00ba7c);
+    font-size: 0.84em;
+    font-weight: 500;
 }
 
-.settings-avatar-inputs input[type="text"] {
-    flex: 1;
-    padding: 6px 10px;
-    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
-    border-radius: 6px;
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-size: 0.86em;
-    min-width: 0;
-}
-
-.settings-avatar-upload-btn {
-    padding: 6px 12px;
-    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
-    border-radius: 6px;
-    background: var(--bg-hover, var(--bg-secondary));
-    color: var(--text-primary);
-    font-size: 0.82em;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.settings-avatar-upload-btn:hover {
-    border-color: var(--accent-color);
-    background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-primary));
-}
+/* avatar inputs row removed — click-to-upload only */
 
 @media (max-width: 640px) {
     .settings-avatar-row {
