@@ -73,8 +73,10 @@ export function checkPendingShutdown(): void {
   if (!pendingShutdownReason) return;
   const reason = pendingShutdownReason;
   pendingShutdownReason = null;
-  // Short delay to ensure SSE broadcast of the final response reaches clients
+  // Generous delay so SSE broadcast of the final response reaches all clients
+  // before the process exits. The turn has already been persisted to the DB
+  // by the time this runs.
   setTimeout(() => {
     requestGracefulShutdown(reason);
-  }, 500);
+  }, 2000);
 }
