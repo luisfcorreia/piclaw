@@ -10,6 +10,10 @@
  * **deferred** until the current turn completes and is persisted to the DB.
  * Call markPendingShutdown() during a tool call, then checkPendingShutdown()
  * from finalizeSuccessfulRun() after the response is committed.
+ *
+ * isPendingShutdown() returns true while the flag is set, so the run-agent
+ * orchestrator can abort the session immediately after the exit_process tool
+ * executes — preventing further tool calls in the same turn.
  */
 
 import { createLogger } from "../utils/logger.js";
@@ -66,17 +70,22 @@ export function markPendingShutdown(reason: string): void {
 }
 
 /**
- * Check if a pending shutdown was requested. If so, execute it.
- * Called from finalizeSuccessfulRun() after the response is committed to the DB.
+ * Query whether a pending shutdown has been requested.
+ * Used by the run-agent orchestrator to abort the session after
+ * exit_process executes, preventing further tool calls.
+ */
+export function isPendingShutdown(): boolean {
+  return pendingShutdownReason !== null;
+}
+
+/**
+ * Check if a pending shutdown was requested. If so, execute it immediately.
+ * Called from finalizeSuccessfulRun() after the response is committed to the DB
+ * and broadcast to connected clients.
  */
 export function checkPendingShutdown(): void {
   if (!pendingShutdownReason) return;
   const reason = pendingShutdownReason;
   pendingShutdownReason = null;
-  // Generous delay so SSE broadcast of the final response reaches all clients
-  // before the process exits. The turn has already been persisted to the DB
-  // by the time this runs.
-  setTimeout(() => {
-    requestGracefulShutdown(reason);
-  }, 2000);
+  requestGracefulShutdown(reason);
 }

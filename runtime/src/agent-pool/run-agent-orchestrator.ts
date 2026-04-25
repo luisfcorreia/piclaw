@@ -33,6 +33,7 @@ import {
 } from "./blank-turn-detection.js";
 import type { AgentTurnCoordinator } from "./turn-coordinator.js";
 import type { AgentOutput, AgentRecoveryDiagnosticEntry, AgentRecoveryMetadata, RetrySettingsProvider, RunAgentOptions } from "./contracts.js";
+import { isPendingShutdown } from "../runtime/shutdown-registry.js";
 
 const log = createLogger("agent-pool.run-orchestrator");
 
@@ -515,6 +516,18 @@ async function runPromptAttempt(
         if (!failedToolName && typeof toolName === "string") {
           failedToolName = toolName;
         }
+      }
+      // If exit_process was called, abort the session immediately so no more
+      // tools execute. The turn output gathered so far will be committed by
+      // finalizeSuccessfulRun, which then calls checkPendingShutdown.
+      if (event.type === "tool_execution_end" && isPendingShutdown()) {
+        void session.abort().catch((err) => {
+          options.onWarn?.("Failed to abort session after exit_process", {
+            operation: "run_agent.pending_shutdown_abort",
+            chatJid,
+            err,
+          });
+        });
       }
     }
     if (event.type === "message_end") {
