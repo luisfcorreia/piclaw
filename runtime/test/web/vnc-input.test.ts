@@ -5,6 +5,9 @@ import {
   computeContainedRemoteDisplayScale,
   encodeVncKeyEvent,
   encodeVncPointerEvent,
+  getVncContactTravelDistance,
+  hasVncTouchTapSlopBeenExceeded,
+  isVncDeferredTouchPointerType,
   mapClientToFramebufferPoint,
   normalizeVncPassword,
   resolveVncKeysymFromKeyboardEvent,
@@ -12,6 +15,7 @@ import {
   shouldArmVncImplicitReleaseTimer,
   shouldReleaseVncPointerContact,
   shouldReleaseVncTouchContact,
+  shouldTriggerVncTouchTap,
   vncButtonMaskForPointerButton,
 } from "../../web/src/panes/vnc-input.js";
 
@@ -54,6 +58,22 @@ test("shouldReleaseVncTouchContact detects touchend/touchcancel and zero-touch m
   expect(shouldReleaseVncTouchContact({ type: "touchmove", touches: [] })).toBe(true);
   expect(shouldReleaseVncTouchContact({ type: "touchmove", touches: [{}] })).toBe(false);
   expect(shouldReleaseVncTouchContact({ type: "touchstart", touches: [{}] })).toBe(false);
+});
+
+test("isVncDeferredTouchPointerType only defers finger touch contacts", () => {
+  expect(isVncDeferredTouchPointerType("touch")).toBe(true);
+  expect(isVncDeferredTouchPointerType("pen")).toBe(false);
+  expect(isVncDeferredTouchPointerType("mouse")).toBe(false);
+  expect(isVncDeferredTouchPointerType("")).toBe(false);
+});
+
+test("touch tap helpers distinguish taps from drags", () => {
+  expect(getVncContactTravelDistance(10, 10, 13, 14)).toBeCloseTo(5, 5);
+  expect(hasVncTouchTapSlopBeenExceeded({ startX: 10, startY: 10, clientX: 18, clientY: 18, maxDistancePx: 10 })).toBe(true);
+  expect(hasVncTouchTapSlopBeenExceeded({ startX: 10, startY: 10, clientX: 14, clientY: 13, maxDistancePx: 10 })).toBe(false);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 14, clientY: 13, elapsedMs: 180 })).toBe(true);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 40, clientY: 13, elapsedMs: 180 })).toBe(false);
+  expect(shouldTriggerVncTouchTap({ startX: 10, startY: 10, clientX: 14, clientY: 13, elapsedMs: 450 })).toBe(false);
 });
 
 test("shouldArmVncImplicitReleaseTimer covers touch, pen, and unknown non-mouse pointers", () => {
