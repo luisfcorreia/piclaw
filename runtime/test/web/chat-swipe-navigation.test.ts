@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import {
+  hasActiveTextSelection,
   isEligibleChatSwipeTarget,
   resolveAdjacentSwipeChatJid,
   resolveSwipeableChatAgents,
@@ -94,4 +95,16 @@ test('isEligibleChatSwipeTarget allows swipe on agent-thinking buttons', () => {
     },
   };
   expect(isEligibleChatSwipeTarget(thinkingButton)).toBe(true);
+});
+
+test('hasActiveTextSelection only returns true for non-collapsed non-empty selections', () => {
+  expect(hasActiveTextSelection({
+    getSelection: () => ({ isCollapsed: false, toString: () => 'selected text' }),
+  } as unknown as Window)).toBe(true);
+  expect(hasActiveTextSelection({
+    getSelection: () => ({ isCollapsed: true, toString: () => 'selected text' }),
+  } as unknown as Window)).toBe(false);
+  expect(hasActiveTextSelection({
+    getSelection: () => ({ isCollapsed: false, toString: () => '   ' }),
+  } as unknown as Window)).toBe(false);
 });

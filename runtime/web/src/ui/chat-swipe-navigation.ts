@@ -25,6 +25,17 @@ function hasClosest(target: unknown): target is { closest: (selector: string) =>
   return Boolean(target && typeof (target as { closest?: unknown }).closest === 'function');
 }
 
+export function hasActiveTextSelection(runtimeWindow: (Window & typeof globalThis) | null | undefined = typeof window !== 'undefined' ? window : null): boolean {
+  if (!runtimeWindow || typeof runtimeWindow.getSelection !== 'function') return false;
+  try {
+    const selection = runtimeWindow.getSelection();
+    if (!selection || selection.isCollapsed) return false;
+    return String(selection.toString() || '').trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function createChatSwipeTouchState(): ChatSwipeTargetState {
   return {
     active: false,
@@ -325,6 +336,7 @@ export function attachChatSwipeNavigation(options: UseChatSwipeNavigationOptions
     // Apple Pencil generates touch events alongside pointer events;
     // swipe navigation should only respond to finger touches.
     if (lastPointerDownWasPen) return;
+    if (hasActiveTextSelection()) return;
     if (!isEligibleChatSwipeTarget(event.target)) return;
     const touch = event.touches[0];
     state.active = true;
@@ -337,6 +349,11 @@ export function attachChatSwipeNavigation(options: UseChatSwipeNavigationOptions
 
   function onTouchMove(event: TouchEvent) {
     if (!state.active || state.cancelled) return;
+    if (hasActiveTextSelection()) {
+      state.cancelled = true;
+      hideIndicator(getIndicator());
+      return;
+    }
     const touch = event.touches[0];
     if (!touch) return;
     state.lastX = touch.clientX;
