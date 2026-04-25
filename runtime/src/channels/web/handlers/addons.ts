@@ -10,7 +10,7 @@
  * spec is unavailable or package install fails.
  */
 
-import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
@@ -88,6 +88,28 @@ function ensureAddonsDir(): string {
     }, null, 2));
   }
   return addonsDir;
+}
+
+/**
+ * Remove a stale node_modules symlink (created by the session extension-link
+ * helper) so that `bun add` can create a real node_modules directory.
+ *
+ * The session bootstrap symlinks `.pi/extensions/node_modules` → the bundled
+ * (read-only) node_modules so that jiti can resolve framework packages from
+ * user-written workspace extensions.  When addons are installed the directory
+ * must be a real writable tree, not a symlink; otherwise every `bun add` and
+ * the legacy mkdir fallback both fail with EACCES.
+ */
+function removeNodeModulesSymlinkIfPresent(addonsDir: string): void {
+  const nodeModulesPath = join(addonsDir, "node_modules");
+  try {
+    const stat = lstatSync(nodeModulesPath);
+    if (stat.isSymbolicLink()) {
+      unlinkSync(nodeModulesPath);
+    }
+  } catch {
+    // Not found or inaccessible — nothing to remove.
+  }
 }
 
 function getInstalledVersion(packageName: string): string | null {
@@ -476,6 +498,7 @@ export async function handleInstallAddon(
   if (!addon) return json({ error: `Add-on "${slug}" not found in catalog` }, 404);
 
   const addonsDir = ensureAddonsDir();
+  removeNodeModulesSymlinkIfPresent(addonsDir);
   const destDir = join(addonsDir, "node_modules", addon.name);
   const addonPath = addon.path || `addons/${slug}`;
   const installPlan = resolveAddonInstallSpec(addon);
