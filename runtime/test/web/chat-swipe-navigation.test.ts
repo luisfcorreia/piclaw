@@ -68,11 +68,11 @@ test('shouldTriggerTouchChatSwipe requires sufficient horizontal distance and ax
   expect(shouldTriggerTouchChatSwipe({ dx: 120, dy: 20, elapsedMs: 3000 })).toBe(true);
 });
 
-test('isEligibleChatSwipeTarget ignores compose and interactive controls', () => {
+test('isEligibleChatSwipeTarget ignores compose, post content, and other interactive controls', () => {
   const allowedTarget = {
     closest: (_selector: string) => null,
   };
-  const blockedTarget = {
+  const blockedComposeTarget = {
     closest: (selector: string) => {
       if (selector.includes('.compose-box')) {
         return { closest: (_s: string) => null } as unknown as Element;
@@ -80,9 +80,18 @@ test('isEligibleChatSwipeTarget ignores compose and interactive controls', () =>
       return null;
     },
   };
+  const blockedPostContentTarget = {
+    closest: (selector: string) => {
+      if (selector.includes('.post-content')) {
+        return { closest: (_s: string) => null } as unknown as Element;
+      }
+      return null;
+    },
+  };
 
   expect(isEligibleChatSwipeTarget(allowedTarget)).toBe(true);
-  expect(isEligibleChatSwipeTarget(blockedTarget)).toBe(false);
+  expect(isEligibleChatSwipeTarget(blockedComposeTarget)).toBe(false);
+  expect(isEligibleChatSwipeTarget(blockedPostContentTarget)).toBe(false);
 });
 
 test('isEligibleChatSwipeTarget allows swipe on agent-thinking buttons', () => {
