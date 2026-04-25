@@ -295,6 +295,19 @@ function createSchema(database: Database): void {
     );
     CREATE INDEX IF NOT EXISTS idx_portainer_configs_updated_at ON portainer_configs(updated_at);
 
+    CREATE TABLE IF NOT EXISTS extension_kv (
+      extension_id TEXT NOT NULL,
+      scope        TEXT NOT NULL DEFAULT 'chat',
+      scope_key    TEXT NOT NULL DEFAULT '',
+      key          TEXT NOT NULL,
+      value        TEXT NOT NULL,
+      created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (extension_id, scope, scope_key, key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_extension_kv_ext_scope ON extension_kv(extension_id, scope, scope_key);
+    CREATE INDEX IF NOT EXISTS idx_extension_kv_updated ON extension_kv(updated_at);
+
     CREATE TABLE IF NOT EXISTS task_run_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task_id TEXT NOT NULL,

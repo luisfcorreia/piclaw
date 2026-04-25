@@ -18,6 +18,8 @@ export {
   renameChatBranchIdentity,
   renameChatJid,
   archiveChatBranch,
+  previewPermanentDeleteArchivedBranch,
+  permanentDeleteArchivedBranch,
   restoreChatBranchIdentity,
 } from "./db/chat-branches.js";
 export {
@@ -79,6 +81,20 @@ export {
   searchToolOutputSnippets,
 } from "./db/tool-outputs.js";
 export { getRouterState, setRouterState } from "./db/router-state.js";
+export {
+  extensionKvGet,
+  extensionKvSet,
+  extensionKvDelete,
+  extensionKvList,
+  extensionKvQuery,
+  extensionKvClear,
+  extensionKvDeleteByChatJid,
+  extensionKvPrune,
+  migrateProxmoxPortainerToKv,
+  type KvScope,
+  type KvEntry,
+  type KvQueryOptions,
+} from "./db/extension-kv.js";
 export {
   getChatCursor,
   getAllChatCursors,
