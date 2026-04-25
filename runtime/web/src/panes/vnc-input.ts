@@ -141,6 +141,11 @@ export function encodeVncKeyEvent(down, keysym) {
     return buffer;
 }
 
+export function shouldSkipDuplicateVncKeydown(existingKeysym, nextKeysym, repeat = false) {
+    if (existingKeysym == null || nextKeysym == null) return false;
+    return Boolean(repeat) || Number(existingKeysym) === Number(nextKeysym);
+}
+
 export function normalizeVncPassword(value) {
     if (typeof value !== 'string') return null;
     return value.length > 0 ? value : null;

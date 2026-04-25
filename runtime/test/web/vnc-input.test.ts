@@ -15,6 +15,7 @@ import {
   shouldArmVncImplicitReleaseTimer,
   shouldReleaseVncPointerContact,
   shouldReleaseVncTouchContact,
+  shouldSkipDuplicateVncKeydown,
   shouldTriggerVncTouchTap,
   vncButtonMaskForPointerButton,
 } from "../../web/src/panes/vnc-input.js";
@@ -108,6 +109,13 @@ test("encodeVncKeyEvent writes VNC key-event bytes", () => {
     0xff,
     0x0d,
   ]);
+});
+
+test("shouldSkipDuplicateVncKeydown suppresses duplicate non-repeat hardware keydown events", () => {
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x61, false)).toBe(true);
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x61, true)).toBe(true);
+  expect(shouldSkipDuplicateVncKeydown(0x61, 0x62, false)).toBe(false);
+  expect(shouldSkipDuplicateVncKeydown(null, 0x61, false)).toBe(false);
 });
 
 test("resolveVncKeysymFromKeyboardEvent maps special keys and printable characters", () => {

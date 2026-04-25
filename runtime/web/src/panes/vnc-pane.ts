@@ -26,6 +26,7 @@ import {
     shouldArmVncImplicitReleaseTimer,
     shouldReleaseVncPointerContact,
     shouldReleaseVncTouchContact,
+    shouldSkipDuplicateVncKeydown,
     shouldTriggerVncTouchTap,
     vncButtonMaskForPointerButton,
 } from './vnc-input.js';
@@ -196,10 +197,15 @@ function buildVncWebSocketUrl(targetId, handoffToken = null) {
     return url.toString();
 }
 
-function buildDirectVncTargetReference(host, port) {
+export function normalizeDirectVncHost(host) {
     const rawHost = String(host || '').trim();
+    return rawHost || 'localhost';
+}
+
+export function buildDirectVncTargetReference(host, port) {
+    const rawHost = normalizeDirectVncHost(host);
     const normalizedPort = Math.floor(Number(port || 0));
-    if (!rawHost || !Number.isFinite(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535) return null;
+    if (!Number.isFinite(normalizedPort) || normalizedPort <= 0 || normalizedPort > 65535) return null;
     const normalizedHost = rawHost.includes(':') && !rawHost.startsWith('[') ? `[${rawHost}]` : rawHost;
     return `${normalizedHost}:${normalizedPort}`;
 }
@@ -490,7 +496,7 @@ class VncPaneInstance implements PaneInstance {
                         <div style="display:grid;gap:10px;align-items:end;">
                             <label style="display:grid;gap:6px;min-width:0;">
                                 <span style="font-size:12px;color:var(--text-secondary);">Server</span>
-                                <input type="text" data-vnc-direct-host placeholder="server" spellcheck="false" style="width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;background:transparent;color:inherit;" />
+                                <input type="text" data-vnc-direct-host value="localhost" placeholder="localhost" spellcheck="false" style="width:100%;padding:10px 12px;border:1px solid var(--border-color);border-radius:8px;background:transparent;color:inherit;" />
                             </label>
                             <label style="display:grid;gap:6px;min-width:0;">
                                 <span style="font-size:12px;color:var(--text-secondary);">Port</span>
@@ -1199,12 +1205,13 @@ class VncPaneInstance implements PaneInstance {
         this.canvas.addEventListener('keydown', (event) => {
             const keysym = resolveVncKeysymFromKeyboardEvent(event);
             if (keysym == null) return;
-            if (event.repeat && this.pressedKeysyms.has(event.code || event.key)) {
+            const keyId = event.code || event.key;
+            const existingKeysym = this.pressedKeysyms.get(keyId);
+            if (shouldSkipDuplicateVncKeydown(existingKeysym, keysym, event.repeat)) {
                 event.preventDefault();
                 return;
             }
             event.preventDefault();
-            const keyId = event.code || event.key;
             this.pressedKeysyms.set(keyId, keysym);
             this.sendKeyEvent(true, keysym);
         });
