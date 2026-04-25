@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { AuthStorage, ModelRegistry, SettingsManager, getAgentDir } from '@mariozechner/pi-coding-agent';
 import '../helpers.js';
 import { withTempWorkspaceEnv } from '../helpers.js';
-import { createSessionInDir, getInstalledAddonExtensionPaths } from '../../src/agent-pool/session.ts';
+import { createSessionInDir, getInstalledAddonExtensionPaths, syncInstalledAddonExtensionBridges } from '../../src/agent-pool/session.ts';
 import { clearExtensionRoutes, getRegisteredRoutes, handleExtensionRoutes } from '../../src/channels/web/http/extension-routes.js';
 
 afterEach(() => {
@@ -29,7 +29,26 @@ test('getInstalledAddonExtensionPaths discovers package pi.extensions from .pi/a
   });
 });
 
-test('web sessions load installed addon extensions from .pi/addons/node_modules', async () => {
+test('syncInstalledAddonExtensionBridges mirrors installed add-ons into workspace extension discovery', async () => {
+  await withTempWorkspaceEnv('piclaw-installed-addon-bridges-', {}, async (workspace) => {
+    const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
+    mkdirSync(addonDir, { recursive: true });
+    writeFileSync(join(addonDir, 'package.json'), JSON.stringify({
+      name: 'piclaw-addon-example',
+      version: '0.1.0',
+      type: 'module',
+      pi: { extensions: ['index.ts'] },
+    }, null, 2));
+    writeFileSync(join(addonDir, 'index.ts'), 'export default function noop() {}\n');
+
+    const bridgePaths = syncInstalledAddonExtensionBridges(workspace.workspace);
+    expect(bridgePaths).toHaveLength(1);
+    expect(bridgePaths[0]).toContain('.pi/extensions/addon-bridge--piclaw-addon-example--0.ts');
+    expect(readFileSync(bridgePaths[0], 'utf8')).toContain('../addons/node_modules/piclaw-addon-example/index.ts');
+  });
+});
+
+test('web sessions load installed addon extensions from workspace extension bridges', async () => {
   await withTempWorkspaceEnv('piclaw-installed-addon-runtime-', {}, async (workspace) => {
     const addonDir = join(workspace.workspace, '.pi', 'addons', 'node_modules', 'piclaw-addon-example');
     mkdirSync(addonDir, { recursive: true });

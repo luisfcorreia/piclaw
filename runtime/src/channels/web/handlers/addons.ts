@@ -13,6 +13,7 @@
 import { existsSync, readFileSync, readdirSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
+import { syncInstalledAddonExtensionBridges } from "../../../agent-pool/session.ts";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
 
 const DEFAULT_CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
@@ -484,6 +485,7 @@ export async function handleInstallAddon(
     const packageInstall = await runBunCommand(["bun", "add", "--force", installPlan.spec], addonsDir);
     if (packageInstall.ok) {
       const installedVersion = getInstalledVersion(addon.name);
+      const bridgePaths = syncInstalledAddonExtensionBridges();
       return json({
         ok: true,
         slug,
@@ -491,6 +493,7 @@ export async function handleInstallAddon(
         installedVersion,
         installKind: installPlan.kind,
         installSpec: installPlan.spec,
+        bridgePaths,
         message: `Installed ${addon.name}@${installedVersion || addon.version || "?"} via ${installPlan.kind}. Restart required to load.`,
       });
     }
@@ -529,6 +532,7 @@ export async function handleInstallAddon(
 
     const installedVersion = getInstalledVersion(addon.name);
     const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
+    const bridgePaths = syncInstalledAddonExtensionBridges();
     return json({
       ok: true,
       slug,
@@ -537,6 +541,7 @@ export async function handleInstallAddon(
       filesDownloaded: downloaded,
       installKind: "legacy-download",
       installSpec: installPlan.spec,
+      bridgePaths,
       message: `Installed ${addon.name}@${installedVersion || "?"} via legacy package download fallback. Restart required to load.`,
       warning: `Package install via ${installPlan.kind} failed first: ${detail}`,
     });
@@ -588,10 +593,12 @@ export async function handleUninstallAddon(
       } catch (e) { console.debug('[addons] cleanup failed', e); }
     }
 
+    const bridgePaths = syncInstalledAddonExtensionBridges();
     return json({
       ok: true,
       slug,
       name: addon.name,
+      bridgePaths,
       message: `Removed ${addon.name}. Restart required to unload.`,
     });
   } catch (e) {
