@@ -93,6 +93,13 @@ function sectionLabel(kind) {
     return 'Slash commands';
 }
 
+function renderQuickActionMedia(item) {
+    if (item?.imageUrl) {
+        return html`<img class="timeline-quick-actions-item-avatar" src=${item.imageUrl} alt="" aria-hidden="true" />`;
+    }
+    return html`<span class="timeline-quick-actions-item-placeholder" aria-hidden="true">${item?.visualHint || ''}</span>`;
+}
+
 export function TimelineQuickActions({
     activeChatAgents = [],
     currentChatJid = 'web:default',
@@ -281,7 +288,7 @@ export function TimelineQuickActions({
                                 <button
                                     key=${item.key}
                                     type="button"
-                                    class=${`timeline-quick-actions-item${index === highlightIndex ? ' active' : ''}`}
+                                    class=${`timeline-quick-actions-item timeline-quick-actions-item-${item.kind}${index === highlightIndex ? ' active' : ''}`}
                                     onMouseEnter=${() => setHighlightIndex(index)}
                                     onClick=${() => {
                                         if (item.kind === 'agent' && item.chatJid) onSwitchChat?.(item.chatJid);
@@ -297,8 +304,13 @@ export function TimelineQuickActions({
                                         setQuery('');
                                     }}
                                 >
-                                    <div class="timeline-quick-actions-item-title">${item.title}</div>
-                                    <div class="timeline-quick-actions-item-subtitle">${item.subtitle}</div>
+                                    <span class="timeline-quick-actions-item-media">
+                                        ${renderQuickActionMedia(item)}
+                                    </span>
+                                    <span class="timeline-quick-actions-item-copy">
+                                        <span class="timeline-quick-actions-item-title">${item.title}</span>
+                                        <span class="timeline-quick-actions-item-subtitle">${item.subtitle}</span>
+                                    </span>
                                 </button>
                             `;
                         })}

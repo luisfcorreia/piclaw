@@ -30,6 +30,8 @@ export interface TimelineQuickActionItem {
   title: string;
   subtitle: string;
   searchText: string;
+  imageUrl?: string;
+  visualHint?: string;
   chatJid?: string;
   commandId?: string;
   commandName?: string;
@@ -151,6 +153,7 @@ export function buildWorkspaceQuickActionItems(options: {
       title: command.label,
       subtitle: command.description,
       searchText: `${command.label} ${command.description} ${(command.keywords || []).join(' ')}`.trim(),
+      visualHint: command.label.slice(0, 1).toUpperCase() || 'W',
       commandId: command.id,
     }));
 }
@@ -186,6 +189,7 @@ export function buildAgentQuickActionItems(options: {
         title: `@${agentName}`,
         subtitle: sessionName || chatJid,
         searchText: `@${agentName} ${sessionName} ${chatJid}`.trim(),
+        visualHint: agentName.slice(0, 1).toUpperCase() || '@',
         chatJid,
       };
     });
@@ -217,6 +221,7 @@ export function buildSlashQuickActionItems(options: {
         title: name,
         subtitle: description,
         searchText: `${name} ${description} ${String(command?.source || '')}`.trim(),
+        visualHint: '/',
         commandName: name,
       };
     });
