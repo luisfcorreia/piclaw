@@ -32,6 +32,8 @@ export interface TimelineQuickActionItem {
   searchText: string;
   imageUrl?: string;
   visualHint?: string;
+  categoryLabel?: string;
+  actionHint?: string;
   chatJid?: string;
   commandId?: string;
   commandName?: string;
@@ -151,9 +153,11 @@ export function buildWorkspaceQuickActionItems(options: {
       key: `workspace:${command.id}`,
       kind: 'workspace' as const,
       title: command.label,
-      subtitle: command.description,
+      subtitle: `${command.description} · runs immediately`,
       searchText: `${command.label} ${command.description} ${(command.keywords || []).join(' ')}`.trim(),
       visualHint: command.label.slice(0, 1).toUpperCase() || 'W',
+      categoryLabel: 'Workspace',
+      actionHint: 'Run',
       commandId: command.id,
     }));
 }
@@ -187,9 +191,11 @@ export function buildAgentQuickActionItems(options: {
         key: `agent:${chatJid}`,
         kind: 'agent' as const,
         title: `@${agentName}`,
-        subtitle: sessionName || chatJid,
+        subtitle: `${sessionName || chatJid} · switches immediately`,
         searchText: `@${agentName} ${sessionName} ${chatJid}`.trim(),
         visualHint: agentName.slice(0, 1).toUpperCase() || '@',
+        categoryLabel: 'Agent',
+        actionHint: 'Open',
         chatJid,
       };
     });
@@ -215,13 +221,16 @@ export function buildSlashQuickActionItems(options: {
     .map((command) => {
       const name = String(command?.name || '').trim();
       const description = hasTrimmedString(command?.description) ? command.description.trim() : 'slash command';
+      const source = hasTrimmedString(command?.source) ? command.source.trim() : '';
       return {
         key: `slash:${name}`,
         kind: 'slash' as const,
         title: name,
-        subtitle: description,
+        subtitle: `${description} · inserts into compose`,
         searchText: `${name} ${description} ${String(command?.source || '')}`.trim(),
         visualHint: '/',
+        categoryLabel: source || 'Slash',
+        actionHint: 'Insert',
         commandName: name,
       };
     });
