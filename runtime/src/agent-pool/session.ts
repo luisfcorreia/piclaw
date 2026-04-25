@@ -112,8 +112,6 @@ const OPTIONAL_EXTENSIONS: OptionalBundledExtension[] = [
   { path: resolve(EXTENSIONS_DIR, "integrations", "bun-runner", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "keychain", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "ssh", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "proxmox", "index.ts") },
-  { path: resolve(EXTENSIONS_DIR, "integrations", "portainer", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "integrations", "mcp-status-hints", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "browser", "cdp-browser-tool", "index.ts") },
   { path: resolve(EXTENSIONS_DIR, "platform", "windows", "powershell", "index.ts"), platforms: ["win32"] },

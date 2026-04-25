@@ -58,7 +58,7 @@ export const TOOLSETS: ToolsetDefinition[] = [
   {
     name: "remote",
     description: "Remote execution configuration and remote-capable infrastructure tools.",
-    toolNames: ["ssh", "proxmox", "portainer"],
+    toolNames: ["ssh"],
   },
   {
     name: "browser",

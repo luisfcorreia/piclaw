@@ -378,24 +378,6 @@ const TOOL_CAPABILITIES: Record<string, ToolCapability> = {
       nouns: ["ssh", "host", "remote", "server"],
     }),
   },
-  proxmox: {
-    kind: "mixed",
-    weight: "standard",
-    recommend: rec({
-      domains: ["infra", "virtualization"],
-      verbs: ["inspect", "manage", "start", "stop"],
-      nouns: ["proxmox", "vm", "lxc", "node", "storage"],
-    }),
-  },
-  portainer: {
-    kind: "mixed",
-    weight: "standard",
-    recommend: rec({
-      domains: ["infra", "containers"],
-      verbs: ["inspect", "manage", "upgrade", "restart"],
-      nouns: ["portainer", "container", "image", "stack", "docker"],
-    }),
-  },
   mcp: {
     kind: "mixed",
     weight: "standard",
