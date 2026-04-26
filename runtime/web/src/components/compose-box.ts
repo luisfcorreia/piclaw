@@ -902,6 +902,9 @@ export function ComposeBox({
             chats.push(chat);
         }
         chats.sort((a, b) => {
+            const archivedA = Boolean(a?.archived_at);
+            const archivedB = Boolean(b?.archived_at);
+            if (archivedA !== archivedB) return archivedA ? 1 : -1;
             const nameA = (a?.agent_name || '').toLowerCase();
             const nameB = (b?.agent_name || '').toLowerCase();
             return nameA.localeCompare(nameB);
@@ -2321,9 +2324,9 @@ export function ComposeBox({
                                                 }}
                                             >
                                                 <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                                    <rect x="2.25" y="2.25" width="8.5" height="8.5" rx="1.5"/>
-                                                    <path d="M8.5 2.25h5.25v5.25"/>
-                                                    <path d="M13.75 2.25 7.75 8.25"/>
+                                                    <path d="M6 2h8v8"/>
+                                                    <path d="M14 2 7 9"/>
+                                                    <path d="M12 9v5H2V4h5"/>
                                                 </svg>
                                             </button>
                                             ${(canPrune || canPurgeArchived) && html`
