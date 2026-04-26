@@ -626,9 +626,9 @@ function App() {
     return html`<${MainApp} locationParams=${locationParams} navigate=${navigate} />`;
 }
 
-// Mount the app — clear container first to prevent double render from stale caches
+// Mount the app — unmount any existing tree first to prevent stacking
 const appRoot = document.getElementById('app');
 if (appRoot) {
-    appRoot.innerHTML = '';
+    render(null, appRoot);
     render(html`<${App} />`, appRoot);
 }
