@@ -97,7 +97,6 @@ export function getAttachmentPreviewKind(contentType: unknown, filename?: unknow
   const addonPreview = resolveAddonAttachmentPreview(contentType, filename);
   if (addonPreview?.id) return addonPreview.id;
   const normalized = normalize(contentType);
-  if (isEmlFilename(filename) || EML_PREVIEW_TYPES.has(normalized)) return "eml";
   if (isPdfFilename(filename) || normalized === "application/pdf") return "pdf";
   if (isOfficeFilename(filename) || OFFICE_PREVIEW_TYPES.has(normalized)) return "office";
   if (isArchiveFilename(filename) || ARCHIVE_PREVIEW_TYPES.has(normalized)) return "archive";
