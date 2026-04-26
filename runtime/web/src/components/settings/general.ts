@@ -158,13 +158,13 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
             <h3>Identity</h3>
             <div class="settings-row">
                 <label>User</label>
-                <input type="text" value=${userName} onInput=${e => setUserName(e.target.value)} placeholder="Your name" />
                 <${AvatarField} value=${userAvatar} onChange=${setUserAvatar} />
+                <input type="text" value=${userName} onInput=${e => setUserName(e.target.value)} placeholder="Your name" />
             </div>
             <div class="settings-row">
                 <label>Agent</label>
-                <input type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} placeholder="Agent name" />
                 <${AvatarField} value=${assistantAvatar} onChange=${setAssistantAvatar} />
+                <input type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} placeholder="Agent name" />
             </div>
 
             <h3 style="margin-top:20px">Session</h3>
