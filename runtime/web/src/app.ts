@@ -179,22 +179,28 @@ function MainApp({ locationParams, navigate }) {
                 const agentId = 'default';
                 surface.setAgents((prev) => {
                     const existing = prev[agentId] || { id: agentId };
-                    const next = { ...existing };
-                    if (name && !next.name) next.name = name;
-                    if (avatarUrl && !next.avatar_url) next.avatar_url = avatarUrl;
-                    return { ...prev, [agentId]: next };
+                    const nameChanged = name && !existing.name;
+                    const avatarChanged = avatarUrl && !existing.avatar_url;
+                    if (!nameChanged && !avatarChanged) return prev;
+                    return { ...prev, [agentId]: { ...existing, ...(nameChanged ? { name } : {}), ...(avatarChanged ? { avatar_url: avatarUrl } : {}) } };
                 });
             }
             const userName = identity.user_name;
             const userAvatarUrl = identity.user_avatar_url;
             const userAvatarBg = identity.user_avatar_background;
             if (userName || userAvatarUrl) {
-                surface.setUserProfile((prev) => ({
-                    ...prev,
-                    ...(userName && !prev.name ? { name: userName } : {}),
-                    ...(userAvatarUrl && !prev.avatar_url ? { avatar_url: userAvatarUrl } : {}),
-                    ...(userAvatarBg && !prev.avatar_background ? { avatar_background: userAvatarBg } : {}),
-                }));
+                surface.setUserProfile((prev) => {
+                    const nameChanged = userName && !prev.name;
+                    const avatarChanged = userAvatarUrl && !prev.avatar_url;
+                    const bgChanged = userAvatarBg && !prev.avatar_background;
+                    if (!nameChanged && !avatarChanged && !bgChanged) return prev;
+                    return {
+                        ...prev,
+                        ...(nameChanged ? { name: userName } : {}),
+                        ...(avatarChanged ? { avatar_url: userAvatarUrl } : {}),
+                        ...(bgChanged ? { avatar_background: userAvatarBg } : {}),
+                    };
+                });
             }
         }, [surface.setAgents, surface.setUserProfile]),
     });
