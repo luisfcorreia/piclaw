@@ -901,6 +901,11 @@ export function ComposeBox({
             seen.add(chatJid);
             chats.push(chat);
         }
+        chats.sort((a, b) => {
+            const nameA = (a?.agent_name || '').toLowerCase();
+            const nameB = (b?.agent_name || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
         return chats;
     }, [activeChatAgents, currentChatJid]);
     const hasSwitchableChatAgents = switchableChatAgents.length > 0;
