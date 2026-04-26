@@ -79,10 +79,10 @@ export function NumberStepper({
             >−</button>
             <input
                 class="settings-number-input"
-                type="number"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 value=${localValue}
-                min=${min}
-                max=${max}
                 disabled=${disabled}
                 style=${`width:${width}`}
                 onInput=${(e) => {

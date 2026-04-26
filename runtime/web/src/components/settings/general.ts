@@ -118,14 +118,16 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
         composeUploadLimitMb, workspaceUploadLimitMb, toolUseBudget,
     ]);
 
-    // Auto-save on every change with debounce
+    // Auto-save on every change with debounce.
+    // Skip if a number input is actively focused (user is still typing a value).
     useEffect(() => {
         if (currentSnapshot === savedSnapshotRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         saveTimerRef.current = setTimeout(async () => {
             if (!mountedRef.current) return;
+            const active = document.activeElement;
+            if (active && active.closest?.('.settings-number-stepper')) return;
             try {
-                const parsed = JSON.parse(currentSnapshot);
                 const response = await fetch('/agent/settings/general', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -138,8 +140,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                 mergeSettingsData?.(payload.settings);
                 setAppliedHint(true);
                 setTimeout(() => { if (mountedRef.current) setAppliedHint(false); }, 4000);
-            } catch (e) { void e; /* best-effort hint reset */ }
-        }, 600);
+            } catch { /* silent */ }
+        }, 800);
         return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
     }, [currentSnapshot, mergeSettingsData]);
 
