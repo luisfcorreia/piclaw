@@ -72,6 +72,11 @@ function readWidgetNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function truncateErrorDetail(msg: string, maxLen = 120): string {
+  const s = String(msg || "").trim();
+  return s.length <= maxLen ? s : s.slice(0, maxLen) + "…";
+}
+
 function buildGeneratedWidgetPayload(
   args: unknown,
   base: Record<string, unknown>,
@@ -562,7 +567,7 @@ export function createStreamingEventHandler(options: StreamingEventHandlerOption
         ? ` · ${Math.max(0, Math.round(e.delayMs / 1000))}s delay`
         : "";
       const reasonOrError = e.errorMessage && e.errorMessage !== e.reason
-        ? (e.reason ? `${e.reason} (${e.errorMessage})` : e.errorMessage)
+        ? (e.reason ? `${e.reason}` : truncateErrorDetail(e.errorMessage))
         : (e.reason || null);
       const detail = `Attempt ${e.attempt ?? "?"}/${e.maxAttempts ?? "?"}${delaySuffix}${reasonOrError ? ` — ${reasonOrError}` : ""}`;
       options.emitter.status({
