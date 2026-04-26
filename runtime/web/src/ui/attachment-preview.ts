@@ -99,6 +99,7 @@ export function getAttachmentPreviewKind(contentType: unknown, filename?: unknow
   const normalized = normalize(contentType);
   if (isPdfFilename(filename) || normalized === "application/pdf") return "pdf";
   if (isOfficeFilename(filename) || OFFICE_PREVIEW_TYPES.has(normalized)) return "office";
+  if (isEmlFilename(filename) || EML_PREVIEW_TYPES.has(normalized)) return "eml";
   if (isArchiveFilename(filename) || ARCHIVE_PREVIEW_TYPES.has(normalized)) return "archive";
   if (isHtmlFilename(filename) || normalized === "text/html") return "html";
   if (isTextFilename(filename)) return "text";
