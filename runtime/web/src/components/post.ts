@@ -32,7 +32,7 @@ function FileAttachment({ mediaId, onPreview }) {
     const size = info.metadata?.size;
     const sizeStr = size ? formatFileSize(size) : '';
     const previewKind = getAttachmentPreviewKind(info.content_type, info.filename);
-    const previewLabel = previewKind === 'unsupported' ? 'Details' : 'Preview';
+    const canPreview = previewKind !== 'unsupported';
 
     return html`
         <div class="file-attachment" onClick=${(e) => e.stopPropagation()}>
@@ -57,17 +57,19 @@ function FileAttachment({ mediaId, onPreview }) {
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
             </a>
-            <button
-                class="file-attachment-preview"
-                type="button"
-                onClick=${(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onPreview?.({ mediaId, info });
-                }}
-            >
-                ${previewLabel}
-            </button>
+            ${canPreview && html`
+                <button
+                    class="file-attachment-preview"
+                    type="button"
+                    onClick=${(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onPreview?.({ mediaId, info });
+                    }}
+                >
+                    Preview
+                </button>
+            `}
         </div>
     `;
 }
@@ -218,7 +220,7 @@ function AttachmentPill({ attachment, onPreview }) {
     const filename = info?.filename || attachment.label || `attachment-${attachment.id}`;
     const downloadHref = Number.isFinite(mediaId) ? getMediaUrl(mediaId) : null;
     const previewKind = getAttachmentPreviewKind(info?.content_type, info?.filename || attachment?.label);
-    const previewLabel = previewKind === 'unsupported' ? 'Details' : 'Preview';
+    const canPreview = previewKind !== 'unsupported';
 
     return html`
         <span class="attachment-pill" title=${filename}>
@@ -239,7 +241,7 @@ function AttachmentPill({ attachment, onPreview }) {
                         title=${filename}
                     />
                 `}
-            ${Number.isFinite(mediaId) && info && html`
+            ${Number.isFinite(mediaId) && info && canPreview && html`
                 <button
                     class="attachment-pill-preview"
                     type="button"
