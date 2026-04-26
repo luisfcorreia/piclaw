@@ -685,8 +685,7 @@
 
 .post-content th:first-child,
 .post-content td:first-child {
-    white-space: nowrap;
-    min-width: 120px;
+    white-space: normal;
 }
 
 .compose-command-notice table {
@@ -800,11 +799,10 @@
     opacity: 0.65;
 }
 .post-content table {
-    display: block;
+    display: table;
     border-collapse: collapse;
     margin: 0.5em 0;
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
     max-width: 100%;
     overflow-x: auto;
     font-size: 0.9em;
@@ -814,17 +812,17 @@
 .post-content th,
 .post-content td {
     border: 1px solid var(--border-color);
-    padding: 0.4em 0.6em;
+    padding: 0.4em 0.75em;
     text-align: left;
     white-space: normal;
     overflow-wrap: break-word;
     word-break: normal;
-    hyphens: auto;
 }
 
 .post-content th:first-child,
 .post-content td:first-child {
     width: auto;
+    white-space: normal;
 }
 
 .post-content th {
