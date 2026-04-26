@@ -620,5 +620,9 @@ function App() {
     return html`<${MainApp} locationParams=${locationParams} navigate=${navigate} />`;
 }
 
-// Mount the app
-render(html`<${App} />`, document.getElementById('app'));
+// Mount the app — clear container first to prevent double render from stale caches
+const appRoot = document.getElementById('app');
+if (appRoot) {
+    appRoot.innerHTML = '';
+    render(html`<${App} />`, appRoot);
+}
