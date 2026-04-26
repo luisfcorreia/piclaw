@@ -20,6 +20,7 @@ import {
 } from "../handlers/addons.js";
 import { getGeneralSettingsData, saveGeneralSettings } from "../handlers/general-settings.js";
 import { getQuickActionsSettingsData, saveQuickActionsSettings } from "../handlers/quick-actions-settings.js";
+import { getWorkspaceSettingsData, saveWorkspaceSettings } from "../handlers/workspace-settings.js";
 import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
@@ -312,6 +313,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       return channel.json({
         ...getGeneralSettingsData(),
         quickActions: getQuickActionsSettingsData(),
+        workspaceSettings: getWorkspaceSettingsData(),
         providers,
         themes,
         colorKeys: [...THEME_LIST_COLOR_KEYS],
@@ -362,6 +364,20 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message || "Failed to save general settings." }, 400);
+      }
+    },
+  },
+  {
+    method: "POST",
+    path: "/agent/settings/workspace",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({}));
+        const saved = saveWorkspaceSettings((body && typeof body === "object") ? body as Record<string, unknown> : {});
+        return channel.json({ ok: true, settings: saved });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message || "Failed to save workspace settings." }, 400);
       }
     },
   },

@@ -65,6 +65,8 @@ describe("core config", () => {
           PICLAW_VNC_ALLOW_DIRECT: undefined,
           PICLAW_WEB_VNC_TARGETS: undefined,
           PICLAW_VNC_TARGETS: undefined,
+          PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
+          PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
           PICLAW_TRUST_PROXY: "0",
           // Unset remote interop env vars so the config file values are authoritative
           PICLAW_REMOTE_INTEROP_ENABLED: undefined,
@@ -134,7 +136,7 @@ describe("core config", () => {
           debugCardSubmissions: true,
           trustProxy: false,
           composeUploadLimitMb: 32,
-          workspaceUploadLimitMb: 512,
+          workspaceUploadLimitMb: 256,
         });
         expect(config.getToolActivationConfig()).toEqual({
           additionalDefaultTools: ["search_workspace", "introspect_sql"],

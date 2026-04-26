@@ -49,22 +49,59 @@ export const footnoteExtension = {
     }],
 };
 
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+type FootnoteDocIndex = {
+    definitionByRef: Map<string, number>;
+    refPositionsByRef: Map<string, number[]>;
+};
+
+const footnoteDocIndexCache = new WeakMap<object, FootnoteDocIndex>();
+
+function buildFootnoteDocIndex(doc: any): FootnoteDocIndex {
+    const text = doc.sliceString(0, doc.length);
+    const definitionByRef = new Map<string, number>();
+    const refPositionsByRef = new Map<string, number[]>();
+
+    const definitionRe = /^\[\^([\w-]+)\]:/gm;
+    let match: RegExpExecArray | null;
+    while ((match = definitionRe.exec(text)) !== null) {
+        const ref = match[1];
+        if (!definitionByRef.has(ref)) {
+            definitionByRef.set(ref, match.index);
+        }
+    }
+
+    const refRe = /\[\^([\w-]+)\](?!:)/g;
+    while ((match = refRe.exec(text)) !== null) {
+        const ref = match[1];
+        const positions = refPositionsByRef.get(ref) || [];
+        positions.push(match.index);
+        refPositionsByRef.set(ref, positions);
+    }
+
+    return { definitionByRef, refPositionsByRef };
+}
+
+function getFootnoteDocIndex(view: EditorView): FootnoteDocIndex {
+    const doc = view.state.doc as object;
+    const cached = footnoteDocIndexCache.get(doc);
+    if (cached) return cached;
+    const built = buildFootnoteDocIndex(view.state.doc);
+    footnoteDocIndexCache.set(doc, built);
+    return built;
 }
 
 function findFootnoteDefinitionPos(view: EditorView, ref: string): number | null {
-    const text = view.state.doc.sliceString(0, view.state.doc.length);
-    const re = new RegExp(`^\\[\\^${escapeRegExp(ref)}\\]:`, 'm');
-    const match = re.exec(text);
-    return match ? match.index : null;
+    return getFootnoteDocIndex(view).definitionByRef.get(ref) ?? null;
 }
 
 function findFirstFootnoteRefPos(view: EditorView, ref: string, beforePos = view.state.doc.length): number | null {
-    const text = view.state.doc.sliceString(0, Math.max(0, beforePos));
-    const re = new RegExp(`\\[\\^${escapeRegExp(ref)}\\](?!:)`, 'g');
-    const match = re.exec(text);
-    return match ? match.index : null;
+    const positions = getFootnoteDocIndex(view).refPositionsByRef.get(ref);
+    if (!positions || positions.length === 0) return null;
+    for (const pos of positions) {
+        if (pos >= beforePos) break;
+        return pos;
+    }
+    return null;
 }
 
 function parseFootnoteDefinitionLine(text: string): { ref: string; labelEndOffset: number; contentOffset: number } | null {

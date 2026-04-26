@@ -139,6 +139,25 @@ test('parseQueuedContent extracts file, message, and attachment refs from transc
   ]);
 });
 
+test('parseQueuedContent normalizes backtick-wrapped file refs from Files blocks', () => {
+  const parsed = parseQueuedContent([
+    'Channel: web',
+    '',
+    'Rui Carmo @ 2026-04-26T18:11:58.022Z:',
+    '  Fixed it.',
+    '  ',
+    '  Files:',
+    '  - `piclaw/runtime/extensions/viewers/editor/markdown/code-block.ts`',
+    '  - `piclaw/runtime/web/static/dist/editor.bundle.js`',
+  ].join('\n'));
+
+  expect(parsed.text).toBe('Fixed it.');
+  expect(parsed.fileRefs).toEqual([
+    'piclaw/runtime/extensions/viewers/editor/markdown/code-block.ts',
+    'piclaw/runtime/web/static/dist/editor.bundle.js',
+  ]);
+});
+
 test('buildReturnedQueuedDraft restores refs and preserves attachment markers in compose text', () => {
   const restored = buildReturnedQueuedDraft([
     'Channel: web',

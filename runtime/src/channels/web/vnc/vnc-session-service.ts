@@ -192,7 +192,7 @@ function createHandoffToken(): string {
 /** Manages allowlisted/direct VNC target metadata and per-websocket TCP bridge sessions. */
 export class VncSessionService {
   private readonly targets = new Map<string, VncTargetRecord>();
-  private readonly allowDirectTargets: boolean;
+  private readonly allowDirectTargetsOverride: boolean | null;
   private readonly createSocket: (target: VncTargetRecord) => Socket;
   private readonly connectTimeoutMs: number;
   private readonly handoffTtlMs: number;
@@ -208,9 +208,9 @@ export class VncSessionService {
     for (const target of configured) {
       this.targets.set(target.id, target);
     }
-    this.allowDirectTargets = typeof options.allowDirectTargets === "boolean"
+    this.allowDirectTargetsOverride = typeof options.allowDirectTargets === "boolean"
       ? options.allowDirectTargets
-      : webRuntimeConfig.vncAllowDirect;
+      : null;
     this.createSocket = options.createSocket || defaultCreateSocket;
     this.connectTimeoutMs = Number.isFinite(options.connectTimeoutMs)
       ? Math.max(1, Number(options.connectTimeoutMs))
@@ -278,8 +278,13 @@ export class VncSessionService {
    * Report whether direct host:port VNC targets are enabled.
    * @returns True when direct-connect targets are permitted.
    */
+  private getAllowDirectTargets(): boolean {
+    if (typeof this.allowDirectTargetsOverride === "boolean") return this.allowDirectTargetsOverride;
+    return getWebRuntimeConfig().vncAllowDirect;
+  }
+
   isDirectConnectEnabled(): boolean {
-    return this.allowDirectTargets;
+    return this.getAllowDirectTargets();
   }
 
   /**
@@ -312,7 +317,7 @@ export class VncSessionService {
   resolveTargetReference(targetRef: string): VncTargetRecord | null {
     const allowlisted = this.getTarget(targetRef);
     if (allowlisted) return allowlisted;
-    if (!this.allowDirectTargets) return null;
+    if (!this.getAllowDirectTargets()) return null;
     return parseDirectVncTargetReference(targetRef);
   }
 
@@ -375,15 +380,16 @@ export class VncSessionService {
    * @returns Transport metadata, allowlist exposure, and optional target details for the UI.
    */
   getSessionInfo(targetRef?: string | null) {
+    const allowDirectTargets = this.getAllowDirectTargets();
     const target = targetRef ? this.resolveTargetReference(targetRef) : null;
     const isDirectTarget = Boolean(target && !this.targets.has(target.id));
     return {
-      enabled: this.targets.size > 0 || this.allowDirectTargets,
+      enabled: this.targets.size > 0 || allowDirectTargets,
       transport: "websocket",
       ws_path: "/vnc/ws",
       renderer: "placeholder",
-      host_policy: this.allowDirectTargets ? "allowlist+direct-opt-in" : "allowlist",
-      direct_connect_enabled: this.allowDirectTargets,
+      host_policy: allowDirectTargets ? "allowlist+direct-opt-in" : "allowlist",
+      direct_connect_enabled: allowDirectTargets,
       targets: this.getTargets(),
       ...(target ? {
         target: {

@@ -51,7 +51,7 @@ describe("audit-baseline-quality-deterministic", () => {
     expect(lines).toContain("channels-web-media-workspace-remote\t17\tchannels web media, workspace, and remote surfaces");
     expect(lines).toContain("web-ui-interaction-and-state\t89\tweb ui interaction and state");
     expect(lines).toContain("web-ui-rendering-and-panes\t65\tweb ui rendering and panes");
-    expect(lines).toContain("web-ui-remote-and-workspace\t14\tweb ui remote and workspace");
+    expect(lines).toContain("web-ui-remote-and-workspace\t16\tweb ui remote and workspace");
   });
 
   test("follow-up ticket markdown captures reproducible failure evidence", () => {

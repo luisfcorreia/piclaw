@@ -10,6 +10,7 @@
 
 import { buildTree } from "./tree.js";
 import { resolveWorkspacePath } from "./paths.js";
+import { getWorkspaceScanSettings } from "./settings.js";
 
 /** Cached tree result type: array of tree nodes. */
 export type WorkspaceTreeResult = { status: number; body: unknown };
@@ -37,10 +38,13 @@ export class WorkspaceTreeCache {
     const targetPath = resolveWorkspacePath(pathParam);
     if (!targetPath) return { status: 400, body: { error: "Invalid path" } };
 
+    const settings = getWorkspaceScanSettings();
     const depthRaw = parseInt(depthParam || "2", 10);
-    const depth = Number.isFinite(depthRaw) ? Math.min(Math.max(depthRaw, 1), 8) : 2;
+    const depth = Number.isFinite(depthRaw)
+      ? Math.min(Math.max(depthRaw, 1), settings.treeMaxDepth)
+      : Math.min(2, settings.treeMaxDepth);
 
-    const cacheKey = `${targetPath}|${depth}|${includeHidden ? "1" : "0"}`;
+    const cacheKey = `${targetPath}|${depth}|${settings.treeMaxEntries}|${includeHidden ? "1" : "0"}`;
     const cached = this.treeCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < 1000) {
       return cached.result;
@@ -51,7 +55,7 @@ export class WorkspaceTreeCache {
     }
 
     try {
-      const state = { count: 0, truncated: false };
+      const state = { count: 0, truncated: false, maxEntries: settings.treeMaxEntries };
       const tree = buildTree(targetPath, depth, state, { includeHidden });
       const result = { status: 200, body: { root: tree, truncated: state.truncated } };
       this.treeCache.set(cacheKey, { timestamp: Date.now(), result });

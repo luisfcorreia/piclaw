@@ -22,7 +22,7 @@ import { isHiddenPath, resolveWorkspacePath, shouldIgnorePath, toRelativePath } 
 const log = createLogger("web.workspace.file-service");
 
 function getWorkspaceUploadMaxBytes(): number {
-  return Math.max(1, Math.round((getWebRuntimeConfig().workspaceUploadLimitMb || 512) * 1024 * 1024));
+  return Math.max(1, Math.round((getWebRuntimeConfig().workspaceUploadLimitMb || 256) * 1024 * 1024));
 }
 
 type FflateModule = typeof import("fflate");

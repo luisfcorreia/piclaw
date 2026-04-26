@@ -52,3 +52,17 @@ test('workspace upload limit setting applies immediately to WorkspaceFileService
     rmSync(targetDir, { recursive: true, force: true });
   }
 });
+
+test('workspace upload limit setting accepts 1024 MB', async () => {
+  const handler = await import('../../src/channels/web/handlers/general-settings.js');
+  const configModule = await import('../../src/core/config.js');
+
+  const previousLimit = configModule.getWebRuntimeConfig().workspaceUploadLimitMb;
+  try {
+    const saved = await handler.saveGeneralSettings({ workspaceUploadLimitMb: 1024 });
+    expect(saved.workspaceUploadLimitMb).toBe(1024);
+    expect(configModule.getWebRuntimeConfig().workspaceUploadLimitMb).toBe(1024);
+  } finally {
+    await handler.saveGeneralSettings({ workspaceUploadLimitMb: previousLimit });
+  }
+});

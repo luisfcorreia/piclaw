@@ -22,6 +22,7 @@ const log = createLogger("web.workspace-tree");
 export interface WorkspaceTreeState {
   count: number;
   truncated: boolean;
+  maxEntries?: number;
 }
 
 function listDirEntries(absPath: string, includeHidden: boolean) {
@@ -68,8 +69,10 @@ export function buildTree(
     children: [],
   };
 
+  const maxEntries = Number.isFinite(state.maxEntries) ? Math.max(1, Number(state.maxEntries)) : MAX_TREE_ENTRIES;
+
   state.count += 1;
-  if (state.count > MAX_TREE_ENTRIES) {
+  if (state.count > maxEntries) {
     state.truncated = true;
     node.children = undefined;
     return node;
@@ -98,7 +101,7 @@ export function buildTree(
 
   node.children = [];
   for (const entry of entries) {
-    if (state.count >= MAX_TREE_ENTRIES) {
+    if (state.count >= maxEntries) {
       state.truncated = true;
       break;
     }

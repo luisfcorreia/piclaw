@@ -184,7 +184,7 @@ export async function saveGeneralSettings(input: GeneralSettingsInput): Promise<
     setWebComposeUploadLimitMb(nextComposeUploadLimitMb);
   }
 
-  const nextWorkspaceUploadLimitMb = normalizeOptionalInt(input.workspaceUploadLimitMb, 1, 512);
+  const nextWorkspaceUploadLimitMb = normalizeOptionalInt(input.workspaceUploadLimitMb, 1, 1024);
   if (nextWorkspaceUploadLimitMb !== undefined) {
     setWebWorkspaceUploadLimitMb(nextWorkspaceUploadLimitMb);
   }

@@ -118,6 +118,26 @@ test("allows compaction recovery despite tool activity when error is context-pre
   expect(decision.strategy).toBe("compact_then_retry");
 });
 
+test("treats tool-use budget exhaustion as compact-then-retry tool-history pressure", () => {
+  const decision = decideAutomaticRecovery({
+    config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
+    errorText: "Tool-use budget exceeded before finalization (65/64 tool steps).",
+    recoveryAttemptsUsed: 0,
+    elapsedMs: 1000,
+    snapshot: {
+      hadToolActivity: true,
+      hadPartialOutput: false,
+      toolUseBudgetExceeded: true,
+      assistantToolUseMessageCount: 65,
+      toolExecutionCount: 64,
+    },
+  });
+
+  expect(decision.recover).toBe(true);
+  expect(decision.classifier).toBe("tool_history_pressure");
+  expect(decision.strategy).toBe("compact_then_retry");
+});
+
 test("stops recovery after the configured attempt budget", () => {
   const decision = decideAutomaticRecovery({
     config: { ...DEFAULT_AUTOMATIC_RECOVERY_CONFIG, maxAttempts: 2, totalBudgetMs: 30_000, enabled: true },

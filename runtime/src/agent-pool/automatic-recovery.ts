@@ -27,6 +27,7 @@ export type RecoveryClassifier =
   | "tool_activity"
   | "completed_turn_output"
   | "context_pressure"
+  | "tool_history_pressure"
   | "transient"
   | "compaction_failure"
   | "unknown";
@@ -39,6 +40,9 @@ export interface RecoveryAttemptSnapshot {
   sawCompactionIntent?: boolean;
   sawAssistantToolCall?: boolean;
   onlyReadOnlyToolActivity?: boolean;
+  toolUseBudgetExceeded?: boolean;
+  assistantToolUseMessageCount?: number;
+  toolExecutionCount?: number;
 }
 
 export interface RecoveryDecision {
@@ -115,7 +119,7 @@ export function getAutomaticRecoveryDelayMs(config: Pick<AutomaticRecoveryConfig
 
 export function isContextPressureFailure(errorText: string | null | undefined): boolean {
   if (!errorText) return false;
-  return /context(?: window| length)?|maximum context length|context_length|token limit|too many tokens|prompt too long|reduce (?:the )?length|overflow|request too large/i.test(errorText);
+  return /context(?: window| length)?|maximum context length|context_length|token limit|too many tokens|prompt too long|reduce (?:the )?length|overflow|request too large|tool(?:-| )use budget exceeded|tool history pressure|too many tool (?:steps|calls)/i.test(errorText);
 }
 
 export function isTransientFailure(errorText: string | null | undefined): boolean {
@@ -159,6 +163,8 @@ export function formatRecoverySummary(recovery: AgentRecoveryMetadata | null | u
 
 export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryDecision {
   const errorText = String(input.errorText || "").trim();
+  const toolHistoryPressure = Boolean(input.snapshot.toolUseBudgetExceeded)
+    || /tool(?:-| )use budget exceeded|tool history pressure|too many tool (?:steps|calls)/i.test(errorText);
 
   if (!input.config.enabled) {
     return {
@@ -183,6 +189,14 @@ export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryD
     // only allowed for clearly context-related failures. Generic retries could
     // re-run side-effecting tools, so exhausted/no-terminal runs are held for
     // explicit retry/skip resolution instead.
+    if (toolHistoryPressure) {
+      return {
+        recover: true,
+        classifier: "tool_history_pressure",
+        strategy: "compact_then_retry",
+        reason: "Turn exceeded the tool-history budget before finalization; compacting before retrying.",
+      };
+    }
     if (isContextPressureFailure(errorText) || input.snapshot.sawCompactionIntent) {
       return {
         recover: true,
@@ -220,6 +234,15 @@ export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryD
       classifier: "completed_turn_output",
       strategy: null,
       reason: "Automatic recovery skipped because a completed assistant turn was already emitted during the failed run.",
+    };
+  }
+
+  if (toolHistoryPressure) {
+    return {
+      recover: true,
+      classifier: "tool_history_pressure",
+      strategy: "compact_then_retry",
+      reason: "Turn exceeded the tool-history budget before finalization; compacting before retrying.",
     };
   }
 

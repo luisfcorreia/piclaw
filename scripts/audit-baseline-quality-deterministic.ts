@@ -477,7 +477,7 @@ const groupDefinitions: GroupDefinition[] = [
   {
     id: "web-ui-remote-and-workspace",
     label: "web ui remote and workspace",
-    notes: "Workspace preview/scale flows plus client-side remote display and VNC behavior.",
+    notes: "Workspace preview/settings/cache flows plus client-side remote display and VNC behavior.",
     match: (relativePath) =>
       relativePath.startsWith("web/") && (
         basenameIsOneOf(relativePath, [
@@ -490,6 +490,8 @@ const groupDefinitions: GroupDefinition[] = [
           "workspace-explorer.test.ts",
           "workspace-preview-pane.test.ts",
           "workspace-scale.test.ts",
+          "workspace-settings-handler.test.ts",
+          "workspace-tree-cache-settings.test.ts",
           "workspace-visibility.test.ts",
           "remote-display-gc.test.ts",
           "remote-display-socket.test.ts",

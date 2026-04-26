@@ -514,10 +514,16 @@ export function isDefaultWebVncDirectEnabled(platform = process.platform): boole
   return platform === "linux" || platform === "darwin" || platform === "win32";
 }
 
-function clampWebUploadLimitMb(value: unknown, fallback: number): number {
+function clampComposeUploadLimitMb(value: unknown, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(512, Math.max(1, Math.round(parsed)));
+}
+
+function clampWorkspaceUploadLimitMb(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(1024, Math.max(1, Math.round(parsed)));
 }
 
 const nestedWebTerminalEnabled = pickBoolean(webConfig, ["terminalEnabled", "webTerminalEnabled", "PICLAW_WEB_TERMINAL_ENABLED"]);
@@ -573,13 +579,13 @@ export const WEB_RUNTIME_CONFIG: WebRuntimeConfig = Object.seal({
     "totp-fallback"
   ).toLowerCase(),
   terminalEnabled: envWebTerminalEnabled ?? nestedWebTerminalEnabled ?? legacyWebTerminalEnabled ?? isDefaultWebTerminalEnabled(),
-  composeUploadLimitMb: clampWebUploadLimitMb(
+  composeUploadLimitMb: clampComposeUploadLimitMb(
     envWebComposeUploadLimitMb ?? configWebComposeUploadLimitMb ?? legacyWebComposeUploadLimitMb,
     32,
   ),
-  workspaceUploadLimitMb: clampWebUploadLimitMb(
+  workspaceUploadLimitMb: clampWorkspaceUploadLimitMb(
     envWebWorkspaceUploadLimitMb ?? configWebWorkspaceUploadLimitMb ?? legacyWebWorkspaceUploadLimitMb,
-    512,
+    256,
   ),
   notificationDebugLabels: envWebNotificationDebugLabels ?? nestedWebNotificationDebugLabels ?? legacyWebNotificationDebugLabels ?? false,
   vncAllowDirect: envWebVncAllowDirect ?? nestedWebVncAllowDirect ?? legacyWebVncAllowDirect ?? isDefaultWebVncDirectEnabled(),
@@ -622,13 +628,37 @@ export function setWebTerminalEnabled(enabled: boolean): boolean {
   return WEB_RUNTIME_CONFIG.terminalEnabled;
 }
 
+export function setWebVncAllowDirect(enabled: boolean): boolean {
+  const nextEnabled = Boolean(enabled);
+  const config = readJsonConfig(getConfigPath());
+  const web =
+    config.web && typeof config.web === "object"
+      ? { ...(config.web as Record<string, unknown>) }
+      : {};
+  const webKeys = ["vncAllowDirect", "vnc_allow_direct", "webVncAllowDirect", "PICLAW_WEB_VNC_ALLOW_DIRECT", "PICLAW_VNC_ALLOW_DIRECT"];
+  for (const key of webKeys) {
+    delete web[key];
+    delete config[key];
+  }
+  web.vncAllowDirect = nextEnabled;
+  config.web = web;
+  delete config.webVncAllowDirect;
+  writeJsonConfig(getConfigPath(), config);
+
+  process.env.PICLAW_WEB_VNC_ALLOW_DIRECT = nextEnabled ? "1" : "0";
+  process.env.PICLAW_VNC_ALLOW_DIRECT = nextEnabled ? "1" : "0";
+  WEB_RUNTIME_CONFIG.vncAllowDirect = nextEnabled;
+  return WEB_RUNTIME_CONFIG.vncAllowDirect;
+}
+
 function persistWebNumberSetting(options: {
   keys: string[];
   value: number;
   envKey: string;
   runtimeKey: "composeUploadLimitMb" | "workspaceUploadLimitMb";
+  clamp: (value: unknown, fallback: number) => number;
 }): number {
-  const nextValue = clampWebUploadLimitMb(options.value, WEB_RUNTIME_CONFIG[options.runtimeKey]);
+  const nextValue = options.clamp(options.value, WEB_RUNTIME_CONFIG[options.runtimeKey]);
   const config = readJsonConfig(getConfigPath());
   const web =
     config.web && typeof config.web === "object"
@@ -655,6 +685,7 @@ export function setWebComposeUploadLimitMb(limitMb: number): number {
     value: limitMb,
     envKey: "PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB",
     runtimeKey: "composeUploadLimitMb",
+    clamp: clampComposeUploadLimitMb,
   });
 }
 
@@ -664,6 +695,7 @@ export function setWebWorkspaceUploadLimitMb(limitMb: number): number {
     value: limitMb,
     envKey: "PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB",
     runtimeKey: "workspaceUploadLimitMb",
+    clamp: clampWorkspaceUploadLimitMb,
   });
 }
 

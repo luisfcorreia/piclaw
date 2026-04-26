@@ -16,7 +16,7 @@ class CodeBlockMonospacePlugin {
     }
 
     update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        if (update.docChanged || update.viewportChanged) {
             this.decorations = this.buildDecorations(update.view);
         }
     }

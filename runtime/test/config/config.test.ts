@@ -252,7 +252,7 @@ test("config and env fallback chains handle booleans and session settings", () =
       debugCardSubmissions: true,
       trustProxy: false,
       composeUploadLimitMb: 32,
-      workspaceUploadLimitMb: 512,
+      workspaceUploadLimitMb: 256,
     });
     expect(snapshot.SESSION_STORAGE_CONFIG).toEqual({
       maxSizeMb: 8,
@@ -576,6 +576,8 @@ test("web runtime config getter groups auth/session/proxy settings", async () =>
       PICLAW_VNC_ALLOW_DIRECT: undefined,
       PICLAW_WEB_VNC_TARGETS: undefined,
       PICLAW_VNC_TARGETS: undefined,
+      PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
+      PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
       PICLAW_DEBUG_CARD_SUBMISSIONS: "yes",
     },
     async (ws) => {
@@ -610,7 +612,7 @@ test("web runtime config getter groups auth/session/proxy settings", async () =>
         debugCardSubmissions: true,
         trustProxy: false,
         composeUploadLimitMb: 32,
-        workspaceUploadLimitMb: 512,
+        workspaceUploadLimitMb: 256,
       });
     },
   );
@@ -714,6 +716,8 @@ test("in-process module init handles deprecated env warnings, argv parsing, and 
       PICLAW_VNC_ALLOW_DIRECT: undefined,
       PICLAW_WEB_VNC_TARGETS: undefined,
       PICLAW_VNC_TARGETS: undefined,
+      PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
+      PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
       PICLAW_DEBUG_CARD_SUBMISSIONS: "off",
       PICLAW_SESSION_MAX_SIZE_MB: "64",
       PICLAW_SESSION_AUTO_ROTATE: "on",
@@ -772,7 +776,7 @@ test("in-process module init handles deprecated env warnings, argv parsing, and 
           debugCardSubmissions: false,
           trustProxy: false,
           composeUploadLimitMb: 32,
-          workspaceUploadLimitMb: 512,
+          workspaceUploadLimitMb: 256,
         });
         expect(cfg.getWebRuntimeConfig()).toBe(cfg.WEB_RUNTIME_CONFIG);
         expect(cfg.SESSION_STORAGE_CONFIG).toEqual({

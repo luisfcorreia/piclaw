@@ -77,8 +77,7 @@ class LivePreviewPlugin {
         if (
             update.docChanged ||
             update.selectionSet ||
-            update.viewportChanged ||
-            update.transactions.length > 0
+            update.viewportChanged
         ) {
             this.decorations = this.buildDecorations(update.view);
         }
@@ -87,32 +86,36 @@ class LivePreviewPlugin {
     private buildDecorations(view: EditorView): DecorationSet {
         const tree = syntaxTree(view.state);
         const entries: DecorationEntry[] = [];
+        const doc = view.state.doc;
+        const cursorHead = view.state.selection.main.head;
+        const cursorLine = doc.lineAt(cursorHead);
 
         for (const { from, to } of view.visibleRanges) {
             tree.iterate({
                 from,
                 to,
                 enter(node) {
-                    const decorator = decorators.get(node.type.name);
+                    const nodeTypeName = node.type.name;
+                    const decorator = decorators.get(nodeTypeName);
                     if (!decorator) return;
 
-                    const isFrontmatter = node.type.name === 'FrontMatter';
-                    const isBlock = usesBlockCursorGate(node.type.name);
-                    const alwaysDecorate = isAlwaysDecoratedNode(node.type.name);
+                    const isFrontmatter = nodeTypeName === 'FrontMatter';
+                    const isBlock = usesBlockCursorGate(nodeTypeName);
+                    const alwaysDecorate = isAlwaysDecoratedNode(nodeTypeName);
 
                     if (!isFrontmatter && !alwaysDecorate) {
                         if (isBlock) {
                             // For block nodes: check if cursor's LINE is inside the block.
                             // Use line-level granularity so only the active line shows raw MD,
                             // not the entire multi-line block.
-                            const cursorLine = view.state.doc.lineAt(view.state.selection.main.head);
                             if (cursorLine.from >= node.from && cursorLine.from <= node.to) {
                                 return;
                             }
                         } else {
-                            // For inline nodes: check if cursor is on the same line
-                            const checkFrom = view.state.doc.lineAt(node.from).from;
-                            const checkTo = view.state.doc.lineAt(node.to).to;
+                            // For inline nodes: check if cursor is on the same line.
+                            const checkFrom = doc.lineAt(node.from).from;
+                            const safeTo = Math.max(node.from, Math.min(node.to, doc.length));
+                            const checkTo = doc.lineAt(safeTo).to;
                             if (cursorInRange(view, checkFrom, checkTo)) return;
                         }
                     }

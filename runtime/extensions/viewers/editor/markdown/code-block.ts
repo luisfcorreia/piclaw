@@ -24,6 +24,13 @@ const COPY_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="non
 const CHECK_ICON_SVG = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
 
 
+type HighlightedCodeBlock = {
+    codeText: string;
+    highlightedLines: string[];
+};
+
+const highlightedCodeBlockCache = new WeakMap<object, Map<string, HighlightedCodeBlock>>();
+
 async function writeToClipboard(text: string): Promise<boolean> {
     try {
         await navigator.clipboard.writeText(text);
@@ -166,6 +173,33 @@ class CodeBlockSpacerWidget extends WidgetType {
     }
 }
 
+function getHighlightedCodeBlock(doc: any, openLineNo: number, closeLineNo: number, lang: string): HighlightedCodeBlock {
+    const cacheKey = `${openLineNo}:${closeLineNo}:${lang}`;
+    const docKey = doc as object;
+    let docCache = highlightedCodeBlockCache.get(docKey);
+    if (!docCache) {
+        docCache = new Map<string, HighlightedCodeBlock>();
+        highlightedCodeBlockCache.set(docKey, docCache);
+    }
+
+    const cached = docCache.get(cacheKey);
+    if (cached) return cached;
+
+    let codeText = '';
+    if (closeLineNo > openLineNo + 1) {
+        const codeFrom = doc.line(openLineNo + 1).from;
+        const codeTo = doc.line(closeLineNo - 1).to;
+        codeText = doc.sliceString(codeFrom, codeTo);
+    }
+
+    const computed = {
+        codeText,
+        highlightedLines: highlightCodeLinesAsHtml(codeText, lang),
+    } satisfies HighlightedCodeBlock;
+    docCache.set(cacheKey, computed);
+    return computed;
+}
+
 function fencedCodeDecorator(node: SyntaxNode, view: EditorView): DecorationEntry[] {
     const entries: DecorationEntry[] = [];
     const doc = view.state.doc;
@@ -187,13 +221,7 @@ function fencedCodeDecorator(node: SyntaxNode, view: EditorView): DecorationEntr
     const openLine = doc.lineAt(openFence.from);
     const closeLine = doc.lineAt(closeFence.from);
 
-    let codeText = '';
-    if (closeLine.number > openLine.number + 1) {
-        const codeFrom = doc.line(openLine.number + 1).from;
-        const codeTo = doc.line(closeLine.number - 1).to;
-        codeText = doc.sliceString(codeFrom, codeTo);
-    }
-    const highlightedLines = highlightCodeLinesAsHtml(codeText, lang);
+    const { codeText, highlightedLines } = getHighlightedCodeBlock(doc, openLine.number, closeLine.number, lang);
 
     // Opening fence: replace text content with language badge + copy action
     entries.push({

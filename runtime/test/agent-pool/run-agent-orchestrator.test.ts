@@ -11,6 +11,7 @@ import { ensureSessionDir } from "../../src/agent-pool/session.js";
 import { getAttachmentRegistry } from "../../src/agent-pool/attachments.js";
 import { AgentTurnCoordinator } from "../../src/agent-pool/turn-coordinator.js";
 import { runAgentPrompt } from "../../src/agent-pool/run-agent-orchestrator.js";
+import { getToolUseMessageBudget, setToolUseMessageBudget } from "../../src/core/config.js";
 import { setEnv } from "../helpers.js";
 
 function createRuntime(session: any, retrySettings?: { enabled?: boolean; maxRetries?: number; baseDelayMs?: number; maxDelayMs?: number }): AgentSessionRuntime {
@@ -1018,6 +1019,108 @@ test("runAgentPrompt auto-compacts and retries when tool activity produced no te
       attemptsUsed: 2,
     });
   } finally {
+    restoreEnv();
+  }
+});
+
+test("runAgentPrompt auto-compacts and retries after tool-use budget exhaustion", async () => {
+  const restoreEnv = setEnv({
+    PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",
+    PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS: "2",
+    PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS: "30000",
+    PICLAW_TURN_MAX_TOOL_USE_MESSAGES: "1",
+  });
+  const previousToolUseBudget = getToolUseMessageBudget();
+  setToolUseMessageBudget(8);
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-1" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    promptCalls = 0;
+    compactCalls = 0;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      this.promptCalls += 1;
+      if (this.promptCalls === 1) {
+        for (const listener of this.listeners) {
+          for (let i = 1; i <= 9; i += 1) {
+            listener({
+              type: "message_end",
+              message: {
+                role: "assistant",
+                stopReason: "toolUse",
+                content: [{ type: "toolCall", id: `tool-${i}`, name: "read", arguments: { path: `/tmp/${i}` } }],
+              },
+            });
+            if (i < 9) {
+              listener({ type: "tool_execution_start", toolCallId: `tool-${i}`, toolName: "read", args: { path: `/tmp/${i}` } });
+              listener({ type: "tool_execution_end", toolCallId: `tool-${i}`, toolName: "read", isError: false });
+            }
+          }
+        }
+        return;
+      }
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "recovered after tool budget compaction" } });
+      }
+    }
+    async compact() {
+      this.compactCalls += 1;
+    }
+    async abort() {}
+  }
+
+  try {
+    const session = new StubSession();
+    const recoveryStarts: Array<{ classifier?: string; strategy?: string }> = [];
+    const turnCoordinator = new AgentTurnCoordinator({
+      takeAttachments: () => [],
+      touchSession: () => {},
+      recordMessageUsage: () => {},
+    });
+
+    const result = await runAgentPrompt("hello", "web:default", {
+      timeoutMs: 0,
+      onEvent: (event) => {
+        if (event.type === "recovery_start") {
+          recoveryStarts.push({
+            classifier: (event as any).classifier,
+            strategy: (event as any).strategy,
+          });
+        }
+      },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session) as any,
+      turnCoordinator,
+      clearAttachments: () => {},
+      takeAttachments: () => [],
+      logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {},
+      clearActiveForkBaseLeaf: () => {},
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.result).toBe("recovered after tool budget compaction");
+    expect(session.promptCalls).toBe(2);
+    expect(session.compactCalls).toBe(1);
+    expect(result.recovery).toEqual(expect.objectContaining({
+      attemptsUsed: 1,
+      recovered: true,
+      exhausted: false,
+      lastClassifier: "tool_history_pressure",
+      strategyHistory: ["compact_then_retry"],
+    }));
+    expect(recoveryStarts).toEqual([{ classifier: "tool_history_pressure", strategy: "compact_then_retry" }]);
+  } finally {
+    setToolUseMessageBudget(previousToolUseBudget);
     restoreEnv();
   }
 });

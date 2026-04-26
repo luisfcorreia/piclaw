@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { EventEmitter } from "node:events";
+
+import "../../helpers.js";
 import {
   parseDirectVncTargetReference,
   parseVncTargets,
@@ -114,5 +116,27 @@ describe("VncSessionService", () => {
       error: "Timed out connecting to VNC target 192.168.1.137:5917.",
     }));
     expect(ws.close).toHaveBeenCalled();
+  });
+
+  test("direct-target policy follows runtime config when no override is provided", async () => {
+    const configModule = await import("../../../src/core/config.js");
+    const previous = configModule.getWebRuntimeConfig().vncAllowDirect;
+
+    try {
+      configModule.setWebVncAllowDirect(false);
+      const service = new VncSessionService();
+      expect(service.isDirectConnectEnabled()).toBe(false);
+      expect(service.resolveTargetReference("192.168.1.137:5917")).toBeNull();
+
+      configModule.setWebVncAllowDirect(true);
+      expect(service.isDirectConnectEnabled()).toBe(true);
+      expect(service.resolveTargetReference("192.168.1.137:5917")).toMatchObject({
+        id: "192.168.1.137:5917",
+        host: "192.168.1.137",
+        port: 5917,
+      });
+    } finally {
+      configModule.setWebVncAllowDirect(previous);
+    }
   });
 });

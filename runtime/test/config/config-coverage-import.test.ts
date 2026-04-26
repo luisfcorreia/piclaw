@@ -25,6 +25,8 @@ test("plain import covers config module init branches with isolated argv and env
       PICLAW_VNC_ALLOW_DIRECT: undefined,
       PICLAW_WEB_VNC_TARGETS: undefined,
       PICLAW_VNC_TARGETS: undefined,
+      PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
+      PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
       PICLAW_REMOTE_INTEROP_ENABLED: "1",
       PICLAW_REMOTE_INTEROP_ALLOW_HTTP: "0",
       PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
@@ -109,7 +111,7 @@ test("plain import covers config module init branches with isolated argv and env
           debugCardSubmissions: false,
           trustProxy: true,
           composeUploadLimitMb: 32,
-          workspaceUploadLimitMb: 512,
+          workspaceUploadLimitMb: 256,
         });
         expect(cfg.getWebRuntimeConfig()).toBe(cfg.WEB_RUNTIME_CONFIG);
         expect(cfg.SESSION_STORAGE_CONFIG).toEqual({

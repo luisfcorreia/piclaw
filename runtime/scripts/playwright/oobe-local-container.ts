@@ -322,6 +322,8 @@ async function main() {
 
         await page.getByRole('button', { name: 'Open Settings' }).click();
         await page.waitForFunction(() => Boolean(document.querySelector('.settings-dialog')), { timeout: 15000 });
+        await page.locator('.settings-dialog-close').click();
+        await page.waitForFunction(() => !document.querySelector('.settings-dialog'), { timeout: 15000 });
 
         await page.getByRole('button', { name: 'Dismiss' }).click();
         await assertPanelHidden(page);
