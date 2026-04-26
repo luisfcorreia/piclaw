@@ -61,6 +61,24 @@ function toolResultMsg(
   };
 }
 
+function bashExecutionMsg(command: string, output = "(no output)", ts = Date.now()) {
+  return {
+    role: "bashExecution" as const,
+    command,
+    output,
+    timestamp: ts,
+  };
+}
+
+function customMsg(text: string, ts = Date.now()) {
+  return {
+    role: "custom" as const,
+    customType: "note",
+    content: text,
+    timestamp: ts,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Build a large conversation (>40 messages) for selective threshold
 // ---------------------------------------------------------------------------
@@ -99,9 +117,38 @@ vi.mock("@mariozechner/pi-ai", () => ({
   completeSimple: vi.fn(),
 }));
 
-// Mock convertToLlm to pass through (our test messages are already in LLM format)
+// Mock convertToLlm with the upstream behaviors we care about in these tests.
 vi.mock("@mariozechner/pi-coding-agent", () => ({
-  convertToLlm: (msgs: any[]) => msgs,
+  convertToLlm: (msgs: any[]) => msgs.flatMap((m: any) => {
+    switch (m.role) {
+      case "compactionSummary":
+        return [{
+          role: "user",
+          content: [{ type: "text", text: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n${m.summary}\n</summary>` }],
+          timestamp: m.timestamp,
+        }];
+      case "branchSummary":
+        return [{
+          role: "user",
+          content: [{ type: "text", text: `The following is a summary of a branch that this conversation came back from:\n\n<summary>\n${m.summary}\n</summary>` }],
+          timestamp: m.timestamp,
+        }];
+      case "bashExecution":
+        return [{
+          role: "user",
+          content: [{ type: "text", text: `Ran \`${m.command}\`\n\n${m.output ?? "(no output)"}` }],
+          timestamp: m.timestamp,
+        }];
+      case "custom":
+        return [{
+          role: "user",
+          content: typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content,
+          timestamp: m.timestamp,
+        }];
+      default:
+        return [m];
+    }
+  }),
 }));
 
 import { completeSimple } from "@mariozechner/pi-ai";
@@ -535,6 +582,7 @@ describe("smart-compaction", () => {
           written: new Set<string>(),
           edited: new Set(["/b.ts", "/c.ts"]),
         },
+        isSplitTurn: true,
       });
 
       const ctx = makeCtx();
@@ -707,6 +755,116 @@ describe("smart-compaction", () => {
       expect(completeSimple).toHaveBeenCalledTimes(1);
     });
 
+    it("does not classify a non-split tool-only window as split-turn continuation", async () => {
+      const summaryText =
+        "## Goal\nFresh summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context";
+
+      (completeSimple as any).mockResolvedValueOnce({
+        content: [{ type: "text", text: summaryText }],
+        stopReason: "end",
+      });
+
+      const splitLikeMsgs: any[] = [];
+      for (let i = 0; i < 60; i++) {
+        splitLikeMsgs.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "edit", args: { path: `/f${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "edit", `ok`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, {
+            messagesToSummarize: splitLikeMsgs,
+            previousSummary:
+              "## Goal\nOld summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context",
+            isSplitTurn: false,
+          }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      expect(completeSimple).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not no-op when kept messages show active current user work", async () => {
+      const summaryText =
+        "## Goal\nFresh summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context";
+
+      (completeSimple as any).mockResolvedValueOnce({
+        content: [{ type: "text", text: summaryText }],
+        stopReason: "end",
+      });
+
+      const minimalMsgs = [userMsg("ok")];
+      while (minimalMsgs.length < 60) {
+        minimalMsgs.push(
+          minimalMsgs.length % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${minimalMsgs.length}`, name: "read", args: { path: `/f${minimalMsgs.length}.ts` } }])
+            : toolResultMsg(`tc-${minimalMsgs.length - 1}`, "read", `ok`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, {
+            messagesToSummarize: minimalMsgs,
+            previousSummary:
+              "## Goal\nOld summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context",
+            isSplitTurn: false,
+            fileOps: { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() },
+          }),
+          branchEntries: [
+            { id: "older", type: "message", message: userMsg("older work") },
+            { id: "kept-entry-1", type: "message", message: userMsg("New active task in kept window") },
+          ],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      expect(completeSimple).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not no-op a split turn when the discarded prefix contains user intent", async () => {
+      const summaryText =
+        "## Goal\nFresh summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context";
+
+      (completeSimple as any).mockResolvedValueOnce({
+        content: [{ type: "text", text: summaryText }],
+        stopReason: "end",
+      });
+
+      const splitLikeMsgs: any[] = [];
+      for (let i = 0; i < 60; i++) {
+        splitLikeMsgs.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "edit", args: { path: `/f${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "edit", `ok`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, {
+            messagesToSummarize: splitLikeMsgs,
+            previousSummary:
+              "## Goal\nOld summary\n## Constraints\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context",
+            isSplitTurn: true,
+            turnPrefixMessages: [userMsg("Actually switch to the reducer bug now")],
+          }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      expect(completeSimple).toHaveBeenCalledTimes(1);
+    });
+
     it("preserves Critical Context section in split-turn delta", async () => {
       const splitTurnMsgs = [
         assistantToolCallMsg([{ id: "tc-1", name: "write", args: { path: "/new.ts" } }]),
@@ -730,6 +888,7 @@ describe("smart-compaction", () => {
           written: new Set(["/new.ts"]),
           edited: new Set<string>(),
         },
+        isSplitTurn: true,
       });
 
       const result = await handler!(
@@ -959,7 +1118,7 @@ describe("smart-compaction", () => {
 
       // 'instead' is a weak cue — should NOT fire without low overlap.
       // Both messages share auth/token vocabulary, so overlap is not low.
-      expect(capturedPrompt).toContain("No strong recent topic shift detected");
+      expect(capturedPrompt).toContain("No explicit topic shift cue detected");
       expect(capturedPrompt).not.toContain("topic-shift boundary");
     });
 
@@ -988,7 +1147,7 @@ describe("smart-compaction", () => {
       );
 
       // 'back to' is a weak cue, but both messages share middleware/JWT/token/validation vocabulary.
-      expect(capturedPrompt).toContain("No strong recent topic shift detected");
+      expect(capturedPrompt).toContain("No explicit topic shift cue detected");
     });
 
     it("does NOT treat 'Add a switch statement for the cases' as a topic shift", async () => {
@@ -1016,7 +1175,7 @@ describe("smart-compaction", () => {
       );
 
       // 'switch' + 'to' is a weak cue, and both turns share router vocabulary.
-      expect(capturedPrompt).toContain("No strong recent topic shift detected");
+      expect(capturedPrompt).toContain("No explicit topic shift cue detected");
     });
 
     it("DOES detect 'ignore that, let us work on something unrelated' as a strong pivot", async () => {
@@ -1096,7 +1255,263 @@ describe("smart-compaction", () => {
       );
 
       // Two shared tokens out of ~10-12 unique → overlap ~0.17-0.2 → above 0.12
-      expect(capturedPrompt).toContain("No strong recent topic shift detected");
+      expect(capturedPrompt).toContain("No explicit topic shift cue detected");
+    });
+  });
+
+  describe("synthetic message filtering", () => {
+    it("excludes compaction summaries from user turn detection and serialization", async () => {
+      let capturedPrompt = "";
+      (completeSimple as any).mockImplementationOnce((_model: any, opts: any) => {
+        capturedPrompt = opts.messages[0].content[0].text;
+        return Promise.resolve({
+          content: [{ type: "text", text: "## Goal\nCompaction work\n## Current Active Topic\n- compaction fix\n## Historical / Background Context\n- none\n## Constraints & Preferences\n- none\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context" }],
+          stopReason: "end",
+        });
+      });
+
+      // Build messages where a compaction summary is injected as a user-role message
+      // (exactly what convertToLlm does upstream)
+      const compactionSummaryMsg = userMsg(
+        "The conversation history before this point was compacted into the following summary:\n\n## Goal\nEML viewer fix\n## Current Active Topic\n- EML viewer pushed as v0.2.1"
+      );
+      const branchSummaryMsg = userMsg(
+        "The following is a summary of a branch that this conversation came back from:\n\n## Summary\nSome branch work"
+      );
+
+      const messages: any[] = [
+        compactionSummaryMsg,
+        branchSummaryMsg,
+        userMsg("Now let's fix the compaction strategy to handle topic shifts correctly."),
+        assistantToolCallMsg([{ id: "tc-1", name: "edit", args: { path: "/workspace/smart-compaction.ts" } }]),
+        toolResultMsg("tc-1", "edit", "Applied 3 edits"),
+        userMsg("Great, run the tests"),
+        assistantToolCallMsg([{ id: "tc-2", name: "bash", args: { command: "bun test" } }]),
+        toolResultMsg("tc-2", "bash", "27 tests passed"),
+      ];
+      // Pad to reach SELECTIVE_THRESHOLD
+      for (let i = messages.length; i < 60; i++) {
+        messages.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "read", args: { path: `/workspace/file-${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "read", `contents ${i}`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, { messagesToSummarize: messages }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      // The prompt must NOT contain the compaction/branch summary text as a user turn
+      expect(capturedPrompt).not.toContain("[0|User]: The conversation history before");
+      expect(capturedPrompt).not.toContain("[1|User]: The following is a summary of a branch");
+      // It SHOULD label them as CompactionSummary
+      expect(capturedPrompt).toContain("CompactionSummary");
+      // The real user messages should still appear
+      expect(capturedPrompt).toContain("compaction strategy");
+      expect(capturedPrompt).toContain("run the tests");
+      // The detected active topic should reference the real user message, not the compaction summary
+      expect(capturedPrompt).not.toContain("Treat message 0 as the");
+      expect(capturedPrompt).not.toContain("Treat message 1 as the");
+    });
+
+    it("does not treat upstream bashExecution/custom user-role wrappers as real user turns", async () => {
+      let capturedPrompt = "";
+      (completeSimple as any).mockImplementationOnce((_model: any, opts: any) => {
+        capturedPrompt = opts.messages[0].content[0].text;
+        return Promise.resolve({
+          content: [{ type: "text", text: "## Goal\nCompaction\n## Current Active Topic\n- compaction\n## Historical / Background Context\n- none\n## Constraints & Preferences\n- none\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context" }],
+          stopReason: "end",
+        });
+      });
+
+      const messages: any[] = [
+        bashExecutionMsg("bun test", "27 tests passed"),
+        customMsg("Internal note from extension"),
+        userMsg("Refactor smart compaction to preserve current-turn context."),
+      ];
+      for (let i = messages.length; i < 60; i++) {
+        messages.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "read", args: { path: `/workspace/file-${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "read", `contents ${i}`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, { messagesToSummarize: messages }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      expect(capturedPrompt).toContain('Latest user request: message 2');
+      expect(capturedPrompt).toContain('Treat message 2 as the current active instruction.');
+      expect(capturedPrompt).toContain('[0|Context]: Ran `bun test`');
+      expect(capturedPrompt).toContain('[1|Context]: Internal note from extension');
+      expect(capturedPrompt).not.toContain('Latest user request: message 0');
+      expect(capturedPrompt).not.toContain('Latest user request: message 1');
+    });
+  });
+
+  describe("kept-messages visibility", () => {
+    it("includes kept window context from branchEntries in the prompt", async () => {
+      let capturedPrompt = "";
+      (completeSimple as any).mockImplementationOnce((_model: any, opts: any) => {
+        capturedPrompt = opts.messages[0].content[0].text;
+        return Promise.resolve({
+          content: [{ type: "text", text: "## Goal\nCompaction\n## Current Active Topic\n- compaction\n## Historical / Background Context\n- none\n## Constraints & Preferences\n- none\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context" }],
+          stopReason: "end",
+        });
+      });
+
+      // Messages to summarize — old EML work being discarded
+      const messages: any[] = [
+        userMsg("Fix the EML viewer to use monospace headers"),
+        assistantToolCallMsg([{ id: "tc-1", name: "edit", args: { path: "/workspace/eml-viewer/index.ts" } }]),
+        toolResultMsg("tc-1", "edit", "Applied edit"),
+      ];
+      for (let i = messages.length; i < 60; i++) {
+        messages.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "read", args: { path: `/workspace/file-${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "read", `contents ${i}`),
+        );
+      }
+
+      // branchEntries simulating kept messages about compaction work
+      const keptEntryId = "kept-entry-001";
+      const branchEntries: any[] = [
+        // Old discarded entries (before firstKeptEntryId)
+        { id: "old-1", type: "message", message: { role: "user", content: [{ type: "text", text: "Fix the EML viewer" }] } },
+        // Compaction entry
+        { id: "compaction-1", type: "compaction", summary: "Previous summary" },
+        // Kept entries (from firstKeptEntryId onward)
+        { id: keptEntryId, type: "message", message: { role: "user", content: [{ type: "text", text: "Now refactor the compaction strategy to walk backwards" }] } },
+        { id: "kept-2", type: "message", message: { role: "assistant", content: [{ type: "text", text: "Done, implemented backwards walk" }] } },
+        { id: "kept-3", type: "message", message: { role: "assistant", content: [{ type: "toolCall", id: "tc-kept", name: "edit", arguments: { path: "/workspace/piclaw/runtime/src/extensions/smart-compaction.ts" } }] } },
+        { id: "kept-4", type: "message", message: { role: "toolResult", toolCallId: "tc-kept", toolName: "edit", content: [{ type: "text", text: "Applied edit" }], isError: false } },
+        { id: "kept-5", type: "custom_message", customType: "note", content: [{ type: "text", text: "Keep reducer follow-up in mind" }], display: true },
+        { id: "kept-6", type: "branch_summary", fromId: "branch-123", summary: "Branch work switched from EML viewer to compaction fixes" },
+        { id: "kept-7", type: "message", message: { role: "user", content: [{ type: "text", text: "Run the tests and rebuild" }] } },
+        // A synthetic compaction summary that should be skipped
+        { id: "kept-8", type: "message", message: { role: "user", content: [{ type: "text", text: "The conversation history before this point was compacted into the following summary:\n\nOld stuff" }] } },
+      ];
+
+      await handler!(
+        {
+          preparation: makePreparation(60, {
+            messagesToSummarize: messages,
+            firstKeptEntryId: keptEntryId,
+          }),
+          branchEntries,
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      // The prompt should contain the kept-window context, not just user turns
+      expect(capturedPrompt).toContain("Kept Messages");
+      expect(capturedPrompt).toContain("compaction strategy to walk backwards");
+      expect(capturedPrompt).toContain("Done, implemented backwards walk");
+      expect(capturedPrompt).toContain("smart-compaction.ts");
+      expect(capturedPrompt).toContain("Keep reducer follow-up in mind");
+      expect(capturedPrompt).toContain("switched from EML viewer to compaction fixes");
+      expect(capturedPrompt).toContain("Run the tests and rebuild");
+      // The synthetic compaction summary in kept entries should be excluded
+      expect(capturedPrompt).not.toContain("Old stuff");
+      // The old EML work from messagesToSummarize should NOT appear in the Kept Messages section
+      // (it's in the excerpts section, not in kept)
+    });
+
+    it("includes split-turn prefix context when compaction cuts through the current turn", async () => {
+      let capturedPrompt = "";
+      (completeSimple as any).mockImplementationOnce((_model: any, opts: any) => {
+        capturedPrompt = opts.messages[0].content[0].text;
+        return Promise.resolve({
+          content: [{ type: "text", text: "## Goal\nCompaction\n## Current Active Topic\n- compaction\n## Historical / Background Context\n- none\n## Constraints & Preferences\n- none\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context" }],
+          stopReason: "end",
+        });
+      });
+
+      const messages: any[] = [
+        userMsg("Older work that is about to be summarized."),
+        assistantToolCallMsg([{ id: "tc-old", name: "read", args: { path: "/workspace/old.ts" } }]),
+        toolResultMsg("tc-old", "read", "old source"),
+      ];
+      for (let i = messages.length; i < 60; i++) {
+        messages.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "read", args: { path: `/workspace/file-${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "read", `contents ${i}`),
+        );
+      }
+
+      const turnPrefixMessages = [
+        userMsg("Within the current turn, first inspect the session manager and then update the reducer."),
+        assistantToolCallMsg([{ id: "tc-split", name: "read", args: { path: "/workspace/runtime/src/session-manager.ts" } }]),
+        toolResultMsg("tc-split", "read", "session manager source"),
+      ];
+
+      await handler!(
+        {
+          preparation: makePreparation(60, {
+            messagesToSummarize: messages,
+            isSplitTurn: true,
+            turnPrefixMessages,
+          }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      expect(capturedPrompt).toContain("## Split Turn Prefix (discarded prefix of the CURRENT turn)");
+      expect(capturedPrompt).toContain("session manager and then update the reducer");
+      expect(capturedPrompt).toContain("session-manager.ts");
+    });
+
+    it("omits Kept Messages section when branchEntries is empty", async () => {
+      let capturedPrompt = "";
+      (completeSimple as any).mockImplementationOnce((_model: any, opts: any) => {
+        capturedPrompt = opts.messages[0].content[0].text;
+        return Promise.resolve({
+          content: [{ type: "text", text: "## Goal\nWork\n## Current Active Topic\n- work\n## Historical / Background Context\n- none\n## Constraints & Preferences\n- none\n## Progress\n### Done\n### In Progress\n### Blocked\n## Key Decisions\n## Next Steps\n## Critical Context" }],
+          stopReason: "end",
+        });
+      });
+
+      const messages: any[] = [
+        userMsg("Do something"),
+        assistantToolCallMsg([{ id: "tc-1", name: "read", args: { path: "/workspace/file.ts" } }]),
+        toolResultMsg("tc-1", "read", "contents"),
+      ];
+      for (let i = messages.length; i < 60; i++) {
+        messages.push(
+          i % 2 === 0
+            ? assistantToolCallMsg([{ id: `tc-${i}`, name: "read", args: { path: `/workspace/file-${i}.ts` } }])
+            : toolResultMsg(`tc-${i - 1}`, "read", `contents ${i}`),
+        );
+      }
+
+      await handler!(
+        {
+          preparation: makePreparation(60, { messagesToSummarize: messages }),
+          branchEntries: [],
+          signal: new AbortController().signal,
+        },
+        makeCtx(),
+      );
+
+      // No kept messages → no Kept Messages section header
+      expect(capturedPrompt).not.toContain("## Kept Messages (survive compaction");
     });
   });
 });
