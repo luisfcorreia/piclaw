@@ -147,11 +147,5 @@
     }
     </script>
     <script type="module" src="/static/dist/app.bundle.js?v=0a0c5f09f5d8"></script>
-    <script type="module">
-        // Fallback error display for module errors
-        import('/static/dist/app.bundle.js?v=0a0c5f09f5d8').catch(function(e) {
-            document.getElementById('app').innerHTML = '<pre style="padding:20px;color:red;">Module Error: ' + e.message + '</pre>';
-        });
-    </script>
 </body>
 </html>
