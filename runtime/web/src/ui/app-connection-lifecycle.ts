@@ -49,16 +49,8 @@ export function handleUiVersionDriftEvent(options: HandleUiVersionDriftOptions):
     && !pendingRequestRef.current;
 
   if (canAutoReload && !staleUiReloadScheduledRef.current) {
-    staleUiReloadScheduledRef.current = true;
-    showIntentToast('Updating UI…', 'Reloading to apply the latest interface after restart.', 'info', 2500);
-    window.setTimeout(() => {
-      try {
-        window.location.reload();
-      } catch {
-        staleUiReloadScheduledRef.current = false;
-      }
-    }, 350);
-    return true;
+    // Disabled auto-reload — it caused cascading reloads during compaction/reconnect.
+    // Show toast instead and let the user reload manually.
   }
 
   showIntentToast('New UI available', 'Reload this page to apply the latest interface update.', 'warning', 8000);
