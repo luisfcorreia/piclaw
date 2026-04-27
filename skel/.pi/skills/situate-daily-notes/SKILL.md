@@ -4,17 +4,16 @@ description: Situate yourself by generating a 1-page situation report and mainta
 distribution: private
 ---
 
-# Skill: situate-daily-notes
+# Situate daily notes
 
-Situate yourself by generating a 1-page situation report and maintaining Obsidian-style daily summary notes.
+Use this on demand when the user asks you to catch up, or as the required daily-notes phase of `close-of-day`.
 
-## When to use
+Do not run it automatically at session start.
 
-- **On demand only** when the user asks you to "situate yourself" or "catch up"
-- When you need to recall what's been discussed recently
-- As a **required chained step** of `/workspace/.pi/skills/close-of-day/SKILL.md`
+## Script roles
 
-Do not run this automatically at session start.
+- `situate.ts` — full situation report + rolling memory refresh + note status check
+- `daily-notes.ts` — generate or refresh daily-note skeletons only
 
 ## Quick start
 
@@ -23,31 +22,18 @@ bun run /workspace/.pi/skills/situate-daily-notes/situate.ts
 ```
 
 This:
-1. Prints a 1-page situation report (environment, preferences, notes, tasks, skills)
-2. Aggregates activity across all relevant session trees for the target chat scope
-   - for `web:*`, this means all web session trees (root chats plus branches)
-   - message previews are labelled so parallel branches stay distinguishable
-3. Generates daily note skeletons for any days that don't have one yet
-4. Refreshes rolling memory/context files derived from the daily notes
-5. Reads the rolling memory outputs first and includes them in the situation report
-6. Lists any notes that need summaries or partial updates
 
-**After running, check for unsummarized notes and write them** (see below).
+1. prints a one-page situation report
+2. aggregates activity across the relevant chat/session scope
+3. generates missing daily-note skeletons
+4. refreshes rolling memory/context files under `notes/memory/`
+5. lists notes that still need summaries or partial updates
+
+For `web:*` scopes, all web session trees are included and labelled so parallel branches stay distinguishable.
 
 ## Daily note format
 
-Rolling memory outputs live under `notes/memory/`.
-
-`situate.ts` consumes those rolling outputs first when building the report, so the memory layer is actually read back during catch-up flows.
-
-- `notes/memory/current-state.md` — compact Dream state snapshot for recent days
-- `notes/memory/recent-context.md` — concise markdown digest for quick reload
-- `notes/memory/MEMORY.md` — startup memory index
-
-The narrative markdown note remains the human-readable source; the rolling memory files are the compact agent-facing layer.
-
-
-Notes live in `notes/daily/YYYY-MM-DD.md` and start with YAML front matter:
+Notes live at `notes/daily/YYYY-MM-DD.md` and begin with YAML front matter like:
 
 ```yaml
 ---
@@ -65,59 +51,31 @@ scope_anchor: web:default
 ---
 ```
 
-- `date` must match the file name.
-- `summarised_until` is the timestamp of the last message covered by the summary.
-- `session_trees` / `session_chats` show how many distinct trees/chats contributed to that day.
-- For `web:*` scopes, `scope_mode: all-web-session-trees` means the note metadata was aggregated across all web roots and branches, not just one visible tab.
+Rolling memory outputs live under `notes/memory/`:
 
-## Writing daily summaries
+- `notes/memory/current-state.md`
+- `notes/memory/recent-context.md`
+- `notes/memory/MEMORY.md`
 
-Daily notes are **summaries only** — the chat DB is the source of truth for full transcripts.
+## Writing summaries
 
-When `situate.ts` or `daily-notes.ts` reports notes needing summaries:
+Daily notes are summaries only; the message database remains the source of truth for full transcripts.
 
-1. For each file listed, read it to see the date and stats.
-2. Use the unified `messages` tool as the primary source for transcript gathering:
-   - `search` to locate the day/range you need
-   - `get` to pull exact rows with surrounding context
-   - if needed, paginate with `limit`/`offset`
-3. Only fall back to `extract-chat-history.ts` for large exports or if you explicitly need a full transcript artifact.
-4. Read the conversation and write a **concise narrative summary** (1–3 paragraphs) covering:
-   - What was worked on (group by theme, not chronologically)
-   - Key outcomes and what got deployed/built/configured
-   - Any unresolved blockers or open threads
-   - When multiple session trees were active, keep materially different branches distinct instead of blending them into one thread
-5. Replace `<!-- NEEDS_SUMMARY -->` in the note with the summary, and set `summarised_until` in the front matter to the last message timestamp.
+When `situate.ts` or `daily-notes.ts` reports notes that need summary work:
 
-### Partial updates
+1. read the note to confirm the target day and current metadata
+2. use the `messages` tool as the primary transcript source
+3. write a concise narrative summary covering:
+   - work grouped by theme rather than chronology
+   - key outcomes / deployments / configurations
+   - unresolved blockers or open threads
+   - materially different branch conversations kept distinct
+4. replace `<!-- NEEDS_SUMMARY -->` or the update marker
+5. move `summarised_until` to the last covered message timestamp
 
-If `situate.ts` reports **Partial Summaries**, append a block like this:
+If a note is only partially behind, append a short update section and advance the watermark rather than rewriting the whole note.
 
-```markdown
-## Summary update (18:10 UTC)
-
-<!-- NEEDS_SUMMARY_UPDATE -->
-```
-
-Then:
-- Use `messages.search` for the post-watermark range
-- Use `messages.get` for any exact rows that need more surrounding context
-- Use the situation report's tree/chat labels to keep parallel branches separate while you summarise
-- Write a short update summary for the new messages
-- Update `summarised_until` in the front matter to the last message timestamp shown in the report
-
-### Example summary style
-
-> Set up Azure OpenAI end-to-end. Created `piclawendpoints` in Sweden Central, deployed six models across GlobalStandard and DataZoneStandard. Wired managed identity auth with token caching into piclaw. Added a `/image` command.
->
-> Cleaned stale deployments from `pragma` and `dogma`. Set up dual backups (restic + Azure Backup vault). Built metrics charting and subscription diagram skills. Implemented TOTP on the web UI.
-
-### Rules
-
-- **Never overwrite** a note that already has a real summary.
-- **Today's note** gets refreshed (metadata update) but its summary is preserved.
-- Keep summaries **short and dense** — this is for quick context recovery, not documentation.
-- After summaries are updated, rerun `situate.ts` or `daily-notes.ts` so the rolling `notes/memory/` outputs stay in sync.
+Keep the prose terse, dense, and matter-of-fact. Preserve existing real summaries; only fill placeholders or append updates.
 
 ## Options
 
@@ -125,22 +83,12 @@ Then:
 |---|---|---|
 | `--days <n>` | `7` | How many days of history to include |
 | `--out <path>` | `/workspace/exports/situation.md` | Situation report output path |
+| `--update-notes` | off | Refresh note metadata and memory outputs while generating the report |
 
-## Standalone daily notes generation
+## Standalone daily-note generation
 
 ```bash
 bun run /workspace/.pi/skills/situate-daily-notes/daily-notes.ts [--days <n>] [--force]
 ```
 
-## Full transcript gathering
-
-For daily-note writing, prefer the `messages` tool (`search` + `get`) rather than depending on a separate transcript-export script. For `web:*`, keep parallel session trees distinct when you summarise them.
-
-### Tone
-
-Terse British English. No excitement, no emoji, no "big day" openers. State what was done.
-
-### Related
-
-- The `close-of-day` skill runs this situate flow (with `--update-notes`) as part of end-of-day maintenance.
-- This is the preferred way to maintain daily note metadata before timeline cleanup.
+For daily-note writing, prefer the `messages` tool over a separate full-transcript export unless you specifically need a transcript artifact.

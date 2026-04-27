@@ -6,60 +6,21 @@ distribution: public
 
 # Adaptive Cards Authoring
 
-Use this skill when you want to:
+Use this skill when a **web-only, structured interaction** is materially better as a card than as plain markdown.
 
-- decide whether Adaptive Cards are appropriate for a PiClaw web interaction
-- prompt the agent to emit a card intentionally instead of plain markdown
-- reuse a small library of card templates that match the **currently shipped** PiClaw card runtime
-- stay within the card/action/state features that PiClaw supports today
+## Good fits
 
-## Current PiClaw environment assumptions
-
-This skill is written for the current PiClaw web runtime in this workspace.
-
-### Supported today
-- Adaptive Cards render in the **web timeline** via `content_blocks`
-- Supported card actions:
-  - `Action.Submit`
-  - `Action.OpenUrl`
-- Supported lifecycle states:
-  - `active`
-  - `completed`
-  - `cancelled`
-  - `failed`
-- Card submissions are persisted as structured submission blocks
-- Failed actions can show inline errors in-card
-- `send_adaptive_card` exists for agent-owned Adaptive Card posting in the web UI
-
-### Not a good fit today
-Do **not** rely on these as first-class flows unless you are explicitly extending core support:
-
-- `Action.ShowCard`
-- `Action.ToggleVisibility`
-- complex card refresh/auth flows
-- multi-channel card delivery outside the web UI
-- assuming the agent will autonomously choose cards without being instructed
-
-## When to use a card
-
-Use an Adaptive Card **only** when it is materially better than markdown.
-
-Good fits:
-- approval / reject / revise
+- approval / reject / revise flows
 - choosing one of a few next actions
-- short structured data collection
-- persistent status / completion receipt UI
-- link collections where explicit buttons are better than inline links
+- short structured data capture
+- persistent status or completion receipts
+- link collections where explicit buttons are clearer than inline links
 
-Avoid cards when:
-- plain markdown is clearer
-- the interaction is long-form, narrative, or exploratory
-- the user needs tool-capable side-agent behavior rather than a simple form/action surface
-- the action semantics are not yet supported in PiClaw
+Avoid cards when markdown is clearer, the interaction is long-form, or the action semantics are not supported.
 
-## Required PiClaw payload shape
+## PiClaw payload shape
 
-Emit cards as a normal message with a matching `content` fallback plus a `content_blocks` entry like:
+Emit a normal message with a concise fallback plus one `adaptive_card` content block:
 
 ```json
 {
@@ -81,89 +42,52 @@ Emit cards as a normal message with a matching `content` fallback plus a `conten
 }
 ```
 
-## Authoring rules for this environment
+Supported today in the PiClaw web runtime:
 
-1. Keep `schema_version` at `1.5` unless you have a specific reason otherwise.
-2. Keep `content` and `fallback_text` concise and human-readable.
-3. Prefer simple `TextBlock`, `FactSet`, `Input.*`, `ChoiceSet`, and `Toggle` primitives.
+- timeline rendering via `content_blocks`
+- actions: `Action.Submit`, `Action.OpenUrl`
+- states: `active`, `completed`, `cancelled`, `failed`
+- agent-owned posting via `send_adaptive_card`
+
+Do **not** rely on `Action.ShowCard`, `Action.ToggleVisibility`, complex refresh/auth flows, or non-web card delivery unless you are explicitly extending core support.
+
+## Authoring rules
+
+1. Keep `schema_version` / `payload.version` at `1.5` unless there is a specific reason otherwise.
+2. Keep `content` and `fallback_text` short and human-readable.
+3. Prefer simple primitives: `TextBlock`, `FactSet`, `Input.*`, `ChoiceSet`, `Toggle`.
 4. Keep button labels short and explicit.
-5. Use `Action.Submit` for structured decisions; use `Action.OpenUrl` for external links.
-6. Assume cards are **web-only** unless explicitly wrapped in a graceful fallback strategy.
-7. Keep submission payloads small, flat, and readable.
-8. Prefer one clear card over a dense, form-heavy wall of controls.
+5. Use `Action.Submit` for structured decisions and `Action.OpenUrl` for external links.
+6. Keep submission payloads small, flat, and readable.
+7. Assume cards are web-only unless you also provide a graceful markdown fallback.
+8. Prefer one clear card over a dense wall of controls.
+9. Keep critical meaning visible in the fallback message too.
 
-## Prompt pattern for using Adaptive Cards now
-
-When you want the agent to emit a card intentionally, use a prompt like this:
+## Prompt pattern
 
 ```text
 Use an Adaptive Card for this response because the interaction is structured and web-only.
 
 Constraints:
 - Target the current PiClaw web runtime
-- Emit a concise human-readable fallback message plus one adaptive_card content block
-- Use schema_version 1.5
+- Emit a concise fallback message plus one adaptive_card content block
+- Use schema version 1.5
 - Only use supported actions: Action.Submit and/or Action.OpenUrl
-- Keep the card visually simple and compact
+- Keep the card compact and readable in a narrow pane
 - Keep submission payloads small and explicit
-- Do not use Action.ShowCard or unsupported card refresh/auth features
 - If a card would be worse than markdown, say so and return markdown instead
 
 Task:
 <describe the approval / choice / form interaction>
 ```
 
-## Stronger generation pattern
+If you need more determinism, ask for:
 
-If you need more determinism, ask for both the prose fallback and the exact block:
+1. a fallback message string
+2. exactly one `adaptive_card` content block JSON object
 
-```text
-Generate:
-1. a concise fallback message string
-2. exactly one PiClaw adaptive_card content block JSON object
+## Templates and implementation notes
 
-Requirements:
-- card_id should be stable and descriptive
-- fallback_text should match the fallback message closely
-- state should start as active
-- payload.version should be 1.5
-- only supported actions
-- keep the body compact and readable in a narrow web pane
-```
-
-## Template library
-
-Read and reuse the examples in:
-- `templates.md`
-
-These templates are tailored to the current PiClaw runtime rather than generic Adaptive Cards marketing examples.
-
-## Practical runtime guidance
-
-### For implementation work
-If you are writing code that emits a card in PiClaw itself:
-- preferred agent-owned posting path: `send_adaptive_card`
-- backend/core posting path: message `content_blocks`
-- lower-level persistent broadcast path: `messages` tool with `action: "post", type: "agent"` when you explicitly need it
-
-### For agent-facing prompting
-Prefer asking for one of these card classes explicitly:
-- `approval-card`
-- `choice-card`
-- `link-card`
-- `status-card`
-- `keep-active-form-card`
-
-## Safety / product guidance
-
-- Cards should improve clarity, not hide information.
-- Never make the card the only place where critical meaning exists; keep a useful fallback.
-- If the user is not in the web UI, prefer markdown unless you know the client can render cards.
-- Avoid making the user do complex multi-step workflows inside one card.
-
-## Deliverables this skill can help produce
-
-- a prompt that reliably asks the agent to emit a supported card
-- a concrete `adaptive_card` content block for PiClaw
-- a small set of reusable card templates for current supported interactions
-- a recommendation to use markdown instead when cards would be overkill
+- Reuse `templates.md` for concrete card patterns rather than inventing new classes ad hoc.
+- If you are implementing card emission in PiClaw itself, prefer `send_adaptive_card`.
+- If you need low-level posting, use message `content_blocks` or `messages` with `action: "post"`.

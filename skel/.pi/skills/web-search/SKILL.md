@@ -1,35 +1,67 @@
 ---
 name: web-search
-description: Search the web via SearXNG and optionally convert result pages to Markdown.
+description: Search the web via SearXNG and optionally fetch result pages as raw Markdown content.
 distribution: public
 ---
 
 # Web Search
 
-Use the local SearXNG instance to search the web and optionally fetch pages and convert HTML to Markdown.
+Use this when you want **search results plus raw fetched page content**.
 
-## Steps
+If you only need short summaries rather than full converted page content, use `web-search-summary` instead.
 
-1. Run a search (JSON output):
-   ```bash
-   bun /workspace/.pi/skills/web-search/web-search.ts --query "your query"
-   ```
+## Examples
 
-2. Fetch top results and convert to Markdown:
-   ```bash
-   bun /workspace/.pi/skills/web-search/web-search.ts --query "your query" --fetch true --fetch-limit 2
-   ```
+Search only:
+
+```bash
+bun /workspace/.pi/skills/web-search/web-search.ts --query "your query"
+```
+
+Fetch top results and convert them to Markdown:
+
+```bash
+bun /workspace/.pi/skills/web-search/web-search.ts --query "your query" --fetch true --fetch-limit 2
+```
+
+## Output shape
+
+The script prints JSON like:
+
+```json
+{
+  "query": "...",
+  "searxUrl": "http://.../search",
+  "limit": 5,
+  "fetch": true,
+  "results": [
+    {
+      "title": "...",
+      "url": "https://...",
+      "content": "snippet or fetched markdown"
+    }
+  ]
+}
+```
+
+- Without `--fetch`, `results[].content` is the search-result snippet when available.
+- With `--fetch`, fetched items replace `content` with converted Markdown.
+
+## Failure behaviour
+
+- If the search request fails, the script exits non-zero.
+- If page fetch fails for an individual result, the search still succeeds and that item gets `content: "Failed to fetch: ..."`.
 
 ## Options
 
-- `--query` (or `--q`) Required search query.
-- `--limit` Number of results to return (default 5).
-- `--fetch` When true, fetches top results and converts HTML to Markdown.
-- `--fetch-limit` How many results to fetch/convert (default 2).
-- `--searx-url` Override the SearXNG endpoint (default http://192.168.1.100:3080/search).
-- `--timeout` Fetch timeout in milliseconds (default 15000).
+- `--query` / `--q` — required search query
+- `--limit` — number of search results to return (default `5`)
+- `--fetch` — fetch and convert result pages (`true` / `1`)
+- `--fetch-limit` — how many results to fetch and convert (default `2`)
+- `--searx-url` — override the SearXNG endpoint (default `http://192.168.1.100:3080/search`)
+- `--timeout` — fetch timeout in milliseconds (default `15000`)
 
 ## Notes
 
-- HTML conversion uses turndown + linkedom.
-- The converter prefers `<article>`/`<main>` content when available.
+- HTML conversion uses `turndown` + `linkedom`.
+- The converter prefers `<article>`, `<main>`, or `[role='main']` when present.
