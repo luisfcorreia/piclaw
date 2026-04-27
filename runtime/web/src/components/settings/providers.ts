@@ -117,6 +117,7 @@ export function ProvidersSection({ providers, setStatus }) {
 
                         ${isExpanded(p.id) && html`
                             <div class="settings-provider-setup">
+                                <p class="settings-hint settings-provider-setup-hint">Sign-in flows open in the browser. In narrow panes the setup form stacks vertically to avoid clipping.</p>
                                 ${p.hasOAuth && html`
                                     <div class="settings-provider-method">
                                         <button class="settings-addon-btn settings-addon-btn-install"
@@ -128,7 +129,7 @@ export function ProvidersSection({ providers, setStatus }) {
                                 `}
                                 ${p.hasApiKey && html`
                                     <div class="settings-provider-method">
-                                        <div class="settings-row" style="margin-bottom:6px">
+                                        <div class="settings-row settings-provider-inline-row" style="margin-bottom:6px">
                                             <label>API Key</label>
                                             <input type="password" value=${formData.apiKey || ''}
                                                 onInput=${e => updateForm('apiKey', e.target.value)}
@@ -144,7 +145,7 @@ export function ProvidersSection({ providers, setStatus }) {
                                 ${p.isCustom && html`
                                     <div class="settings-provider-method">
                                         ${(p.customFields || []).map(f => html`
-                                            <div class="settings-row" style="margin-bottom:6px">
+                                            <div class="settings-row settings-provider-inline-row" style="margin-bottom:6px">
                                                 <label>${f.label}${f.required ? ' *' : ''}</label>
                                                 <input type="text" value=${formData[f.key] || ''}
                                                     onInput=${e => updateForm(f.key, e.target.value)}

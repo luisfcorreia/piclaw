@@ -34,10 +34,14 @@ PICLAW_HTTP_PATH="${PICLAW_HTTP_PATH:-/}"
 PICLAW_CONTAINER_PORT="${PICLAW_CONTAINER_PORT:-8080}"
 
 STATIC_OUTPUT="$(mktemp)"
-CONTAINER_NAME="piclaw-smoke-${PLATFORM//\//-}-${GITHUB_RUN_ID:-local}-${RANDOM}"
+CONTAINER_BASENAME="piclaw-smoke-${PLATFORM//\//-}-${GITHUB_RUN_ID:-local}"
+CONTAINER_NAME=""
+WORKSPACE_TMP_DIR=""
+CONFIG_TMP_DIR=""
+WORKSPACE_VOLUME=""
 
 print_container_logs() {
-  if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+  if [ -n "$CONTAINER_NAME" ] && docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     echo "[smoke] container logs (${CONTAINER_NAME})"
     docker logs "$CONTAINER_NAME" || true
     echo "[smoke] piclaw stderr log:"
@@ -47,11 +51,28 @@ print_container_logs() {
   fi
 }
 
-cleanup() {
-  rm -f "$STATIC_OUTPUT"
-  if docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+cleanup_runtime_artifacts() {
+  if [ -n "$CONTAINER_NAME" ] && docker inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
+  if [ -n "$WORKSPACE_TMP_DIR" ] && [ -d "$WORKSPACE_TMP_DIR" ]; then
+    rm -rf "$WORKSPACE_TMP_DIR"
+  fi
+  if [ -n "$CONFIG_TMP_DIR" ] && [ -d "$CONFIG_TMP_DIR" ]; then
+    rm -rf "$CONFIG_TMP_DIR"
+  fi
+  if [ -n "$WORKSPACE_VOLUME" ]; then
+    docker volume rm -f "$WORKSPACE_VOLUME" >/dev/null 2>&1 || true
+  fi
+  CONTAINER_NAME=""
+  WORKSPACE_TMP_DIR=""
+  CONFIG_TMP_DIR=""
+  WORKSPACE_VOLUME=""
+}
+
+cleanup() {
+  rm -f "$STATIC_OUTPUT"
+  cleanup_runtime_artifacts
 }
 trap cleanup EXIT
 
@@ -82,74 +103,111 @@ require_pattern "restic $EXPECTED_RESTIC_VERSION"
 require_pattern "=== Pi CLI ==="
 require_pattern "=== Piclaw CLI ==="
 
-echo "[smoke] starting web runtime"
-docker run -d \
-  --name "$CONTAINER_NAME" \
-  --platform "$PLATFORM" \
-  -p 127.0.0.1::${PICLAW_CONTAINER_PORT} \
-  -v "$(mktemp -d):/workspace" \
-  -v "$(mktemp -d):/config" \
-  "$IMAGE_REF" >/dev/null
+start_runtime() {
+  local workspace_mode="$1"
+  cleanup_runtime_artifacts
 
-HOST_PORT=""
-for _ in $(seq 1 15); do
-  HOST_PORT="$(docker port "$CONTAINER_NAME" "${PICLAW_CONTAINER_PORT}/tcp" 2>/dev/null | awk -F: 'NR==1 { print $NF }')"
-  if [ -n "$HOST_PORT" ]; then
-    break
-  fi
-  sleep 1
-done
+  CONTAINER_NAME="${CONTAINER_BASENAME}-${workspace_mode}-${RANDOM}"
+  CONFIG_TMP_DIR="$(mktemp -d)"
 
-if [ -z "$HOST_PORT" ]; then
-  echo "[smoke] failed to resolve published host port for ${CONTAINER_NAME}" >&2
-  print_container_logs
-  exit 1
-fi
+  local docker_args=(
+    docker run -d
+    --name "$CONTAINER_NAME"
+    --platform "$PLATFORM"
+    -p "127.0.0.1::${PICLAW_CONTAINER_PORT}"
+    -v "$CONFIG_TMP_DIR:/config"
+  )
 
-HTTP_URL="http://127.0.0.1:${HOST_PORT}${PICLAW_HTTP_PATH}"
-echo "[smoke] probing ${HTTP_URL}"
-
-READY=0
-START_DEADLINE=$((SECONDS + HTTP_TIMEOUT_SEC))
-while [ "$SECONDS" -lt "$START_DEADLINE" ]; do
-  if curl --silent --show-error --fail --location --max-time "$CURL_MAX_TIME_SEC" "$HTTP_URL" >/dev/null; then
-    READY=1
-    break
+  if [ "$workspace_mode" = "bind" ]; then
+    WORKSPACE_TMP_DIR="$(mktemp -d)"
+    docker_args+=( -v "$WORKSPACE_TMP_DIR:/workspace" )
+  elif [ "$workspace_mode" = "named-volume" ]; then
+    WORKSPACE_VOLUME="${CONTAINER_BASENAME}-workspace-${RANDOM}"
+    docker volume create "$WORKSPACE_VOLUME" >/dev/null
+    docker_args+=( -v "$WORKSPACE_VOLUME:/workspace" )
+  else
+    echo "[smoke] unsupported workspace mode: $workspace_mode" >&2
+    exit 64
   fi
 
-  if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" != "true" ]; then
-    echo "[smoke] container exited before serving ${PICLAW_HTTP_PATH}" >&2
+  docker_args+=( "$IMAGE_REF" )
+  "${docker_args[@]}" >/dev/null
+}
+
+wait_for_runtime() {
+  local workspace_mode="$1"
+  local host_port=""
+  local http_url=""
+  local ready=0
+  local supervisor_ready=0
+
+  for _ in $(seq 1 15); do
+    host_port="$(docker port "$CONTAINER_NAME" "${PICLAW_CONTAINER_PORT}/tcp" 2>/dev/null | awk -F: 'NR==1 { print $NF }')"
+    if [ -n "$host_port" ]; then
+      break
+    fi
+    sleep 1
+  done
+
+  if [ -z "$host_port" ]; then
+    echo "[smoke] failed to resolve published host port for ${CONTAINER_NAME}" >&2
     print_container_logs
     exit 1
   fi
 
-  sleep 2
-done
+  http_url="http://127.0.0.1:${host_port}${PICLAW_HTTP_PATH}"
+  echo "[smoke] (${workspace_mode}) probing ${http_url}"
 
-if [ "$READY" -ne 1 ]; then
-  echo "[smoke] timed out waiting for ${HTTP_URL}" >&2
-  print_container_logs
-  exit 1
-fi
+  local start_deadline=$((SECONDS + HTTP_TIMEOUT_SEC))
+  while [ "$SECONDS" -lt "$start_deadline" ]; do
+    if curl --silent --show-error --fail --location --max-time "$CURL_MAX_TIME_SEC" "$http_url" >/dev/null; then
+      ready=1
+      break
+    fi
 
-echo "[smoke] HTTP startup ok"
+    if [ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo false)" != "true" ]; then
+      echo "[smoke] container exited before serving ${PICLAW_HTTP_PATH} (${workspace_mode})" >&2
+      print_container_logs
+      exit 1
+    fi
 
-echo "[smoke] verifying supervisord is running"
-SUPERVISOR_READY=0
-SUPERVISOR_DEADLINE=$((SECONDS + 30))
-while [ "$SECONDS" -lt "$SUPERVISOR_DEADLINE" ]; do
-  if docker exec "$CONTAINER_NAME" sh -c 'pgrep -af supervisord >/dev/null && supervisorctl -c /workspace/.piclaw/supervisor/supervisord.conf status piclaw | grep -q RUNNING'; then
-    SUPERVISOR_READY=1
-    break
+    sleep 2
+  done
+
+  if [ "$ready" -ne 1 ]; then
+    echo "[smoke] timed out waiting for ${http_url} (${workspace_mode})" >&2
+    print_container_logs
+    exit 1
   fi
-  sleep 2
-done
-if [ "$SUPERVISOR_READY" -ne 1 ]; then
-  echo "[smoke] supervisord or piclaw supervisor status check failed" >&2
-  print_container_logs
-  exit 1
-fi
 
-docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  echo "[smoke] (${workspace_mode}) HTTP startup ok"
+  echo "[smoke] (${workspace_mode}) verifying supervisord is running"
+
+  local supervisor_deadline=$((SECONDS + 30))
+  while [ "$SECONDS" -lt "$supervisor_deadline" ]; do
+    if docker exec "$CONTAINER_NAME" sh -c 'pgrep -af supervisord >/dev/null && supervisorctl -c /workspace/.piclaw/supervisor/supervisord.conf status piclaw | grep -q RUNNING'; then
+      supervisor_ready=1
+      break
+    fi
+    sleep 2
+  done
+
+  if [ "$supervisor_ready" -ne 1 ]; then
+    echo "[smoke] supervisord or piclaw supervisor status check failed (${workspace_mode})" >&2
+    print_container_logs
+    exit 1
+  fi
+}
+
+smoke_runtime() {
+  local workspace_mode="$1"
+  echo "[smoke] starting web runtime (${workspace_mode})"
+  start_runtime "$workspace_mode"
+  wait_for_runtime "$workspace_mode"
+  cleanup_runtime_artifacts
+}
+
+smoke_runtime bind
+smoke_runtime named-volume
 
 echo "[smoke] ok"

@@ -6,6 +6,9 @@ export function AddonsSection({ setStatus, filter = '' }) {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(null);
     const [restartRequired, setRestartRequired] = useState(false);
+    const [platformInfo, setPlatformInfo] = useState({ runtime: '', windowsNative: false });
+    const [catalogSources, setCatalogSources] = useState([]);
+    const [failedSources, setFailedSources] = useState([]);
 
     // Read developer overrides from localStorage
     function devParams() {
@@ -17,6 +20,8 @@ export function AddonsSection({ setStatus, filter = '' }) {
                 .map(v => v.trim())
                 .filter(Boolean);
             const ru = localStorage.getItem('piclaw_addons_repo_url');
+            // All custom URLs are sent as catalog_url params; the server always
+            // includes the default catalog and merges these on top.
             if (primaryCatalogUrl) params.append('catalog_url', primaryCatalogUrl);
             for (const extraUrl of additionalCatalogUrls) params.append('catalog_url', extraUrl);
             if (ru) params.set('repo_url', ru);
@@ -27,10 +32,22 @@ export function AddonsSection({ setStatus, filter = '' }) {
 
     const loadAddons = useCallback(async () => {
         try {
-            const resp = await fetch(`/agent/addons${devParams()}`);
-            const data = await resp.json();
+            const [addonsResp, settingsResp] = await Promise.all([
+                fetch(`/agent/addons${devParams()}`),
+                fetch('/agent/settings-data'),
+            ]);
+            const data = await addonsResp.json();
             if (data.error) throw new Error(data.error);
             setAddons(data.addons || []);
+            setCatalogSources(data.sources || []);
+            setFailedSources(data.failed_sources || []);
+
+            const settingsData = await settingsResp.json().catch(() => ({}));
+            const runtimePlatform = typeof settingsData?.runtimePlatform === 'string' ? settingsData.runtimePlatform : '';
+            setPlatformInfo({
+                runtime: runtimePlatform,
+                windowsNative: runtimePlatform === 'win32',
+            });
         } catch (e) { setAddons(null); setStatus?.(String(e.message || e), 'error'); }
         finally { setLoading(false); }
     }, [setStatus]);
@@ -45,7 +62,8 @@ export function AddonsSection({ setStatus, filter = '' }) {
             const data = await resp.json();
             if (data.error) { setStatus?.(data.error, 'error'); return; }
             setRestartRequired(true);
-            setStatus?.(data.message, 'success'); await loadAddons();
+            const summary = [data.message, data.warning].filter(Boolean).join(' ');
+            setStatus?.(summary || 'Add-on installed.', 'success'); await loadAddons();
         } catch (e) { setStatus?.(String(e.message || e), 'error'); }
         finally { setBusy(null); }
     }, [busy, loadAddons, setStatus]);
@@ -59,7 +77,8 @@ export function AddonsSection({ setStatus, filter = '' }) {
             const data = await resp.json();
             if (data.error) { setStatus?.(data.error, 'error'); return; }
             setRestartRequired(true);
-            setStatus?.(data.message, 'success'); await loadAddons();
+            const summary = [data.message, data.warning].filter(Boolean).join(' ');
+            setStatus?.(summary || 'Add-on removed.', 'success'); await loadAddons();
         } catch (e) { setStatus?.(String(e.message || e), 'error'); }
         finally { setBusy(null); }
     }, [busy, loadAddons, setStatus]);
@@ -96,7 +115,33 @@ export function AddonsSection({ setStatus, filter = '' }) {
     return html`
         <div class=${`settings-section settings-addon-panel${busy ? ' busy' : ''}`} aria-busy=${busy ? 'true' : 'false'}>
             <div class="settings-addon-toolbar">
-                <p class="settings-hint">Catalog from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>. Package-first install via Bun; restart required after install/uninstall.</p>
+                <div>
+                    <p class="settings-hint">
+                        ${catalogSources.length <= 1
+                            ? html`Catalog from <a href="https://github.com/rcarmo/piclaw-addons" target="_blank">rcarmo/piclaw-addons</a>.`
+                            : html`${catalogSources.length} catalog sources merged.`}
+                        ${' '}Package-first install via Bun; restart required after install/uninstall.
+                    </p>
+                    ${failedSources.length > 0 && html`
+                        <div class="settings-addon-error" role="alert">
+                            Failed to fetch ${failedSources.length} catalog source${failedSources.length > 1 ? 's' : ''}:
+                            ${failedSources.map(u => html` <code style="font-size:0.82em;word-break:break-all">${u}</code>`)}
+                        </div>
+                    `}
+                    ${catalogSources.length > 1 && html`
+                        <details class="settings-hint" style="margin-top:4px">
+                            <summary style="cursor:pointer">Active catalog sources (${catalogSources.length})</summary>
+                            <ul style="margin:4px 0 0 16px;font-size:0.82em">
+                                ${catalogSources.map(u => html`<li style="word-break:break-all"><code>${u}</code></li>`)}
+                            </ul>
+                        </details>
+                    `}
+                    ${platformInfo.windowsNative && html`
+                        <div class="settings-addon-error" role="alert">
+                            Native Windows add-on installs are higher risk: Bun package installs, symlink cleanup, locked files, and restart timing can all be less predictable than in Linux/WSL. Prefer WSL or a container when possible.
+                        </div>
+                    `}
+                </div>
             </div>
             ${busy && html`
                 <div class="settings-addon-panel-overlay" role="status" aria-live="polite" aria-label=${busyLabel}>

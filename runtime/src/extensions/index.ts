@@ -50,7 +50,6 @@ import { chatTool } from "./chat-tool.js";
 import { openWorkspaceFile } from "./open-workspace-file.js";
 import { envTools } from "./env-tools.js";
 import { exitProcess } from "./exit-process.js";
-import { autoresearchSupervisor } from "./autoresearch-supervisor.js";
 import { imageProcessing } from "./image-processing.js";
 import { remotePair } from "./remote-pair.js";
 import { sessionStatus } from "./session-status.js";
@@ -79,7 +78,6 @@ export function createBuiltinExtensionFactories(options?: {
     openWorkspaceFile,
     envTools,
     exitProcess,
-    autoresearchSupervisor,
     imageProcessing,
     remotePair,
     sessionStatus,

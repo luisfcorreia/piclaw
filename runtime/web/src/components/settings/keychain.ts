@@ -137,7 +137,7 @@ export function KeychainSection({ filter = '' }) {
 
             ${showAdd && html`
                 <div class="settings-keychain-add-form">
-                    <div class="settings-keychain-add-row">
+                    <div class="settings-keychain-add-row settings-keychain-add-row-primary">
                         <input ref=${nameRef} type="text" placeholder="Entry name (e.g. github/my-token)"
                             value=${addName} onInput=${e => setAddName(e.target.value)}
                             class="settings-keychain-input" />
@@ -146,13 +146,13 @@ export function KeychainSection({ filter = '' }) {
                             ${TYPE_OPTIONS.map(t => html`<option value=${t}>${t}</option>`)}
                         </select>
                     </div>
-                    <div class="settings-keychain-add-row">
+                    <div class="settings-keychain-add-row settings-keychain-add-row-secondary">
                         <input type="password" placeholder="Secret value"
                             value=${addSecret} onInput=${e => setAddSecret(e.target.value)}
                             class="settings-keychain-input settings-keychain-secret" />
                         <input type="text" placeholder="Username (optional)"
                             value=${addUsername} onInput=${e => setAddUsername(e.target.value)}
-                            class="settings-keychain-input" style="max-width:200px" />
+                            class="settings-keychain-input settings-keychain-username-input" />
                         <button class="settings-keychain-save-btn" onClick=${handleAdd}
                             disabled=${saving || !addName.trim() || !addSecret}>
                             ${saving ? 'Saving…' : 'Save'}
@@ -182,7 +182,15 @@ export function KeychainSection({ filter = '' }) {
                             <tr class="settings-keychain-row" key=${e.name}>
                                 <td class="settings-keychain-name">${e.name}</td>
                                 <td><span class="settings-keychain-type-badge">${e.type}</span></td>
-                                <td class="settings-keychain-env">${e.envVar ? html`<code>$${e.envVar}</code>` : '—'}</td>
+                                <td class="settings-keychain-env">
+                                    ${e.envVar ? html`
+                                        <div class="settings-keychain-env-list">
+                                            <code>$${e.envVar}</code>
+                                            <code>%${e.envVar}%</code>
+                                            <code>$env:${e.envVar}</code>
+                                        </div>
+                                    ` : '—'}
+                                </td>
                                 <td class="settings-keychain-date">${formatDate(e.updatedAt)}</td>
                                 <td class="settings-keychain-actions">
                                     ${confirmDelete === e.name
@@ -202,7 +210,7 @@ export function KeychainSection({ filter = '' }) {
                     </tbody>
                 </table>
             </div>
-            <p class="settings-hint">Entries are encrypted at rest and auto-injected as environment variables into bash commands. Secrets are never displayed in the UI.</p>
+            <p class="settings-hint">Entries are encrypted at rest and auto-injected as environment variables for shell/tool execution. Use the shell syntax that matches your environment: <code>$NAME</code>, <code>%NAME%</code>, or <code>$env:NAME</code>. Secrets are never displayed in the UI.</p>
         </div>
     `;
 }

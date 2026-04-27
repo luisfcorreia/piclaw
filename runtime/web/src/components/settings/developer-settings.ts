@@ -34,6 +34,8 @@ function DeveloperSettingsSection() {
                 <input type="checkbox" checked=${devMode} onChange=${toggleDev} />
             </div>
 
+            <p class="settings-hint settings-local-only-hint">This browser only. Developer-mode toggles and add-on catalog overrides are stored in local browser storage.</p>
+
             ${devMode && html`
                 <h3 style="margin-top:16px">Add-on Sources</h3>
                 <div class="settings-row">

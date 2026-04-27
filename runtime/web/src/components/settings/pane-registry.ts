@@ -33,11 +33,17 @@ export function registerSettingsPane(def: SettingsPaneDefinition): void {
     registry.sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 }
 
+export function unregisterSettingsPane(id: string): void {
+    const idx = registry.findIndex(p => p.id === id);
+    if (idx >= 0) registry.splice(idx, 1);
+}
+
 export function getRegisteredSettingsPanes(): SettingsPaneDefinition[] {
     return [...registry];
 }
 
 /** Dispatch a custom event so the settings dialog knows to re-render. */
 export function notifySettingsPanesChanged(): void {
+    if (typeof window === 'undefined') return;
     window.dispatchEvent(new CustomEvent('piclaw:settings-panes-changed'));
 }

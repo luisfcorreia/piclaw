@@ -7,8 +7,14 @@ function resolveAvatarPreview(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
     if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:') || raw.startsWith('blob:')) return raw;
-    const rel = raw.startsWith('/workspace/') ? raw.slice('/workspace/'.length) : raw;
-    return `/workspace/file?path=${encodeURIComponent(rel)}`;
+    if (raw.startsWith('/workspace/')) {
+        return `/workspace/file?path=${encodeURIComponent(raw.slice('/workspace/'.length))}`;
+    }
+    if (raw.startsWith('/')) return '';
+    if (/^[a-zA-Z]:[\\/]/.test(raw)) return '';
+    if (raw.startsWith('\\\\')) return '';
+    if (raw.includes('\\')) return '';
+    return `/workspace/file?path=${encodeURIComponent(raw.replace(/^\.\//, ''))}`;
 }
 
 function AvatarField({ value, onChange }) {
@@ -45,12 +51,8 @@ function normalizeGeneralSettings(data = {}) {
         userAvatar: data.userAvatar || '',
         assistantName: data.assistantName || '',
         assistantAvatar: data.assistantAvatar || '',
-        sessionAutoRotate: data.sessionAutoRotate !== false,
-        sessionMaxSizeMb: data.sessionMaxSizeMb ?? 32,
         composeUploadLimitMb: data.composeUploadLimitMb ?? 32,
         workspaceUploadLimitMb: data.workspaceUploadLimitMb ?? 256,
-        toolUseBudget: data.toolUseBudget ?? 64,
-        sessionIsolation: data.sessionIsolation || 'none',
     };
 }
 
@@ -59,12 +61,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
     const [userAvatar, setUserAvatar] = useState('');
     const [assistantName, setAssistantName] = useState('');
     const [assistantAvatar, setAssistantAvatar] = useState('');
-    const [sessionAutoRotate, setSessionAutoRotate] = useState(true);
-    const [sessionMaxSizeMb, setSessionMaxSizeMb] = useState(32);
     const [composeUploadLimitMb, setComposeUploadLimitMb] = useState(32);
     const [workspaceUploadLimitMb, setWorkspaceUploadLimitMb] = useState(256);
-    const [toolUseBudget, setToolUseBudget] = useState(64);
-    const [sessionIsolation, setSessionIsolation] = useState('none');
     const [metersEnabled, setMetersEnabled] = useState(() => readStoredMetersEnabled(false));
     const [appliedHint, setAppliedHint] = useState(false);
     const savedSnapshotRef = useRef('');
@@ -82,12 +80,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
         setUserAvatar(next.userAvatar);
         setAssistantName(next.assistantName);
         setAssistantAvatar(next.assistantAvatar);
-        setSessionAutoRotate(next.sessionAutoRotate);
-        setSessionMaxSizeMb(next.sessionMaxSizeMb);
         setComposeUploadLimitMb(next.composeUploadLimitMb);
         setWorkspaceUploadLimitMb(next.workspaceUploadLimitMb);
-        setToolUseBudget(next.toolUseBudget);
-        setSessionIsolation(next.sessionIsolation);
         savedSnapshotRef.current = JSON.stringify(next);
     }, []);
 
@@ -105,18 +99,12 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
 
     const currentSnapshot = useMemo(() => JSON.stringify(normalizeGeneralSettings({
         userName, userAvatar, assistantName, assistantAvatar,
-        sessionAutoRotate, sessionMaxSizeMb,
-        composeUploadLimitMb, workspaceUploadLimitMb, toolUseBudget,
-        sessionIsolation,
+        composeUploadLimitMb, workspaceUploadLimitMb,
     })), [
         userName, userAvatar, assistantName, assistantAvatar,
-        sessionAutoRotate, sessionMaxSizeMb,
-        composeUploadLimitMb, workspaceUploadLimitMb, toolUseBudget,
-        sessionIsolation,
+        composeUploadLimitMb, workspaceUploadLimitMb,
     ]);
 
-    // Auto-save on every change with debounce.
-    // Skip if a number input is actively focused (user is still typing a value).
     useEffect(() => {
         if (currentSnapshot === savedSnapshotRef.current) return;
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -153,6 +141,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
         qrSvg: '',
     };
 
+    const isSecureContext = typeof window !== 'undefined' && window.isSecureContext;
+
     return html`
         <div class="settings-section">
             ${appliedHint && html`
@@ -172,23 +162,30 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                 <input type="text" value=${assistantName} onInput=${e => setAssistantName(e.target.value)} placeholder="Agent name" />
             </div>
 
-            <h3 style="margin-top:20px">Session</h3>
-            <div class="settings-row">
-                <label>Auto-rotate sessions</label>
-                <input type="checkbox" checked=${sessionAutoRotate} onChange=${e => setSessionAutoRotate(e.target.checked)} />
-            </div>
-            <div class="settings-row">
-                <label>Max session size (MB)</label>
-                <${NumberStepper}
-                    label="max session size"
-                    value=${sessionMaxSizeMb}
-                    min=${1}
-                    max=${256}
-                    fallback=${32}
-                    width="80px"
-                    onChange=${setSessionMaxSizeMb}
-                />
-            </div>
+            <h3 style="margin-top:20px">Notifications</h3>
+            ${isSecureContext ? html`
+                <div class="settings-row">
+                    <label>Browser notifications</label>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span class="settings-hint" style="margin:0">
+                            Use the 🔔 bell button in the compose bar to enable/disable notifications.
+                            Web Push requires HTTPS or localhost.
+                        </span>
+                    </div>
+                </div>
+            ` : html`
+                <div class="settings-row">
+                    <label>Browser notifications</label>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span class="settings-hint" style="margin:0; color: var(--error-color, #e55)">
+                            ⚠ Not available — requires a secure context (HTTPS or localhost).
+                            Access via SSH tunnel or reverse proxy with TLS to enable.
+                        </span>
+                    </div>
+                </div>
+            `}
+
+            <h3 style="margin-top:20px">Display</h3>
             <div class="settings-row">
                 <label>System meters</label>
                 <div style="display:flex; align-items:center; gap:10px;">
@@ -197,29 +194,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                             const next = applyMetersEnabled(!metersEnabled);
                             setMetersEnabled(next);
                         }} />
-                    <span class="settings-hint" style="margin:0">Same toggle as <code>/meters on|off|toggle</code>. Applies immediately in this browser.</span>
+                    <span class="settings-hint" style="margin:0">CPU/memory/network meters in the status bar. This browser only.</span>
                 </div>
-            </div>
-            <div class="settings-row">
-                <label>Tool use budget</label>
-                <${NumberStepper}
-                    label="tool use budget"
-                    value=${toolUseBudget}
-                    min=${8}
-                    max=${512}
-                    fallback=${64}
-                    width="80px"
-                    onChange=${setToolUseBudget}
-                />
-                <span class="settings-hint" style="margin:0">per turn</span>
-            </div>
-            <div class="settings-row">
-                <label>Session isolation</label>
-                <select value=${sessionIsolation} onChange=${e => setSessionIsolation(e.target.value)}>
-                    <option value="none">None — full cross-session visibility</option>
-                    <option value="summary">Summary — tools visible, no arguments</option>
-                    <option value="full">Full — sessions cannot see each other</option>
-                </select>
             </div>
 
             <h3 style="margin-top:20px">Instance Configuration</h3>
@@ -249,6 +225,8 @@ export function GeneralSection({ settingsData, setStatus, mergeSettingsData }) {
                 />
                 <span class="settings-hint" style="margin:0">defaults to 256 MB; chunked uploads allow up to 1 GB</span>
             </div>
+
+            <h3 style="margin-top:20px">Authentication</h3>
             <div class="settings-totp-panel">
                 <div class="settings-totp-header">
                     <div>

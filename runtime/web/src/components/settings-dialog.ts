@@ -10,7 +10,7 @@ import { BodyPortal } from './body-portal.js';
 import { getRegisteredSettingsPanes } from './settings/pane-registry.js';
 
 type SettingsSectionComponent = unknown;
-type BuiltinSectionId = 'general' | 'providers' | 'models' | 'theme' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
+type BuiltinSectionId = 'general' | 'sessions' | 'workspace' | 'providers' | 'models' | 'theme' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
 
 const builtinSectionComponentCache = new Map<BuiltinSectionId, SettingsSectionComponent>();
 const builtinSectionLoadPromiseCache = new Map<BuiltinSectionId, Promise<SettingsSectionComponent>>();
@@ -19,6 +19,8 @@ let extensionSettingsPanesPromise: Promise<void> | null = null;
 
 const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSectionComponent>> = {
     general: () => import('./settings/general.js').then(mod => mod.GeneralSection),
+    sessions: () => import('./settings/sessions.js').then(mod => mod.SessionsSection),
+    workspace: () => import('./settings/workspace.js').then(mod => mod.WorkspaceSection),
     providers: () => import('./settings/providers.js').then(mod => mod.ProvidersSection),
     models: () => import('./settings/models.js').then(mod => mod.ModelsSection),
     theme: () => import('./settings/appearance.js').then(mod => mod.ThemeSection),
@@ -88,6 +90,8 @@ function renderSectionLoading(label = 'Loading…') {
 // ── SVG nav icons ───────────────────────────────────────────────────────────
 // All icons: 24×24 viewBox, 16×16 rendered, stroke-based, stroke-width 2, round caps/joins.
 const iconGeneral = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M8.5 5.9L9.6 2.3h4.8l1.1 3.6 3.7-.8 2.4 4.1-2.6 2.8 2.6 2.8-2.4 4.1-3.7-.8-1.1 3.6H9.6l-1.1-3.6-3.7.8-2.4-4.1L5 12 2.4 9.2l2.4-4.1z"/></svg>`;
+const iconSessions = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+const iconWorkspace = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>`;
 const iconProviders = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>`;
 const iconModels = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="14" height="10" rx="2"/><circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.5" fill="currentColor" stroke="none"/><line x1="12" y1="9" x2="12" y2="5"/><circle cx="12" cy="4" r="1.5"/></svg>`;
 const iconAppearance = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c1.1 0 2-.9 2-2 0-.53-.21-1.01-.55-1.36-.34-.36-.55-.84-.55-1.37 0-1.1.9-2 2-2h2.36c3.08 0 5.64-2.56 5.64-5.64C22.9 5.85 18.05 2 12 2z"/><circle cx="8" cy="10" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="16" cy="10" r="1.5" fill="currentColor" stroke="none"/></svg>`;
@@ -99,6 +103,8 @@ const iconAddons = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="no
 // Built-in sections (order 0-100)
 const BUILTIN_SECTIONS = [
     { id: 'general', label: 'General', icon: iconGeneral, searchable: false, order: 10 },
+    { id: 'sessions', label: 'Sessions', icon: iconSessions, searchable: false, order: 12 },
+    { id: 'workspace', label: 'Workspace', icon: iconWorkspace, searchable: false, order: 15 },
     { id: 'providers', label: 'Providers', icon: iconProviders, searchable: false, order: 20 },
     { id: 'models', label: 'Models', icon: iconModels, searchable: true, placeholder: 'Filter models…', order: 30 },
     { id: 'theme', label: 'Appearance', icon: iconAppearance, searchable: false, order: 40 },
@@ -117,7 +123,9 @@ function SettingsDialogContent({ onClose }) {
     const [builtinSectionComponents, setBuiltinSectionComponents] = useState(() => Object.fromEntries(builtinSectionComponentCache.entries()));
     const [loadingSectionId, setLoadingSectionId] = useState('general');
     const [extensionPanesLoaded, setExtensionPanesLoaded] = useState(extensionSettingsPanesReady);
+    const [layoutMode, setLayoutMode] = useState({ compact: false, narrow: false });
     const filterRef = useRef(null);
+    const dialogRef = useRef(null);
 
     useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -145,6 +153,32 @@ function SettingsDialogContent({ onClose }) {
 
     useEffect(() => {
         fetch('/agent/settings-data').then(r => r.json()).then(setSettingsData).catch(() => setSettingsData({}));
+    }, []);
+
+    useEffect(() => {
+        const element = dialogRef.current;
+        if (!element) return;
+
+        const updateLayoutMode = () => {
+            const width = element.clientWidth || 0;
+            setLayoutMode((prev) => {
+                const next = {
+                    compact: width > 0 && width <= 860,
+                    narrow: width > 0 && width <= 720,
+                };
+                return prev.compact === next.compact && prev.narrow === next.narrow ? prev : next;
+            });
+        };
+
+        updateLayoutMode();
+        if (typeof ResizeObserver === 'function') {
+            const observer = new ResizeObserver(() => updateLayoutMode());
+            observer.observe(element);
+            return () => observer.disconnect();
+        }
+
+        window.addEventListener('resize', updateLayoutMode);
+        return () => window.removeEventListener('resize', updateLayoutMode);
     }, []);
 
     const extensionPanes = extensionPanesLoaded ? getRegisteredSettingsPanes() : [];
@@ -223,6 +257,8 @@ function SettingsDialogContent({ onClose }) {
 
         switch (activeSection) {
             case 'general': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
+            case 'sessions': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
+            case 'workspace': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
             case 'providers': return html`<${Comp} providers=${settingsData?.providers} setStatus=${setStatus} />`;
             case 'models': return html`<${Comp} filter=${filter} />`;
             case 'theme': return html`<${Comp} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
@@ -238,7 +274,7 @@ function SettingsDialogContent({ onClose }) {
 
     return html`
         <div class="settings-dialog-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
-            <div class="settings-dialog">
+            <div ref=${dialogRef} class=${`settings-dialog${layoutMode.compact ? ' settings-dialog-compact' : ''}${layoutMode.narrow ? ' settings-dialog-narrow' : ''}`}>
                 <div class="settings-dialog-header">
                     <span class="settings-dialog-title">Settings</span>
                     ${activeMeta?.searchable && html`

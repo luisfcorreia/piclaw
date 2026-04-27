@@ -49,7 +49,7 @@ function MindmapSettingsSection() {
                 <input type="checkbox" checked=${animateTransitions}
                     onChange=${() => { const v = !animateTransitions; setAnimateTransitions(v); setBool('piclaw_mindmap_animate', v); }} />
             </div>
-            <p class="settings-hint">Opens <code>.mindmap.yaml</code> files. Changes take effect on the next map open.</p>
+            <p class="settings-hint settings-local-only-hint">This browser only. Opens <code>.mindmap.yaml</code> files. Changes take effect on the next map open.</p>
         </div>
     `;
 }

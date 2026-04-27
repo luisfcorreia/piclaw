@@ -139,7 +139,7 @@ See [WORKITEMS.md](WORKITEMS.md) for board lane definitions and label taxonomy.
 - [rcarmo/agentbox](https://github.com/rcarmo/agentbox)
 - [qwibitai/nanoclaw](https://github.com/qwibitai/nanoclaw)
 - [badlogic/pi-mono](https://github.com/badlogic/pi-mono)
-- [davebcn87/pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) — autonomous experiment loop by Tobi Lutke and David Cortés (vendored under `runtime/vendor/autoresearch/`)
+- [davebcn87/pi-autoresearch](https://github.com/davebcn87/pi-autoresearch) — autonomous experiment loop by Tobi Lutke and David Cortés (now carried by the autoresearch add-on in `rcarmo/piclaw-addons`)
 - [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) — visual artifact generation skill philosophy, prompt workflow, and template patterns by Nico Bailon (adapted, not vendored)
 
 ## Licence

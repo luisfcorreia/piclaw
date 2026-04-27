@@ -44,7 +44,6 @@ const BACKEND_SERVICE_SCOPE_PATHS = [
   "runtime/src/channels/web/link-previews.ts",
   "runtime/src/agent-control/handlers/control.ts",
   "runtime/src/agent-control/handlers/login.ts",
-  "runtime/src/extensions/autoresearch-supervisor.ts",
   "runtime/src/extensions/exit-process.ts",
   "runtime/src/extensions/file-attachments.ts",
 ];

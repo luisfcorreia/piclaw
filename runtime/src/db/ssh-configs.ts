@@ -24,7 +24,7 @@ export function getSshConfig(chatJid: string): SshConfig | null {
   };
 }
 
-export function upsertSshConfig(config: Omit<SshConfig, "created_at" | "updated_at">): SshConfig {
+export function upsertSshConfig(config: Omit<SshConfig, "created_at" | "updated_at" | "last_used_at">): SshConfig {
   const db = getDb();
   const now = new Date().toISOString();
   const strictMode = normalizeStrictMode(config.strict_host_key_checking);

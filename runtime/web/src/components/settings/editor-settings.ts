@@ -82,7 +82,7 @@ function EditorSettingsSection() {
                     onInput=${e => { const v = e.target.value; setEditorFontFamily(v); setString('piclaw_editor_font_family', v); }}
                     placeholder="monospace (default)" />
             </div>
-            <p class="settings-hint">Editor changes take effect when you next open or reload a file tab.</p>
+            <p class="settings-hint settings-local-only-hint">This browser only. Editor changes are stored in local browser storage and take effect when you next open or reload a file tab.</p>
         </div>
     `;
 }

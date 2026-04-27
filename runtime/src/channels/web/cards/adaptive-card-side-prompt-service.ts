@@ -26,6 +26,7 @@ import { parseJsonObjectRequest } from "../json-body.js";
 import { hashTotpSecret, parseTotpCardToken } from "../auth/totp-card.js";
 import { handleAgentMessage as handleAgentMessageRequest } from "../handlers/agent.js";
 import type { WebChannelLike } from "../core/web-channel-contracts.js";
+import { runAddonAdaptiveCardIntent } from "../../../addons/runtime-contributions.js";
 
 const log = createLogger("web");
 const SIDE_PROMPT_STREAM_HEARTBEAT_MS = 30000;
@@ -385,94 +386,59 @@ export class WebAdaptiveCardSidePromptService {
     }
 
     const isTotpFlow = rawSubmissionData && rawSubmissionData.intent === "totp-confirm";
-    const isAutoresearchLaunch = rawSubmissionData && rawSubmissionData.intent === "autoresearch-launch";
-    if (isAutoresearchLaunch) {
-      updateSourceCard(
-        markAdaptiveCardState(
-          sourceInteraction.data?.content_blocks,
-          normalized.cardId,
-          "completed",
-          submittedAt,
-          { action_type: normalized.actionType, title: "Launch", data: { intent: "autoresearch-launch" }, submitted_at: submittedAt },
-        ),
-      );
 
-      const selectedModel = typeof rawSubmissionData.model === "string" ? rawSubmissionData.model.trim() : "";
-      const sandboxToggle = rawSubmissionData.sandbox;
-      const useSandbox = sandboxToggle === "true" || sandboxToggle === true;
-      if (!selectedModel) {
-        await this.options.sendMessage(chatJid, "No model selected.", { threadId });
-        return this.options.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
-      }
-
+    const addonIntent = rawSubmissionData && typeof rawSubmissionData.intent === "string"
+      ? rawSubmissionData.intent.trim()
+      : "";
+    if (addonIntent && !isTotpFlow) {
       try {
-        const { consumePendingLaunch, startAutoresearchFromCard } = await import("../../../extensions/autoresearch-supervisor.js");
-        const pending = consumePendingLaunch();
-        if (!pending) {
-          await this.options.sendMessage(chatJid, "No pending experiment launch found. Use start_autoresearch to set one up.", { threadId });
-          return this.options.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
+        const handledAddonIntent = await runAddonAdaptiveCardIntent(addonIntent, {
+          chatJid,
+          threadId: threadId != null ? String(threadId) : null,
+          sourcePostId,
+          rawSubmissionData: rawSubmissionData ?? {},
+          sendMessage: (content, options = {}) => this.options.sendMessage(chatJid, content, { threadId: options.threadId != null ? Number(options.threadId) : threadId }),
+        });
+        if (handledAddonIntent) {
+          updateSourceCard(
+            markAdaptiveCardState(
+              sourceInteraction.data?.content_blocks,
+              normalized.cardId,
+              "completed",
+              submittedAt,
+              {
+                action_type: normalized.actionType,
+                title: normalized.actionTitle || "Submit",
+                data: { intent: addonIntent },
+                submitted_at: submittedAt,
+              },
+            ),
+          );
+          return this.options.json({
+            status: "ok",
+            card_updated: true,
+            source_post_id: sourcePostId,
+            card_id: normalized.cardId,
+            submitted_at: submittedAt,
+          }, 200);
         }
-
-        await this.options.sendMessage(chatJid, `Launching with model **${selectedModel}**…`, { threadId });
-        const result = await startAutoresearchFromCard({
-          project_dir: pending.project_dir,
-          prompt: pending.prompt,
-          model: selectedModel,
-          sandbox: useSandbox,
-          max_iterations: pending.max_iterations,
-          variables: pending.variables,
-          chat_jid: pending.chat_jid || chatJid,
-        });
-        await this.options.sendMessage(chatJid, result, { threadId });
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        log.warn("Failed to launch autoresearch experiment from adaptive card", {
-          operation: "handle_adaptive_card_action.autoresearch_launch",
+        log.warn("Failed to handle addon adaptive card intent", {
+          operation: "handle_adaptive_card_action.addon_intent",
           chatJid,
+          intent: addonIntent,
           err: error,
         });
-        await this.options.sendMessage(chatJid, `Failed to launch experiment: ${msg}`, { threadId });
+        await this.options.sendMessage(chatJid, `Failed to handle action: ${msg}`, { threadId });
+        return this.options.json({
+          status: "ok",
+          card_updated: true,
+          source_post_id: sourcePostId,
+          card_id: normalized.cardId,
+          submitted_at: submittedAt,
+        }, 200);
       }
-
-      return this.options.json({ status: "ok", card_updated: true, source_post_id: sourcePostId, card_id: normalized.cardId }, 200);
-    }
-
-    const isAutoresearchStop = rawSubmissionData && rawSubmissionData.intent === "autoresearch-stop";
-    if (isAutoresearchStop) {
-      updateSourceCard(
-        markAdaptiveCardState(
-          sourceInteraction.data?.content_blocks,
-          normalized.cardId,
-          "completed",
-          submittedAt,
-          { action_type: normalized.actionType, title: "Stop", data: { intent: "autoresearch-stop" }, submitted_at: submittedAt },
-        ),
-      );
-
-      const experimentId = typeof rawSubmissionData.experiment_id === "string" ? rawSubmissionData.experiment_id : "";
-      await this.options.sendMessage(chatJid, `Stopping autoresearch experiment${experimentId ? ` ${experimentId}` : ""}…`, { threadId });
-
-      try {
-        const { stopAutoresearchFromCard } = await import("../handlers/autoresearch-card-action.js");
-        const result = await stopAutoresearchFromCard();
-        await this.options.sendMessage(chatJid, result, { threadId });
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        log.warn("Failed to stop autoresearch experiment from adaptive card", {
-          operation: "handle_adaptive_card_action.autoresearch_stop",
-          chatJid,
-          err: error,
-        });
-        await this.options.sendMessage(chatJid, `Failed to stop experiment: ${msg}`, { threadId });
-      }
-
-      return this.options.json({
-        status: "ok",
-        card_updated: true,
-        source_post_id: sourcePostId,
-        card_id: normalized.cardId,
-        submitted_at: submittedAt,
-      }, 200);
     }
 
     if (isTotpFlow) {

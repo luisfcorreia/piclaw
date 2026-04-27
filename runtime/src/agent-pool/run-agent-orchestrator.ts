@@ -539,18 +539,10 @@ async function runPromptAttempt(
           failedToolName = toolName;
         }
       }
-      // If exit_process was called, abort the session immediately so no more
-      // tools execute. The turn output gathered so far will be committed by
-      // finalizeSuccessfulRun, which then calls checkPendingShutdown.
-      if (event.type === "tool_execution_end" && isPendingShutdown()) {
-        void session.abort().catch((err) => {
-          options.onWarn?.("Failed to abort session after exit_process", {
-            operation: "run_agent.pending_shutdown_abort",
-            chatJid,
-            err,
-          });
-        });
-      }
+      // If exit_process was called, do NOT abort immediately — let the LLM
+      // finish its current text response so the agent's reply is captured and
+      // persisted to the DB. The abort happens below in the message_end handler
+      // when the LLM tries to issue further tool calls (stopReason === "toolUse").
     }
     if (event.type === "message_end") {
       const message = (event as { message?: { role?: unknown; content?: unknown; stopReason?: unknown } }).message;
@@ -559,6 +551,19 @@ async function runPromptAttempt(
         sawAssistantToolCallMessage = sawAssistantToolCallMessage || hasToolCall;
         if (hasToolCall && message.stopReason === "toolUse") {
           assistantToolUseMessageCount += 1;
+          // If exit_process was called earlier in this turn, abort now before
+          // any further tool calls execute. The LLM's text reply has already
+          // been streamed and captured by onTurnComplete, so the agent's
+          // response will be persisted to the DB by finalizeSuccessfulRun.
+          if (isPendingShutdown()) {
+            void session.abort().catch((err) => {
+              options.onWarn?.("Failed to abort session after exit_process (deferred to message_end)", {
+                operation: "run_agent.pending_shutdown_abort",
+                chatJid,
+                err,
+              });
+            });
+          }
           if (!toolUseBudgetExceeded && assistantToolUseMessageCount > toolUseMessageBudget) {
             toolUseBudgetExceeded = true;
             void session.abort().catch((err) => {

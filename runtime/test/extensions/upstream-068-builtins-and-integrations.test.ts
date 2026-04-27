@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import "../helpers.js";
 import { createFakeExtensionApi } from "./fake-extension-api.js";
 import { imageProcessing } from "../../src/extensions/image-processing.js";
-import { autoresearchSupervisor } from "../../src/extensions/autoresearch-supervisor.js";
 import officeToolsToolExtension from "../../extensions/integrations/office-tools-tool/index.ts";
 import bunRunnerExtension from "../../extensions/integrations/bun-runner/index.ts";
 
@@ -66,18 +65,6 @@ describe("Pi 0.68.0 built-in and packaged adoption", () => {
     expect(writeUi.messages[0]).toBe("Office: writing bad.txt…");
     expect(writeUi.messages[writeUi.messages.length - 1]).toBeUndefined();
     expect(writeUi.indicators[writeUi.indicators.length - 1]).toEqual({ frames: [] });
-  });
-
-  test("autoresearch tools register with progress-aware execute signatures", () => {
-    const fake = createFakeExtensionApi();
-    autoresearchSupervisor(fake.api);
-
-    const startTool = fake.tools.get("start_autoresearch");
-    const stopTool = fake.tools.get("stop_autoresearch");
-    if (!startTool || !stopTool) throw new Error("autoresearch tools not registered");
-
-    expect(startTool.execute.length).toBeGreaterThanOrEqual(5);
-    expect(stopTool.execute.length).toBeGreaterThanOrEqual(5);
   });
 
   test("bun-runner remains a dedicated packaged integration and stays separate from bash", () => {

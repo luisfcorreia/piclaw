@@ -97,34 +97,4 @@ describe("session_shutdown upgrade regressions", () => {
     expect(mod.hasLiveChatSshSession(chatJid)).toBe(false);
   });
 
-  test("autoresearch clears its widget UI on session shutdown", async () => {
-    await withTempWorkspaceEnv("piclaw-autoresearch-shutdown-", {}, async (workspace) => {
-      const autoresearch = await importFresh<any>("../vendor/autoresearch/extensions/pi-autoresearch/index.ts");
-      const fake = createFakeExtensionApi({ allTools: [] });
-      autoresearch.default(fake.api);
-
-      const start = getHandler(fake.handlers as FakeHandler[], "session_start");
-      const shutdown = getHandler(fake.handlers as FakeHandler[], "session_shutdown");
-      const widgetCalls: Array<{ key: string; value: unknown }> = [];
-      const ctx = {
-        cwd: workspace.workspace,
-        hasUI: true,
-        ui: {
-          setWidget: (key: string, value: unknown) => widgetCalls.push({ key, value }),
-          setStatus() {},
-          notify() {},
-          theme: { fg: (_name: string, text: string) => text },
-        },
-        sessionManager: {
-          getSessionId: () => "session-shutdown-test",
-          getBranch: () => [],
-        },
-      };
-
-      await start.handler({}, ctx);
-      await shutdown.handler({}, ctx);
-
-      expect(widgetCalls).toContainEqual({ key: "autoresearch", value: undefined });
-    });
-  });
 });

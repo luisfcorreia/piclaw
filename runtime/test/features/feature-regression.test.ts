@@ -340,7 +340,6 @@ describe("feature: tool catalog", () => {
       "search_workspace", "refresh_workspace_index",
       "send_adaptive_card", "send_dashboard_widget",
       "open_workspace_file", "env", "exit_process",
-      "start_autoresearch", "stop_autoresearch", "autoresearch_status",
       "image_process",
     ];
     const missing = required.filter((n) => !registered.has(n));

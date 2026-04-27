@@ -1,4 +1,5 @@
 import { paneRegistry } from '../panes/index.js';
+import { registerSettingsPane, unregisterSettingsPane, notifySettingsPanesChanged } from '../components/settings/pane-registry.js';
 
 export interface AddonStandaloneTabUrlContext {
   hasPopOutTab?: boolean;
@@ -14,11 +15,14 @@ export interface AddonAttachmentPreviewDefinition {
 
 export interface AddonWebApiSurface {
   registerPane: (extension: any) => boolean;
+  registerWorkspacePane: (extension: any) => boolean;
+  registerSettingsPane: (definition: any) => () => void;
   registerStandaloneTabUrlResolver: (resolver: (path: string, context?: AddonStandaloneTabUrlContext) => string | null | undefined) => () => void;
   registerAttachmentPreview: (definition: AddonAttachmentPreviewDefinition) => () => void;
 }
 
 const addonPaneIds = new Set<string>();
+const addonSettingsPaneIds = new Set<string>();
 const standaloneTabUrlResolvers = new Set<(path: string, context?: AddonStandaloneTabUrlContext) => string | null | undefined>();
 const attachmentPreviewDefinitions = new Map<string, AddonAttachmentPreviewDefinition>();
 let addonWebApiInstalled = false;
@@ -34,11 +38,29 @@ function normalizeUrl(value: unknown, base: string): string | null {
   }
 }
 
-export function registerAddonPane(extension: any): boolean {
+export function registerAddonWorkspacePane(extension: any): boolean {
   if (!extension || typeof extension.id !== 'string' || !extension.id.trim()) return false;
   paneRegistry.register(extension);
   addonPaneIds.add(extension.id);
   return true;
+}
+
+export function registerAddonPane(extension: any): boolean {
+  return registerAddonWorkspacePane(extension);
+}
+
+export function registerAddonSettingsPane(definition: any): () => void {
+  if (!definition || typeof definition.id !== 'string' || !definition.id.trim()) {
+    return () => {};
+  }
+  registerSettingsPane(definition);
+  addonSettingsPaneIds.add(definition.id);
+  notifySettingsPanesChanged();
+  return () => {
+    unregisterSettingsPane(definition.id);
+    addonSettingsPaneIds.delete(definition.id);
+    notifySettingsPanesChanged();
+  };
 }
 
 export function registerAddonStandaloneTabUrlResolver(
@@ -116,6 +138,8 @@ export function buildAddonAttachmentPreviewFrameUrl(kind: string | null | undefi
 export function createAddonWebApi(): AddonWebApiSurface {
   return {
     registerPane: registerAddonPane,
+    registerWorkspacePane: registerAddonWorkspacePane,
+    registerSettingsPane: registerAddonSettingsPane,
     registerStandaloneTabUrlResolver: registerAddonStandaloneTabUrlResolver,
     registerAttachmentPreview: registerAddonAttachmentPreview,
   };
@@ -126,6 +150,8 @@ export function installAddonWebApi(runtimeWindow: (Window & typeof globalThis) |
   if (!runtimeWindow || addonWebApiInstalled) return api;
   (runtimeWindow as any).__piclaw_web = api;
   (runtimeWindow as any).__piclaw_registerPane = api.registerPane;
+  (runtimeWindow as any).__piclaw_registerWorkspacePane = api.registerWorkspacePane;
+  (runtimeWindow as any).__piclaw_registerSettingsPane = api.registerSettingsPane;
   (runtimeWindow as any).__piclaw_registerStandaloneTabUrlResolver = api.registerStandaloneTabUrlResolver;
   (runtimeWindow as any).__piclaw_registerAttachmentPreview = api.registerAttachmentPreview;
   addonWebApiInstalled = true;
@@ -165,7 +191,12 @@ export function resetAddonWebRegistriesForTests(): void {
   for (const paneId of addonPaneIds) {
     paneRegistry.unregister(paneId);
   }
+  for (const paneId of addonSettingsPaneIds) {
+    unregisterSettingsPane(paneId);
+  }
   addonPaneIds.clear();
+  addonSettingsPaneIds.clear();
+  notifySettingsPanesChanged();
   standaloneTabUrlResolvers.clear();
   attachmentPreviewDefinitions.clear();
   addonWebEntryLoadPromise = null;
