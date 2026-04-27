@@ -278,8 +278,8 @@ function SettingsDialogContent({ onClose }) {
     `;
 }
 
-export function SettingsDialog() {
-    const [open, setOpen] = useState(false);
+export function SettingsDialog({ initialOpen = false } = {}) {
+    const [open, setOpen] = useState(Boolean(initialOpen));
     useEffect(() => {
         const handler = () => setOpen(true);
         window.addEventListener('piclaw:open-settings', handler);

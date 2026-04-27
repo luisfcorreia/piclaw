@@ -34,16 +34,6 @@ function notifySettingsDialogSubscribers(): void {
     }
 }
 
-function scheduleDeferredOpen(mod: SettingsDialogModule): void {
-    requestAnimationFrame(() => {
-        try {
-            mod.openSettingsDialog?.();
-        } catch (error) {
-            console.error('[settings-dialog-loader] Failed to open settings dialog after load.', error);
-        }
-    });
-}
-
 function loadSettingsDialogModule(): Promise<SettingsDialogModule> {
     if (settingsDialogModuleCache) return Promise.resolve(settingsDialogModuleCache);
     if (settingsDialogModulePromise) return settingsDialogModulePromise;
@@ -57,11 +47,6 @@ function loadSettingsDialogModule(): Promise<SettingsDialogModule> {
             settingsDialogLoading = false;
             settingsDialogModulePromise = null;
             notifySettingsDialogSubscribers();
-            if (settingsDialogPendingOpen) {
-                settingsDialogPendingOpen = false;
-                notifySettingsDialogSubscribers();
-                scheduleDeferredOpen(mod);
-            }
             return mod;
         })
         .catch((error) => {
@@ -81,12 +66,7 @@ function subscribeSettingsDialogLoader(callback: (snapshot: LoaderSnapshot) => v
     return () => settingsDialogSubscribers.delete(callback);
 }
 
-export function openSettingsDialog() {
-    if (settingsDialogModuleCache) {
-        settingsDialogModuleCache.openSettingsDialog?.();
-        return;
-    }
-
+function requestOpenSettingsDialog(): void {
     settingsDialogPendingOpen = true;
     notifySettingsDialogSubscribers();
     loadSettingsDialogModule().catch((error) => {
@@ -94,10 +74,23 @@ export function openSettingsDialog() {
     });
 }
 
+export function openSettingsDialog() {
+    window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
+}
+
 export function SettingsDialogLoader() {
     const [snapshot, setSnapshot] = useState(getLoaderSnapshot);
 
     useEffect(() => subscribeSettingsDialogLoader(setSnapshot), []);
+    useEffect(() => {
+        const handleOpenSettings = () => {
+            if (!settingsDialogModuleCache) {
+                requestOpenSettingsDialog();
+            }
+        };
+        window.addEventListener('piclaw:open-settings', handleOpenSettings);
+        return () => window.removeEventListener('piclaw:open-settings', handleOpenSettings);
+    }, []);
 
     const showLoadingOverlay = !snapshot.loaded && (snapshot.pendingOpen || snapshot.loading);
     const LoadedDialog = settingsDialogModuleCache?.SettingsDialog || null;
@@ -113,7 +106,7 @@ export function SettingsDialogLoader() {
                 </div>
             </div>
         `}
-        ${LoadedDialog && html`<${LoadedDialog} />`}
+        ${LoadedDialog && html`<${LoadedDialog} initialOpen=${snapshot.pendingOpen} />`}
     `;
 }
 
