@@ -786,6 +786,11 @@ const configWorkspaceSearchExtensions = pickStringArray(toolsConfig, [
   "workspace_search_extensions",
   "PICLAW_WORKSPACE_SEARCH_EXTENSIONS",
 ]);
+const configSearchMatchMode = pickString(toolsConfig, [
+  "searchMatchMode",
+  "search_match_mode",
+  "PICLAW_SEARCH_MATCH_MODE",
+]);
 
 /** Typed session-file safeguards grouped for runtime/session wiring. */
 export interface SessionStorageConfig {
@@ -908,6 +913,9 @@ export const TOOL_ACTIVATION_CONFIG = Object.freeze<ToolActivationConfig>({
   additionalDefaultTools: configAdditionalDefaultTools ?? [],
 });
 
+/** FTS match mode for multi-word queries: "or" = any keyword, "and" = all keywords. */
+export type SearchMatchMode = "or" | "and";
+
 /** Typed workspace-search config grouped for FTS root and extension selection. */
 export interface WorkspaceSearchConfig {
   roots: string[];
@@ -934,6 +942,48 @@ export const WORKSPACE_SEARCH_CONFIG = Object.freeze<WorkspaceSearchConfig>({
 /** Return grouped workspace-search config for runtime wiring and tests. */
 export function getWorkspaceSearchConfig(): Readonly<WorkspaceSearchConfig> {
   return WORKSPACE_SEARCH_CONFIG;
+}
+
+// ---------------------------------------------------------------------------
+// Search match mode – controls whether multi-word FTS queries use OR or AND.
+// ---------------------------------------------------------------------------
+
+function parseSearchMatchMode(raw: string | null | undefined): SearchMatchMode {
+  const lower = (raw ?? "").trim().toLowerCase();
+  return lower === "and" ? "and" : "or";
+}
+
+let SEARCH_MATCH_MODE: SearchMatchMode = parseSearchMatchMode(
+  process.env.PICLAW_SEARCH_MATCH_MODE ?? configSearchMatchMode,
+);
+
+/** Return the current FTS match mode ("or" = any keyword, "and" = all keywords). */
+export function getSearchMatchMode(): SearchMatchMode {
+  // Read dynamically so test env overrides take effect.
+  const envOverride = process.env.PICLAW_SEARCH_MATCH_MODE?.trim().toLowerCase();
+  if (envOverride === "and" || envOverride === "or") return envOverride;
+  return SEARCH_MATCH_MODE;
+}
+
+/** Persist and apply the search match mode. */
+export function setSearchMatchMode(mode: SearchMatchMode): SearchMatchMode {
+  const nextMode: SearchMatchMode = mode === "and" ? "and" : "or";
+  const config = readJsonConfig(getConfigPath());
+  const tools =
+    config.tools && typeof config.tools === "object"
+      ? { ...(config.tools as Record<string, unknown>) }
+      : {};
+  const clearKeys = ["searchMatchMode", "search_match_mode", "PICLAW_SEARCH_MATCH_MODE"];
+  for (const key of clearKeys) {
+    delete tools[key];
+  }
+  tools.searchMatchMode = nextMode;
+  config.tools = tools;
+  writeJsonConfig(getConfigPath(), config);
+
+  process.env.PICLAW_SEARCH_MATCH_MODE = nextMode;
+  SEARCH_MATCH_MODE = nextMode;
+  return SEARCH_MATCH_MODE;
 }
 
 /** Return grouped tool-activation config for runtime wiring and tests. */

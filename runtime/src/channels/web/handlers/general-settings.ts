@@ -12,16 +12,19 @@ import {
   getSessionStorageConfig,
   getToolUseMessageBudget,
   getWebRuntimeConfig,
+  getSearchMatchMode,
   setAssistantAvatar,
   setAssistantName,
   setSessionStorageConfig,
   setToolUseMessageBudget,
+  setSearchMatchMode,
   setUserAvatar,
   setUserAvatarBackground,
   setUserName,
   setWebComposeUploadLimitMb,
   setWebTerminalEnabled,
   setWebWorkspaceUploadLimitMb,
+  type SearchMatchMode,
 } from "../../../core/config.js";
 import { updateAssistantConfig, updateUserConfig } from "../../../agent-control/agent-control-helpers.js";
 import { generateTotpQr } from "../../../utils/totp-qr.js";
@@ -47,6 +50,7 @@ export interface GeneralSettingsData {
     qrSvg: string;
   };
   sessionIsolation: "none" | "summary" | "full";
+  searchMatchMode: "or" | "and";
 }
 
 export interface GeneralSettingsInput {
@@ -61,6 +65,7 @@ export interface GeneralSettingsInput {
   workspaceUploadLimitMb?: unknown;
   toolUseBudget?: unknown;
   sessionIsolation?: unknown;
+  searchMatchMode?: unknown;
 }
 
 function normalizeOptionalString(value: unknown): string | null | undefined {
@@ -127,6 +132,7 @@ export function getGeneralSettingsData(): GeneralSettingsData {
     toolUseBudget: getToolUseMessageBudget(),
     instanceTotp: buildTotpSettingsData(),
     sessionIsolation: getSessionIsolationLevel(),
+    searchMatchMode: getSearchMatchMode(),
   };
 }
 
@@ -197,6 +203,11 @@ export async function saveGeneralSettings(input: GeneralSettingsInput): Promise<
   const nextSessionIsolation = typeof input.sessionIsolation === "string" ? input.sessionIsolation.trim().toLowerCase() : undefined;
   if (nextSessionIsolation === "none" || nextSessionIsolation === "summary" || nextSessionIsolation === "full") {
     setSessionIsolationLevel(nextSessionIsolation as SessionIsolationLevel);
+  }
+
+  const nextSearchMatchMode = typeof input.searchMatchMode === "string" ? input.searchMatchMode.trim().toLowerCase() : undefined;
+  if (nextSearchMatchMode === "or" || nextSearchMatchMode === "and") {
+    setSearchMatchMode(nextSearchMatchMode as SearchMatchMode);
   }
 
   return getGeneralSettingsData();

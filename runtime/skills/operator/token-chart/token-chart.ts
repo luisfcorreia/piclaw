@@ -56,6 +56,7 @@
 import { readdirSync, statSync, readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { basename, dirname, join } from "path";
 import Database from "bun:sqlite";
+import { generateProviderModelEstimatedCostChart } from "./token-cost-by-provider-model-chart";
 import { generateProviderModelChart } from "./token-usage-by-provider-model-chart";
 
 const args = process.argv.slice(2);
@@ -77,9 +78,12 @@ const useSessions = source === "sessions" || sessionsArgIndex >= 0;
 const modeArgIndex = args.indexOf("--mode");
 const modeCandidate = modeArgIndex >= 0 ? args[modeArgIndex + 1] : undefined;
 const chartMode = modeCandidate && !modeCandidate.startsWith("--") ? modeCandidate : "default";
-const isProviderModelMode = ["provider-model", "provider-model-chart", "provider-model-alt"].includes(chartMode);
+const providerModelModes = ["provider-model", "provider-model-chart", "provider-model-alt"];
+const providerModelCostModes = ["provider-model-cost", "provider-model-cost-chart", "provider-model-estimated-cost"];
+const isProviderModelMode = providerModelModes.includes(chartMode);
+const isProviderModelCostMode = providerModelCostModes.includes(chartMode);
 
-if (chartMode !== "default" && chartMode !== "provider-model" && chartMode !== "provider-model-chart" && chartMode !== "provider-model-alt") {
+if (chartMode !== "default" && !isProviderModelMode && !isProviderModelCostMode) {
   console.warn(`[token-chart] Unknown mode: ${chartMode}. Falling back to default chart.`);
 }
 
@@ -146,30 +150,30 @@ const formatDayLocalLabel = (day: string) => {
   return `${dayNames[d.getDay()]} ${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 };
 
-function runProviderModelMode() {
-  const result = generateProviderModelChart({
-    days: targetDays,
-    dbPath,
-    now,
-  });
+const formatUsdCompact = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) return "$0";
+  if (value >= 1_000) {
+    const scaled = value / 1_000;
+    const fixed = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1);
+    return `$${fixed.replace(/\.0$/, "")}K`;
+  }
+  if (value >= 100) return `$${value.toFixed(0)}`;
+  if (value >= 10) return `$${value.toFixed(1).replace(/\.0$/, "")}`;
+  if (value >= 1) return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
+  if (value >= 0.1) return `$${value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "")}`;
+  return `$${value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "")}`;
+};
 
-  const total = Math.round(result.totalTokens);
-
-  const summaryLines = [
-    `Alternative chart (provider + model): last ${targetDays} days • ${formatCompact(total)} tokens across ${result.seriesCount} series`,
-    ...result.dayTotals.map((point) => `• ${formatDayLocalLabel(point.day)}: ${formatCompact(point.total)} tokens`),
-  ];
-
-  const message = summaryLines.join("\n");
+function emitAlternativeChart(message: string, svg: string) {
   if (outputSvg) {
     mkdirSync(dirname(outputSvg), { recursive: true });
-    writeFileSync(outputSvg, result.svg, "utf8");
+    writeFileSync(outputSvg, svg, "utf8");
   }
   if (ipcEnabled) {
     mkdirSync(messagesDir, { recursive: true });
     mkdirSync(mediaDir, { recursive: true });
     const svgPath = outputSvg || join(mediaDir, `token-chart-provider-model-${Date.now()}.svg`);
-    if (!outputSvg) writeFileSync(svgPath, result.svg, "utf8");
+    if (!outputSvg) writeFileSync(svgPath, svg, "utf8");
     const outPath = join(messagesDir, `msg_${Date.now()}_tokenchart.json`);
     const payload = {
       type: "message",
@@ -187,14 +191,52 @@ function runProviderModelMode() {
     };
     writeFileSync(outPath, JSON.stringify(payload, null, 2));
     process.stdout.write(outPath);
-  } else {
-    const dataUrl = `data:image/svg+xml;base64,${Buffer.from(result.svg).toString("base64")}`;
-    process.stdout.write([`![token-chart](${dataUrl})`, "", ...summaryLines].join("\n"));
+    return;
   }
+
+  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+  process.stdout.write([`![token-chart](${dataUrl})`, "", message].join("\n"));
+}
+
+function runProviderModelMode() {
+  const result = generateProviderModelChart({
+    days: targetDays,
+    dbPath,
+    now,
+  });
+
+  const total = Math.round(result.totalTokens);
+
+  const summaryLines = [
+    `Alternative chart (provider + model): last ${targetDays} days • ${formatCompact(total)} tokens across ${result.seriesCount} series`,
+    ...result.dayTotals.map((point) => `• ${formatDayLocalLabel(point.day)}: ${formatCompact(point.total)} tokens`),
+  ];
+
+  emitAlternativeChart(summaryLines.join("\n"), result.svg);
+}
+
+function runProviderModelCostMode() {
+  const result = generateProviderModelEstimatedCostChart({
+    days: targetDays,
+    dbPath,
+    now,
+  });
+
+  const summaryLines = [
+    `Estimated cost chart (provider + model): last ${targetDays} days • ${formatUsdCompact(result.totalEstimatedCost)} across ${result.seriesCount} active series • pricing ref ${result.pricingReferenceTag}`,
+    ...result.dayTotals.map((point) => `• ${formatDayLocalLabel(point.day)}: ${formatUsdCompact(point.total)}`),
+  ];
+
+  emitAlternativeChart(summaryLines.join("\n"), result.svg);
 }
 
 if (isProviderModelMode) {
   runProviderModelMode();
+  process.exit(0);
+}
+
+if (isProviderModelCostMode) {
+  runProviderModelCostMode();
   process.exit(0);
 }
 

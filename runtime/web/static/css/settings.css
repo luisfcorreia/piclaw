@@ -1459,3 +1459,180 @@
 .settings-provider-card-header {
     cursor: pointer;
 }
+
+/* ── Keychain panel ───────────────────────────────────────────────── */
+.settings-keychain-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.settings-keychain-add-btn {
+    padding: 5px 14px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-secondary, #1a1a2e);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.85em;
+}
+.settings-keychain-add-btn:hover {
+    background: var(--accent-color, #4a9eff);
+    color: #fff;
+}
+.settings-keychain-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 8px;
+    background: var(--bg-secondary, rgba(0,0,0,0.15));
+}
+.settings-keychain-add-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.settings-keychain-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.86em;
+    min-width: 0;
+}
+.settings-keychain-secret {
+    font-family: monospace;
+}
+.settings-keychain-select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.86em;
+}
+.settings-keychain-save-btn {
+    padding: 6px 16px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent-color, #4a9eff);
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.86em;
+    white-space: nowrap;
+}
+.settings-keychain-save-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.settings-keychain-table-wrap {
+    overflow-x: auto;
+}
+.settings-keychain-table {
+    width: 100%;
+}
+.settings-keychain-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary, #888);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.2));
+}
+.settings-keychain-table td {
+    padding: 7px 10px;
+    font-size: 0.88em;
+    border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.1));
+    white-space: nowrap;
+}
+.settings-keychain-name {
+    font-family: var(--font-mono, monospace);
+    font-weight: 500;
+    word-break: break-all;
+    white-space: normal;
+}
+.settings-keychain-type-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--bg-secondary, rgba(128,128,128,0.15));
+    font-size: 0.82em;
+    font-family: var(--font-mono, monospace);
+}
+.settings-keychain-env code {
+    font-size: 0.84em;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--bg-secondary, rgba(128,128,128,0.12));
+}
+.settings-keychain-date {
+    color: var(--text-secondary, #888);
+    font-size: 0.84em;
+}
+.settings-keychain-actions {
+    text-align: right;
+}
+.settings-keychain-delete-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    opacity: 0.5;
+    padding: 2px 6px;
+}
+.settings-keychain-delete-btn:hover {
+    opacity: 1;
+}
+.settings-keychain-confirm {
+    font-size: 0.84em;
+    color: var(--error-color, #e55);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.settings-keychain-confirm-yes,
+.settings-keychain-confirm-no {
+    padding: 2px 8px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+.settings-keychain-confirm-yes {
+    background: var(--error-color, #e55);
+    color: #fff;
+    border-color: transparent;
+}
+.settings-keychain-empty {
+    text-align: center;
+    color: var(--text-secondary, #888);
+    padding: 20px 10px !important;
+}
+.settings-keychain-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    background: rgba(230,80,80,0.12);
+    color: var(--error-color, #e55);
+    font-size: 0.88em;
+}
+.settings-keychain-dismiss {
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1em;
+    padding: 0 4px;
+}

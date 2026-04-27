@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T00:29:22.441Z",
+  "generated_at": "2026-04-27T10:40:03.164Z",
   "package_dir": "/workspace/piclaw",
   "runtime_dir": "/workspace/piclaw/runtime",
   "stage_size": 25,
@@ -8,11 +8,11 @@
   "base_bun_args": [
     "--max-concurrency=1"
   ],
-  "total_files": 488,
+  "total_files": 489,
   "stages_completed": 20,
-  "elapsed_ms": 83117,
-  "max_peak_process_tree_rss_kb": 529400,
-  "max_peak_cgroup_memory_bytes": 728268800,
+  "elapsed_ms": 85148,
+  "max_peak_process_tree_rss_kb": 541708,
+  "max_peak_cgroup_memory_bytes": 793952256,
   "failed_stage_index": null,
   "exit_code": 0,
   "stages": [
@@ -46,13 +46,13 @@
         "test/agent-pool/mcp-adapter-bundled.test.ts",
         "test/agent-pool/orphan-tool-results.test.ts"
       ],
-      "elapsed_ms": 14019,
+      "elapsed_ms": 15021,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 267160,
-      "peak_cgroup_memory_bytes": 573263872,
+      "peak_process_tree_rss_kb": 267052,
+      "peak_cgroup_memory_bytes": 596230144,
       "peak_process_tree_at_ms": 1002,
       "peak_cgroup_at_ms": 1002,
-      "samples": 15
+      "samples": 16
     },
     {
       "index": 2,
@@ -84,13 +84,13 @@
         "test/channels/web/agent/agent-control-plane-service.test.ts",
         "test/channels/web/agent/agent-debug.test.ts"
       ],
-      "elapsed_ms": 27026,
+      "elapsed_ms": 28044,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 194856,
-      "peak_cgroup_memory_bytes": 524906496,
-      "peak_process_tree_at_ms": 9012,
-      "peak_cgroup_at_ms": 11014,
-      "samples": 28
+      "peak_process_tree_rss_kb": 205132,
+      "peak_cgroup_memory_bytes": 547487744,
+      "peak_process_tree_at_ms": 7011,
+      "peak_cgroup_at_ms": 4006,
+      "samples": 29
     },
     {
       "index": 3,
@@ -122,12 +122,12 @@
         "test/channels/web/core/web-channel-lifecycle-special-surface-service.test.ts",
         "test/channels/web/core/web-channel-runtime-public-surface-service.test.ts"
       ],
-      "elapsed_ms": 2003,
+      "elapsed_ms": 2005,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 159852,
-      "peak_cgroup_memory_bytes": 450375680,
-      "peak_process_tree_at_ms": 1001,
-      "peak_cgroup_at_ms": 1001,
+      "peak_process_tree_rss_kb": 1124,
+      "peak_cgroup_memory_bytes": 485244928,
+      "peak_process_tree_at_ms": 0,
+      "peak_cgroup_at_ms": 1002,
       "samples": 3
     },
     {
@@ -160,12 +160,12 @@
         "test/channels/web/media/link-previews.test.ts",
         "test/channels/web/media/media-service.test.ts"
       ],
-      "elapsed_ms": 1002,
+      "elapsed_ms": 1003,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 500,
-      "peak_cgroup_memory_bytes": 323510272,
+      "peak_process_tree_rss_kb": 1964,
+      "peak_cgroup_memory_bytes": 378896384,
       "peak_process_tree_at_ms": 0,
-      "peak_cgroup_at_ms": 0,
+      "peak_cgroup_at_ms": 1002,
       "samples": 2
     },
     {
@@ -198,10 +198,10 @@
         "test/channels/web/security.test.ts",
         "test/channels/web/server-lifecycle-gateway-service.test.ts"
       ],
-      "elapsed_ms": 3006,
+      "elapsed_ms": 3005,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 182448,
-      "peak_cgroup_memory_bytes": 468148224,
+      "peak_process_tree_rss_kb": 183024,
+      "peak_cgroup_memory_bytes": 521080832,
       "peak_process_tree_at_ms": 1001,
       "peak_cgroup_at_ms": 1001,
       "samples": 4
@@ -236,12 +236,12 @@
         "test/channels/web/web-channel-runtime-public-surface-delegation.test.ts",
         "test/channels/web/web-channel-terminal-vnc-http-delegation.test.ts"
       ],
-      "elapsed_ms": 4012,
+      "elapsed_ms": 4007,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 529400,
-      "peak_cgroup_memory_bytes": 728268800,
-      "peak_process_tree_at_ms": 3007,
-      "peak_cgroup_at_ms": 3007,
+      "peak_process_tree_rss_kb": 541708,
+      "peak_cgroup_memory_bytes": 793952256,
+      "peak_process_tree_at_ms": 2003,
+      "peak_cgroup_at_ms": 3005,
       "samples": 5
     },
     {
@@ -274,13 +274,13 @@
         "test/core/config-store.test.ts",
         "test/core/config.test.ts"
       ],
-      "elapsed_ms": 4005,
+      "elapsed_ms": 3005,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 260816,
-      "peak_cgroup_memory_bytes": 556027904,
-      "peak_process_tree_at_ms": 2002,
-      "peak_cgroup_at_ms": 2002,
-      "samples": 5
+      "peak_process_tree_rss_kb": 256860,
+      "peak_cgroup_memory_bytes": 604315648,
+      "peak_process_tree_at_ms": 2003,
+      "peak_cgroup_at_ms": 2003,
+      "samples": 4
     },
     {
       "index": 8,
@@ -312,12 +312,12 @@
         "test/extensions/azure-openai-streaming.test.ts",
         "test/extensions/azure-openai-tool-call-limit.test.ts"
       ],
-      "elapsed_ms": 3003,
+      "elapsed_ms": 3006,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 320596,
-      "peak_cgroup_memory_bytes": 585969664,
-      "peak_process_tree_at_ms": 1000,
-      "peak_cgroup_at_ms": 1000,
+      "peak_process_tree_rss_kb": 283684,
+      "peak_cgroup_memory_bytes": 591200256,
+      "peak_process_tree_at_ms": 1002,
+      "peak_cgroup_at_ms": 1002,
       "samples": 4
     },
     {
@@ -352,10 +352,10 @@
       ],
       "elapsed_ms": 2007,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 237444,
-      "peak_cgroup_memory_bytes": 533254144,
-      "peak_process_tree_at_ms": 1006,
-      "peak_cgroup_at_ms": 1006,
+      "peak_process_tree_rss_kb": 242316,
+      "peak_cgroup_memory_bytes": 575250432,
+      "peak_process_tree_at_ms": 1005,
+      "peak_cgroup_at_ms": 1005,
       "samples": 3
     },
     {
@@ -388,12 +388,12 @@
         "test/queue/queue.test.ts",
         "test/remote/execute-concurrency.test.ts"
       ],
-      "elapsed_ms": 6007,
+      "elapsed_ms": 6011,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 189624,
-      "peak_cgroup_memory_bytes": 469278720,
-      "peak_process_tree_at_ms": 4004,
-      "peak_cgroup_at_ms": 3003,
+      "peak_process_tree_rss_kb": 191208,
+      "peak_cgroup_memory_bytes": 517705728,
+      "peak_process_tree_at_ms": 4007,
+      "peak_cgroup_at_ms": 4007,
       "samples": 7
     },
     {
@@ -426,12 +426,12 @@
         "test/scheduled-task-query-service.test.ts",
         "test/scripts/audit-baseline-quality-deterministic.test.ts"
       ],
-      "elapsed_ms": 6009,
+      "elapsed_ms": 6010,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 410876,
-      "peak_cgroup_memory_bytes": 662085632,
-      "peak_process_tree_at_ms": 3003,
-      "peak_cgroup_at_ms": 3003,
+      "peak_process_tree_rss_kb": 402280,
+      "peak_cgroup_memory_bytes": 698204160,
+      "peak_process_tree_at_ms": 3005,
+      "peak_cgroup_at_ms": 3005,
       "samples": 7
     },
     {
@@ -457,25 +457,26 @@
         "test/scripts/supervisor-run-piclaw.test.ts",
         "test/scripts/terminal-font-vendor.test.ts",
         "test/scripts/token-chart-ipc.test.ts",
+        "test/scripts/token-chart-provider-model-cost.test.ts",
         "test/scripts/token-chart-provider-model.test.ts",
         "test/scripts/token-chart.test.ts",
         "test/scripts/vendor-workflow.test.ts",
         "test/scripts/vnc-harness-bridge-helpers.test.ts",
-        "test/scripts/vnc-harness-report-helpers.test.ts",
-        "test/secure/keychain.test.ts"
+        "test/scripts/vnc-harness-report-helpers.test.ts"
       ],
-      "elapsed_ms": 2003,
+      "elapsed_ms": 3007,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 100768,
-      "peak_cgroup_memory_bytes": 354779136,
-      "peak_process_tree_at_ms": 1002,
-      "peak_cgroup_at_ms": 1002,
-      "samples": 3
+      "peak_process_tree_rss_kb": 114668,
+      "peak_cgroup_memory_bytes": 415006720,
+      "peak_process_tree_at_ms": 2004,
+      "peak_cgroup_at_ms": 2004,
+      "samples": 4
     },
     {
       "index": 13,
       "file_count": 25,
       "files": [
+        "test/secure/keychain.test.ts",
         "test/secure/shell-secrets.test.ts",
         "test/session-rotation.test.ts",
         "test/task-scheduler-internal.test.ts",
@@ -499,13 +500,12 @@
         "test/web/agent-mentions.test.ts",
         "test/web/api-routing.test.ts",
         "test/web/app-agent-activity-orchestration.test.ts",
-        "test/web/app-agent-panel-toggle.test.ts",
-        "test/web/app-agent-previews.test.ts"
+        "test/web/app-agent-panel-toggle.test.ts"
       ],
-      "elapsed_ms": 2003,
+      "elapsed_ms": 2004,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 179240,
-      "peak_cgroup_memory_bytes": 462200832,
+      "peak_process_tree_rss_kb": 171448,
+      "peak_cgroup_memory_bytes": 502927360,
       "peak_process_tree_at_ms": 1002,
       "peak_cgroup_at_ms": 1002,
       "samples": 3
@@ -514,6 +514,7 @@
       "index": 14,
       "file_count": 25,
       "files": [
+        "test/web/app-agent-previews.test.ts",
         "test/web/app-agent-status-lifecycle.test.ts",
         "test/web/app-agent-status-orchestration.test.ts",
         "test/web/app-agent-status-refresh.test.ts",
@@ -537,21 +538,21 @@
         "test/web/app-floating-widget-dashboard.test.ts",
         "test/web/app-floating-widget-events.test.ts",
         "test/web/app-floating-widget-followup.test.ts",
-        "test/web/app-floating-widget.test.ts",
-        "test/web/app-followup-actions-orchestration.test.ts"
+        "test/web/app-floating-widget.test.ts"
       ],
-      "elapsed_ms": 1001,
+      "elapsed_ms": 1002,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 1140,
-      "peak_cgroup_memory_bytes": 317513728,
-      "peak_process_tree_at_ms": 1,
-      "peak_cgroup_at_ms": 1,
+      "peak_process_tree_rss_kb": 600,
+      "peak_cgroup_memory_bytes": 365264896,
+      "peak_process_tree_at_ms": 0,
+      "peak_cgroup_at_ms": 1001,
       "samples": 2
     },
     {
       "index": 15,
       "file_count": 25,
       "files": [
+        "test/web/app-followup-actions-orchestration.test.ts",
         "test/web/app-followup-actions.test.ts",
         "test/web/app-followup-queue.test.ts",
         "test/web/app-generated-widget-events.test.ts",
@@ -575,21 +576,21 @@
         "test/web/app-realtime-lifecycle-orchestration.test.ts",
         "test/web/app-realtime-timeline.test.ts",
         "test/web/app-refresh-coordination.test.ts",
-        "test/web/app-resume.test.ts",
-        "test/web/app-runtime-callbacks.test.ts"
+        "test/web/app-resume.test.ts"
       ],
-      "elapsed_ms": 1002,
+      "elapsed_ms": 1001,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 1780,
-      "peak_cgroup_memory_bytes": 317612032,
-      "peak_process_tree_at_ms": 1,
-      "peak_cgroup_at_ms": 1,
+      "peak_process_tree_rss_kb": 800,
+      "peak_cgroup_memory_bytes": 365785088,
+      "peak_process_tree_at_ms": 0,
+      "peak_cgroup_at_ms": 0,
       "samples": 2
     },
     {
       "index": 16,
       "file_count": 25,
       "files": [
+        "test/web/app-runtime-callbacks.test.ts",
         "test/web/app-shell-bootstrap.test.ts",
         "test/web/app-shell-environment-effects.test.ts",
         "test/web/app-shell-ref-utils.test.ts",
@@ -613,13 +614,12 @@
         "test/web/chat-window.test.ts",
         "test/web/compose-box.test.ts",
         "test/web/compose-layout.test.ts",
-        "test/web/compose-model-refresh.test.ts",
-        "test/web/compose-session-switcher.test.ts"
+        "test/web/compose-model-refresh.test.ts"
       ],
       "elapsed_ms": 1002,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 1724,
-      "peak_cgroup_memory_bytes": 317665280,
+      "peak_process_tree_rss_kb": 42904,
+      "peak_cgroup_memory_bytes": 365285376,
       "peak_process_tree_at_ms": 1,
       "peak_cgroup_at_ms": 1,
       "samples": 2
@@ -628,6 +628,7 @@
       "index": 17,
       "file_count": 25,
       "files": [
+        "test/web/compose-session-switcher.test.ts",
         "test/web/connection-status.test.ts",
         "test/web/csv-viewer-pane.test.ts",
         "test/web/editor-extension.test.ts",
@@ -651,21 +652,21 @@
         "test/web/mindmap-history.test.ts",
         "test/web/mindmap-layout-utils.test.ts",
         "test/web/mindmap-pane-source.test.ts",
-        "test/web/mobile-viewport.test.ts",
-        "test/web/notification-delivery-coordinator.test.ts"
+        "test/web/mobile-viewport.test.ts"
       ],
       "elapsed_ms": 1001,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 520,
-      "peak_cgroup_memory_bytes": 317341696,
+      "peak_process_tree_rss_kb": 2500,
+      "peak_cgroup_memory_bytes": 370499584,
       "peak_process_tree_at_ms": 0,
-      "peak_cgroup_at_ms": 0,
+      "peak_cgroup_at_ms": 1001,
       "samples": 2
     },
     {
       "index": 18,
       "file_count": 25,
       "files": [
+        "test/web/notification-delivery-coordinator.test.ts",
         "test/web/notification-focus.test.ts",
         "test/web/number-stepper.test.ts",
         "test/web/oobe-panel.test.ts",
@@ -689,13 +690,12 @@
         "test/web/remote-display-vnc.test.ts",
         "test/web/remote-display-wasm-pipeline.test.ts",
         "test/web/service-worker.test.ts",
-        "test/web/session-tree-widget.test.ts",
-        "test/web/status-content.test.ts"
+        "test/web/session-tree-widget.test.ts"
       ],
-      "elapsed_ms": 1001,
+      "elapsed_ms": 1003,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 1648,
-      "peak_cgroup_memory_bytes": 317739008,
+      "peak_process_tree_rss_kb": 1128,
+      "peak_cgroup_memory_bytes": 370716672,
       "peak_process_tree_at_ms": 1,
       "peak_cgroup_at_ms": 1,
       "samples": 2
@@ -704,6 +704,7 @@
       "index": 19,
       "file_count": 25,
       "files": [
+        "test/web/status-content.test.ts",
         "test/web/status-dot.test.ts",
         "test/web/status-duration.test.ts",
         "test/web/status-git-label.test.ts",
@@ -727,21 +728,21 @@
         "test/web/use-splitters.test.ts",
         "test/web/use-sse-connection.test.ts",
         "test/web/use-timeline.test.ts",
-        "test/web/video-viewer-pane.test.ts",
-        "test/web/vnc-auth.test.ts"
+        "test/web/video-viewer-pane.test.ts"
       ],
       "elapsed_ms": 1002,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 712,
-      "peak_cgroup_memory_bytes": 316551168,
+      "peak_process_tree_rss_kb": 1724,
+      "peak_cgroup_memory_bytes": 365588480,
       "peak_process_tree_at_ms": 0,
       "peak_cgroup_at_ms": 0,
       "samples": 2
     },
     {
       "index": 20,
-      "file_count": 13,
+      "file_count": 14,
       "files": [
+        "test/web/vnc-auth.test.ts",
         "test/web/vnc-input.test.ts",
         "test/web/vnc-pane.test.ts",
         "test/web/window-bridge-safety.test.ts",
@@ -758,10 +759,10 @@
       ],
       "elapsed_ms": 1002,
       "exit_code": 0,
-      "peak_process_tree_rss_kb": 472,
-      "peak_cgroup_memory_bytes": 316407808,
+      "peak_process_tree_rss_kb": 1988,
+      "peak_cgroup_memory_bytes": 366161920,
       "peak_process_tree_at_ms": 0,
-      "peak_cgroup_at_ms": 1001,
+      "peak_cgroup_at_ms": 0,
       "samples": 2
     }
   ]

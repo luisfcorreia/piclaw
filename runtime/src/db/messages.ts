@@ -28,6 +28,7 @@ import {
   getMediaIdsForMessage,
   getMediaIdsForMessages,
 } from "./media.js";
+import { getSearchMatchMode } from "../core/config.js";
 
 /**
  * Internal representation of a raw row from the `messages` table.
@@ -448,7 +449,8 @@ function searchMessagesInternal(chatJids: string[] | null, query: string, limit:
     .split(/\s+/)
     .map((term) => term.replace(/^["']+|["']+$/g, ""))
     .filter(Boolean);
-  const ftsQuery = !hasOperators && terms.length > 1 ? terms.join(" AND ") : rawQuery;
+  const joiner = getSearchMatchMode() === "or" ? " OR " : " AND ";
+  const ftsQuery = !hasOperators && terms.length > 1 ? terms.join(joiner) : rawQuery;
 
   try {
     const rows = db

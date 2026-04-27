@@ -36,13 +36,13 @@ describe("isFtsOperatorQuery", () => {
 describe("sanitizeFtsQuery", () => {
   test("passes simple words through", () => {
     expect(sanitizeFtsQuery("hello")).toBe("hello");
-    expect(sanitizeFtsQuery("hello world")).toBe("hello world");
+    expect(sanitizeFtsQuery("hello world")).toBe("hello OR world");
   });
 
   test("strips special FTS characters", () => {
-    expect(sanitizeFtsQuery('hello "world"')).toBe("hello world");
-    expect(sanitizeFtsQuery("hello(world)")).toBe("hello world");
-    expect(sanitizeFtsQuery("hello:world")).toBe("hello world");
+    expect(sanitizeFtsQuery('hello "world"')).toBe("hello OR world");
+    expect(sanitizeFtsQuery("hello(world)")).toBe("hello OR world");
+    expect(sanitizeFtsQuery("hello:world")).toBe("hello OR world");
     expect(sanitizeFtsQuery("hello*")).toBe("hello");
   });
 
@@ -51,13 +51,13 @@ describe("sanitizeFtsQuery", () => {
     expect(sanitizeFtsQuery("or")).toBe('"or"');
     expect(sanitizeFtsQuery("not")).toBe('"not"');
     expect(sanitizeFtsQuery("near")).toBe('"near"');
-    expect(sanitizeFtsQuery("foo and bar")).toBe('foo "and" bar');
+    expect(sanitizeFtsQuery("foo and bar")).toBe('foo OR "and" OR bar');
   });
 
   test("strips leading hyphens (NOT prefix)", () => {
     expect(sanitizeFtsQuery("-hello")).toBe("hello");
     expect(sanitizeFtsQuery("--hello")).toBe("hello");
-    expect(sanitizeFtsQuery("foo -bar")).toBe("foo bar");
+    expect(sanitizeFtsQuery("foo -bar")).toBe("foo OR bar");
   });
 
   test("returns null for empty/whitespace-only input", () => {
@@ -81,7 +81,17 @@ describe("sanitizeFtsQuery", () => {
   });
 
   test("collapses multiple spaces", () => {
-    expect(sanitizeFtsQuery("hello    world")).toBe("hello world");
+    expect(sanitizeFtsQuery("hello    world")).toBe("hello OR world");
+  });
+
+  test("AND mode joins with implicit AND (space)", () => {
+    expect(sanitizeFtsQuery("hello world", "and")).toBe("hello world");
+    expect(sanitizeFtsQuery("foo and bar", "and")).toBe('foo "and" bar');
+  });
+
+  test("OR mode is default", () => {
+    expect(sanitizeFtsQuery("hello world")).toBe("hello OR world");
+    expect(sanitizeFtsQuery("hello world", "or")).toBe("hello OR world");
   });
 });
 
@@ -96,13 +106,17 @@ describe("prepareFtsQuery", () => {
     expect(prepareFtsQuery('"exact phrase"')).toBe('"exact phrase"');
   });
 
-  test("sanitizes plain multi-word queries", () => {
-    expect(prepareFtsQuery("hello world")).toBe("hello world");
+  test("sanitizes plain multi-word queries (default OR)", () => {
+    expect(prepareFtsQuery("hello world")).toBe("hello OR world");
+  });
+
+  test("sanitizes plain multi-word queries (AND mode)", () => {
+    expect(prepareFtsQuery("hello world", "and")).toBe("hello world");
   });
 
   test("sanitizes queries with problematic chars", () => {
     const result = prepareFtsQuery("pi-side-agents worktree");
-    expect(result).toBe("pi-side-agents worktree");
+    expect(result).toBe("pi-side-agents OR worktree");
   });
 
   test("handles the real-world failures we hit today", () => {
@@ -115,12 +129,17 @@ describe("prepareFtsQuery", () => {
     expect(prepareFtsQuery("/agents")).toBe("/agents");
 
     // "no such column: capable" — compound term parsed as column
-    expect(prepareFtsQuery("service-capable cross-client workbench")).toBe("service-capable cross-client workbench");
+    expect(prepareFtsQuery("service-capable cross-client workbench")).toBe("service-capable OR cross-client OR workbench");
 
     // "no such column: commit" — hyphenated compound
-    expect(prepareFtsQuery("auto-commit dashboard widget")).toBe("auto-commit dashboard widget");
+    expect(prepareFtsQuery("auto-commit dashboard widget")).toBe("auto-commit OR dashboard OR widget");
 
     // "no such column: packages" — plain word treated as column
-    expect(prepareFtsQuery("pi-packages install")).toBe("pi-packages install");
+    expect(prepareFtsQuery("pi-packages install")).toBe("pi-packages OR install");
+  });
+
+  test("respects AND mode for real-world queries", () => {
+    expect(prepareFtsQuery("service-capable cross-client workbench", "and")).toBe("service-capable cross-client workbench");
+    expect(prepareFtsQuery("auto-commit dashboard widget", "and")).toBe("auto-commit dashboard widget");
   });
 });

@@ -55,6 +55,7 @@ describe("messages tool extension", () => {
       PICLAW_STORE: ws.store,
       PICLAW_DATA: ws.data,
       PICLAW_DB_IN_MEMORY: "1",
+      PICLAW_SEARCH_MATCH_MODE: "and",
     });
     db = await importFresh<typeof import("../src/db.js")>("../src/db.js");
     db.initDatabase();

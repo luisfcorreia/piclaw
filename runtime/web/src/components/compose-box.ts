@@ -566,7 +566,7 @@ export function QueuedFollowupStack({
                 if (!parsed.text.trim() && parsed.fileRefs.length === 0 && parsed.messageRefs.length === 0 && parsed.attachmentRefs.length === 0) return null;
                 const canMoveUp = index > 0;
                 const canMoveDown = index < items.length - 1;
-                const canReturnToEditor = index === items.length - 1;
+                const canReturnToEditor = true;
                 return html`
                     <div class="compose-queue-stack-item" role="listitem">
                         <div class="compose-queue-stack-content" title=${rowText}>
@@ -741,6 +741,7 @@ export function ComposeBox({
     const [searchText, setSearchText] = useState('');
     const [searchFilterImages, setSearchFilterImages] = useState(false);
     const [searchFilterAttachments, setSearchFilterAttachments] = useState(false);
+    const [searchMatchMode, setSearchMatchMode] = useState('or');
     const [mediaFiles, setMediaFiles] = useState([]);
     const [isDragActive, setIsDragActive] = useState(false);
     const [slashMatches, setSlashMatches] = useState([]);
@@ -811,6 +812,14 @@ export function ComposeBox({
         historyIndexRef.current = -1;
         historyDraftRef.current = '';
     }, [historyStorageKey]);
+
+    // Fetch search match mode when entering search mode
+    useEffect(() => {
+        if (!searchMode) return;
+        fetch('/agent/settings-data').then(r => r.json()).then(data => {
+            if (data?.searchMatchMode) setSearchMatchMode(data.searchMatchMode);
+        }).catch(() => {});
+    }, [searchMode]);
 
     // Fetch dynamic commands from the server for autocomplete
     useEffect(() => {
@@ -2494,6 +2503,22 @@ export function ComposeBox({
                             <input type="checkbox" checked=${searchFilterAttachments} onChange=${() => setSearchFilterAttachments(v => !v)} />
                             <span class="compose-search-filter-label">Attachments</span>
                         </label>
+                        <button
+                            class=${`compose-search-match-toggle ${searchMatchMode === 'and' ? 'active' : ''}`}
+                            onClick=${() => {
+                                const next = searchMatchMode === 'or' ? 'and' : 'or';
+                                setSearchMatchMode(next);
+                                fetch('/agent/settings/general', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ searchMatchMode: next }),
+                                }).catch((e) => { void e; });
+                            }}
+                            title=${searchMatchMode === 'or' ? 'Any keyword (OR) — click for all keywords (AND)' : 'All keywords (AND) — click for any keyword (OR)'}
+                            type="button"
+                        >
+                            ${searchMatchMode === 'or' ? 'OR' : 'AND'}
+                        </button>
                     `}
                     <button
                         class="icon-btn search-toggle"
@@ -2582,7 +2607,7 @@ export function ComposeBox({
                                         type="button"
                                         onClick=${() => {
                                             if (isComposeSubmitAbortMode(abortButtonState.mode)) {
-                                                void handleSubmit('/abort', 'steer');
+                                                void handleSubmit('/abort', 'steer', { clearAfterSubmit: false, includeMedia: false, includeFileRefs: false, includeMessageRefs: false, recordHistory: false });
                                             }
                                         }}
                                         disabled=${abortButtonState.disabled}

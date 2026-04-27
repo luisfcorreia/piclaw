@@ -41,10 +41,28 @@ const TOOL_EXTENSION = {
 const KIND_BADGE = { 'read-only': '\ud83d\udd0d', 'mutating': '\u270f\ufe0f', 'mixed': '\ud83d\udd04' };
 const DEFAULT_ICON = html`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>`;
 
-export function ToolsSection({ toolsets, filter = '' }) {
+export function ToolsSection({ toolsets, filter = '', settingsData, mergeSettingsData }) {
     const groups = toolsets || [];
     const [enabledGroups, setEnabledGroups] = useState(() => { const m = {}; for (const g of groups) m[g.name] = true; return m; });
     const toggleGroup = useCallback((name) => { setEnabledGroups(prev => ({ ...prev, [name]: !prev[name] })); }, []);
+    const searchMatchMode = settingsData?.searchMatchMode || 'or';
+
+    const toggleSearchMode = useCallback(async () => {
+        const next = searchMatchMode === 'or' ? 'and' : 'or';
+        try {
+            const response = await fetch('/agent/settings/general', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ searchMatchMode: next }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (payload?.ok && payload?.settings) {
+                mergeSettingsData?.(payload.settings);
+            }
+        } catch (e) {
+            console.warn('[settings/tools] Failed to save search match mode.', e);
+        }
+    }, [searchMatchMode, mergeSettingsData]);
 
     const lf = filter.toLowerCase();
     const filteredGroups = useMemo(() => {
@@ -63,6 +81,20 @@ export function ToolsSection({ toolsets, filter = '' }) {
 
     return html`
         <div class="settings-section">
+            <div class="settings-search-options">
+                <h4 style="margin:0 0 8px 0">Search</h4>
+                <div class="settings-row">
+                    <label>Match mode</label>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <input type="checkbox" checked=${searchMatchMode === 'and'} onChange=${toggleSearchMode} />
+                        <span class="settings-hint" style="margin:0">
+                            ${searchMatchMode === 'or'
+                                ? 'Any keyword (OR) — results match at least one search term'
+                                : 'All keywords (AND) — results must match every search term'}
+                        </span>
+                    </div>
+                </div>
+            </div>
             ${filteredGroups.map(g => { const enabled = enabledGroups[g.name] !== false; return html`
                 <div class="settings-toolset">
                     <div class="settings-toolset-header">

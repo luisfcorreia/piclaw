@@ -3,7 +3,6 @@ import { setLocalStorageItem } from '../utils/storage.js';
 import {
   DESKTOP_WORKSPACE_LAYOUT_MEDIA_QUERY,
   persistWorkspaceOpenPreference,
-  readStoredWorkspaceOpenPreference,
   resolveWorkspaceLayoutBucket,
 } from './workspace-visibility.js';
 import { initTheme } from './theme.js';
@@ -166,11 +165,14 @@ export function useAppShellEnvironmentEffects(options: UseAppShellEnvironmentEff
     const applyLayoutPreference = () => {
       const nextBucket = resolveWorkspaceLayoutBucket(window);
       if (workspaceLayoutBucketRef.current === nextBucket) return;
+      const prevBucket = workspaceLayoutBucketRef.current;
       workspaceLayoutBucketRef.current = nextBucket;
-      setWorkspaceOpen(readStoredWorkspaceOpenPreference({
-        bucket: nextBucket,
-        defaultValue: false,
-      }));
+      // When shrinking to narrow, collapse the workspace to avoid overlap.
+      // When widening to desktop, do NOT auto-open — respect the user's
+      // explicit toggle. They can open it themselves.
+      if (prevBucket === 'desktop' && nextBucket === 'narrow') {
+        setWorkspaceOpen(false);
+      }
     };
 
     if (media.addEventListener) media.addEventListener('change', applyLayoutPreference);

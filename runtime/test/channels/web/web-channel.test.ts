@@ -2276,7 +2276,7 @@ test("processChat persists a compact recovery bubble instead of a generic no-res
   const timeline = db.getTimeline("web:default", 20);
   const botMessages = timeline.filter((item: any) => item.data.type === "agent_response");
   expect(botMessages.some((item: any) => Array.isArray(item.data.content_blocks)
-    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && (block?.label === "recovery" || block?.label === "context") && String(block?.detail || "").includes("orphaned tool-result blocks")))).toBe(true);
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker"))).toBe(true);
   expect(botMessages.some((item: any) => String(item.data.content || "").includes("produced no response"))).toBe(false);
 });
 

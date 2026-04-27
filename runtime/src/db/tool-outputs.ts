@@ -21,6 +21,7 @@
 import { getDb } from "./connection.js";
 import type { ToolOutputRecord } from "./types.js";
 import { prepareFtsQuery } from "../utils/fts-query.js";
+import { getSearchMatchMode } from "../core/config.js";
 
 /** Insert or replace a tool output metadata record (without FTS content). */
 export function storeToolOutput(record: ToolOutputRecord): void {
@@ -84,7 +85,7 @@ export function deleteToolOutputsBefore(cutoffIso: string): ToolOutputRecord[] {
  */
 export function searchToolOutputSnippets(outputId: string, query: string, limit = 5): string[] {
   const db = getDb();
-  const ftsQuery = prepareFtsQuery(query);
+  const ftsQuery = prepareFtsQuery(query, getSearchMatchMode());
   if (!ftsQuery) return [];
   try {
     const stmt = db.prepare(

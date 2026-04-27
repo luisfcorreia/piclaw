@@ -22,6 +22,13 @@ import { getGeneralSettingsData, saveGeneralSettings } from "../handlers/general
 import { getQuickActionsSettingsData, saveQuickActionsSettings } from "../handlers/quick-actions-settings.js";
 import { getWorkspaceSettingsData, saveWorkspaceSettings } from "../handlers/workspace-settings.js";
 import {
+  listKeychainEntries,
+  setKeychainEntry,
+  deleteKeychainEntry,
+  listInjectableKeychainEntries,
+  type KeychainEntryMetadata,
+} from "../../../secure/keychain.js";
+import {
   handleWebPushPresence,
   handleWebPushSubscriptionDelete,
   handleWebPushSubscriptionUpsert,
@@ -378,6 +385,70 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message || "Failed to save workspace settings." }, 400);
+      }
+    },
+  },
+  // ── Keychain management ──────────────────────────────────────────────
+  {
+    method: "GET",
+    path: "/agent/keychain",
+    handle: (channel) => {
+      try {
+        const entries = listKeychainEntries();
+        const injectable = listInjectableKeychainEntries();
+        const envMap: Record<string, string> = {};
+        for (const { keychainName, envName } of injectable) {
+          envMap[keychainName] = envName;
+        }
+        const result = entries.map((e: KeychainEntryMetadata) => ({
+          ...e,
+          envVar: envMap[e.name] || null,
+        }));
+        return channel.json({ ok: true, entries: result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message }, 500);
+      }
+    },
+  },
+  {
+    method: "POST",
+    path: "/agent/keychain",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        const secret = typeof body.secret === "string" ? body.secret : "";
+        if (!name || !secret) {
+          return channel.json({ error: "Provide name and secret." }, 400);
+        }
+        const type = (["token", "password", "basic", "secret"] as const).includes(body.type as any)
+          ? (body.type as "token" | "password" | "basic" | "secret")
+          : "secret";
+        const username = typeof body.username === "string" && body.username.trim() ? body.username.trim() : undefined;
+        await setKeychainEntry({ name, type, secret, username });
+        return channel.json({ ok: true, name, type });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message }, 400);
+      }
+    },
+  },
+  {
+    method: "DELETE",
+    path: "/agent/keychain",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          return channel.json({ error: "Provide name." }, 400);
+        }
+        const removed = deleteKeychainEntry(name);
+        return channel.json({ ok: true, removed });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message }, 400);
       }
     },
   },

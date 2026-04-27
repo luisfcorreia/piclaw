@@ -16,7 +16,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { getDb } from "./db.js";
-import { WORKSPACE_DIR, getWorkspaceSearchConfig } from "./core/config.js";
+import { WORKSPACE_DIR, getWorkspaceSearchConfig, getSearchMatchMode } from "./core/config.js";
 import { prepareFtsQuery } from "./utils/fts-query.js";
 import { createLogger, debugSuppressedError } from "./utils/logger.js";
 
@@ -531,7 +531,7 @@ export async function searchWorkspace(params: WorkspaceSearchParams): Promise<Wo
 
   const effectiveScope = params.scope?.trim();
 
-  const ftsQuery = prepareFtsQuery(query);
+  const ftsQuery = prepareFtsQuery(query, getSearchMatchMode());
   if (!ftsQuery) {
     return { rows: [], limit, offset, error: "Query is empty after sanitization." };
   }

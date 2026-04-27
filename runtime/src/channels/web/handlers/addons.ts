@@ -87,6 +87,20 @@ function ensureAddonsDir(): string {
       dependencies: {},
     }, null, 2));
   }
+  // Ensure .npmrc points at GitHub Packages for @rcarmo scoped packages.
+  // The token is read from the GITHUB_PICLAW_BOT_PAT env var (keychain-injected).
+  const npmrcPath = join(addonsDir, ".npmrc");
+  const ghToken = process.env.GITHUB_PICLAW_BOT_PAT || process.env.GITHUB_TOKEN || "";
+  if (ghToken) {
+    const npmrc = [
+      "@rcarmo:registry=https://npm.pkg.github.com",
+      `//npm.pkg.github.com/:_authToken=\${GITHUB_PICLAW_BOT_PAT}`,
+    ].join("\n") + "\n";
+    try {
+      const existing = existsSync(npmrcPath) ? readFileSync(npmrcPath, "utf-8") : "";
+      if (existing !== npmrc) writeFileSync(npmrcPath, npmrc);
+    } catch (e) { void e; /* best effort */ }
+  }
   return addonsDir;
 }
 
@@ -329,13 +343,16 @@ async function fetchMergedCatalog(catalogUrls: string[]): Promise<{ catalog: Cat
   };
 }
 
-export function resolveAddonInstallSpec(addon: Pick<CatalogAddon, "name" | "version" | "install">): { kind: string; spec: string; piSource?: string } {
+export function resolveAddonInstallSpec(addon: Pick<CatalogAddon, "name" | "version" | "install">): { kind: string; spec: string; piSource?: string; scopedName?: string } {
   const explicitSpec = addon.install?.spec?.trim();
   if (explicitSpec) {
+    // Extract the package name (possibly scoped) from the spec, stripping @version
+    const scopedName = explicitSpec.replace(/@[^@/]+$/, "");
     return {
       kind: addon.install?.kind?.trim() || "package",
       spec: explicitSpec,
       piSource: addon.install?.piSource?.trim() || undefined,
+      scopedName: scopedName !== addon.name ? scopedName : undefined,
     };
   }
   const version = addon.version?.trim();
@@ -507,7 +524,8 @@ export async function handleInstallAddon(
   try {
     const packageInstall = await runBunCommand(["bun", "add", "--force", installPlan.spec], addonsDir);
     if (packageInstall.ok) {
-      const installedVersion = getInstalledVersion(addon.name);
+      const lookupName = installPlan.scopedName || addon.name;
+      const installedVersion = getInstalledVersion(lookupName);
       return json({
         ok: true,
         slug,

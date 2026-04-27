@@ -1693,6 +1693,8 @@ export async function processChat(
   // actually persisted (either the final output itself or a draft fallback).
   const finalAttachments = output.attachments ?? [];
   const hasOutput = !!(output.result || finalAttachments.length > 0);
+  const finalDraft = channel.getBuffer(turnId, "draft");
+  const hasDraftFallback = typeof finalDraft?.text === "string" && finalDraft.text.trim().length > 0;
   const finalized = hasOutput
     ? storeAgentTurn(channel, emitter, {
         chatJid,
@@ -1704,7 +1706,11 @@ export async function processChat(
         isTerminalAgentReply: true,
         extraContentBlocks: buildRecoveryMarkerBlocks(output.recovery),
       })
-    : publishDraftFallback("empty-final", undefined, { requireDraft: true });
+    : hasDraftFallback
+      ? publishDraftFallback("empty-final")
+      : persistedIntermediateOutput
+        ? true
+        : publishDraftFallback("empty-final");
 
   if (!finalized && hasOutput) {
     // The agent produced output but terminal persistence failed.

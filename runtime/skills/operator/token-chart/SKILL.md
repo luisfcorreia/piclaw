@@ -15,17 +15,22 @@ Generate a 7-day token usage chart (all chats) and post it to the web UI timelin
    bun /workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts
    ```
 
-2. Run the **alternative provider+model mode** (stacked series by provider + model):
+2. Run the **alternative provider+model token mode** (stacked series by provider + model):
    ```bash
    bun /workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts --mode provider-model
    ```
 
-3. Post safely to the web chat (JSON-encoded, no Pushover nudge):
+3. Run the **estimated provider+model cost mode** (same provider hues, pricing reference tag `2026-04-27`):
+   ```bash
+   bun /workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts --mode provider-model-cost
+   ```
+
+4. Post safely to the web chat (JSON-encoded, no Pushover nudge):
    ```bash
    bun /workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts --ipc
    ```
 
-4. If you explicitly want a Pushover nudge as well:
+5. If you explicitly want a Pushover nudge as well:
    ```bash
    bun /workspace/piclaw/runtime/skills/operator/token-chart/token-chart.ts --ipc --nudge
    ```
@@ -39,4 +44,5 @@ Generate a 7-day token usage chart (all chats) and post it to the web UI timelin
 - Uses the `token_usage` table by default; pass `--source sessions` (or `--sessions-dir`) to read session JSONL files.
 - The default chart combines normal usage and `source = "autoresearch"` usage into a single per-day stacked bar, with cached segments below uncached ones.
 - `--mode provider-model` draws an alternative chart grouping tokens by provider/model.
-- Use this on demand (not scheduled yet).
+- `--mode provider-model-cost` draws an **estimated** cost chart using `provider-model-pricing-reference.ts` and the human-readable note `provider-model-pricing-reference.md`, both tagged `2026-04-27`.
+- Use these on demand (not scheduled yet).

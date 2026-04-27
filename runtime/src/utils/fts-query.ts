@@ -19,6 +19,9 @@
  *   - extensions/messages-crud.ts (runSearch)
  */
 
+/** FTS5 match mode: "or" treats multi-word queries as any-match, "and" requires all. */
+export type FtsMatchMode = "or" | "and";
+
 /** FTS5 reserved keywords that must be quoted if used as search terms. */
 const FTS_KEYWORDS = new Set(["AND", "OR", "NOT", "NEAR"]);
 
@@ -52,11 +55,13 @@ export function isFtsOperatorQuery(query: string): boolean {
  * 2. Split into whitespace-separated tokens.
  * 3. Quote any token that is an FTS keyword (AND, OR, NOT, NEAR).
  * 4. Drop empty tokens.
- * 5. Join with implicit AND semantics (space-separated in FTS5 = AND).
+ * 5. Join with the specified mode (OR or implicit AND).
  *
- * Returns null if the query reduces to nothing after sanitization.
+ * @param rawQuery   The raw user input string.
+ * @param mode       "or" joins tokens with OR (any match); "and" uses implicit AND (all match). Default: "or".
+ * @returns          Safe FTS5 MATCH expression, or null if the query is empty.
  */
-export function sanitizeFtsQuery(rawQuery: string): string | null {
+export function sanitizeFtsQuery(rawQuery: string, mode: FtsMatchMode = "or"): string | null {
   const stripped = rawQuery
     .replace(FTS_SPECIAL_CHARS, " ")
     .replace(/\s+/g, " ")
@@ -76,19 +81,22 @@ export function sanitizeFtsQuery(rawQuery: string): string | null {
   }).filter(Boolean);
 
   if (safe.length === 0) return null;
-  return safe.join(" ");
+  return mode === "or" ? safe.join(" OR ") : safe.join(" ");
 }
 
 /**
  * Prepare a user query for FTS5 MATCH, with automatic fallback.
  *
  * - If the query looks like an intentional operator expression, pass through.
- * - Otherwise, sanitize it into safe tokens.
+ * - Otherwise, sanitize it into safe tokens joined by the given mode.
  * - Returns null if the query is empty or unsalvageable.
+ *
+ * @param rawQuery   The raw user input string.
+ * @param mode       "or" joins tokens with OR; "and" uses implicit AND. Default: "or".
  */
-export function prepareFtsQuery(rawQuery: string): string | null {
+export function prepareFtsQuery(rawQuery: string, mode: FtsMatchMode = "or"): string | null {
   const trimmed = rawQuery.trim();
   if (!trimmed) return null;
   if (isFtsOperatorQuery(trimmed)) return trimmed;
-  return sanitizeFtsQuery(trimmed);
+  return sanitizeFtsQuery(trimmed, mode);
 }
