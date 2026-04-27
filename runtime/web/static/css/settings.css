@@ -811,6 +811,37 @@
     font-size: 0.88em;
 }
 
+.settings-loading-pane,
+.settings-loading-shell-body {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.settings-loading-pane {
+    min-height: 160px;
+    width: 100%;
+    justify-content: center;
+}
+
+.settings-dialog-backdrop-loader {
+    z-index: 2399;
+    pointer-events: none;
+}
+
+.settings-dialog-loading-shell {
+    width: min(420px, 92vw);
+    height: auto;
+    min-height: 0;
+}
+
+.settings-loading-shell-body {
+    justify-content: center;
+    padding: 28px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 /* ── Status bar (bottom of dialog) ──────────────────────────── */
 
 .settings-status-bar {

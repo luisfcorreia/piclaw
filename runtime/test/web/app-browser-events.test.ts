@@ -3,6 +3,7 @@ import { expect, test } from 'bun:test';
 import {
   watchDockToggleShortcut,
   watchPaneOpenEvents,
+  watchSettingsShortcut,
   watchZenModeShortcuts,
 } from '../../web/src/ui/app-browser-events.js';
 
@@ -104,4 +105,38 @@ test('watchZenModeShortcuts toggles on Ctrl+Shift+Z and exits on Escape when act
 
   dispose();
   expect(doc.count('keydown')).toBe(0);
+});
+
+test('watchSettingsShortcut accepts Cmd/Ctrl+, and Alt+, fallback, but ignores editable targets and shift-modified chords', () => {
+  const doc = createEventTarget();
+  const events: string[] = [];
+  const originalWindow = (globalThis as any).window;
+  const customWindow = {
+    dispatchEvent(event: { type?: string }) {
+      events.push(String(event?.type || ''));
+      return true;
+    },
+  } as any;
+  (globalThis as any).window = customWindow;
+
+  const dispose = watchSettingsShortcut({ document: doc as any });
+
+  const primaryEvent = doc.dispatch('keydown', { ctrlKey: true, key: ',' });
+  const altEvent = doc.dispatch('keydown', { altKey: true, key: ',' });
+  const shiftedEvent = doc.dispatch('keydown', { altKey: true, shiftKey: true, key: ',' });
+  const editableEvent = doc.dispatch('keydown', {
+    altKey: true,
+    key: ',',
+    target: { closest: (selector: string) => selector.includes('input') ? ({} as Element) : null },
+  });
+
+  expect(primaryEvent.prevented).toBe(true);
+  expect(altEvent.prevented).toBe(true);
+  expect(shiftedEvent.prevented).toBeUndefined();
+  expect(editableEvent.prevented).toBeUndefined();
+  expect(events).toEqual(['piclaw:open-settings', 'piclaw:open-settings']);
+
+  dispose();
+  expect(doc.count('keydown')).toBe(0);
+  (globalThis as any).window = originalWindow;
 });

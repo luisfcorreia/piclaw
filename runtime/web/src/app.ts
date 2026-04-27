@@ -14,7 +14,7 @@ import {
     isIOSDevice,
 } from './ui/app-helpers.js';
 import { isCompactionStatus } from './ui/status-duration.js';
-import { openSettingsDialog } from './components/settings-dialog.js';
+import { openSettingsDialog } from './components/settings-dialog-loader.js';
 import {
     useAppLocationNavigation,
 } from './ui/app-location-navigation.js';

@@ -4,7 +4,7 @@ import { OobePanel } from '../components/oobe-panel.js';
 import { BtwPanel } from '../components/btw-panel.js';
 import { FloatingWidgetPane } from '../components/floating-widget-pane.js';
 import { AttachmentPreviewModal } from '../components/attachment-preview-modal.js';
-import { SettingsDialog } from '../components/settings-dialog.js';
+import { SettingsDialogLoader } from '../components/settings-dialog-loader.js';
 import { TimelineQuickActions } from '../components/timeline-quick-actions.js';
 import { TimelineMenu } from '../components/timeline-menu.js';
 import { AgentRequestModal, AgentStatus } from '../components/status.js';
@@ -526,7 +526,7 @@ export function renderMainShell(options: MainShellRenderOptions): any {
             onClose=${() => setAttachmentPreview(null)}
           />
         `}
-        <${SettingsDialog} />
+        <${SettingsDialogLoader} />
         <${AgentStatus}
           extensionPanels=${Array.from(extensionStatusPanels.values())}
           pendingPanelActions=${pendingExtensionPanelActions}

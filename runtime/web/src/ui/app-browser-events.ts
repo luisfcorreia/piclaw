@@ -161,16 +161,24 @@ export function watchChatSwitchShortcuts(callbacks: ChatSwitchShortcutCallbacks,
   return () => doc.removeEventListener('keydown', onKeyDown);
 }
 
-/** Register Cmd/Ctrl+, shortcut to open the settings dialog. */
+/** Register browser settings shortcuts.
+ *
+ * Cmd/Ctrl+, is the conventional app-settings shortcut, but some browsers
+ * reserve it for their own preferences UI before page code can act.
+ * Support Alt+, as a browser-safe fallback while keeping the canonical chord.
+ */
 export function watchSettingsShortcut(runtime: RuntimeLike = {}): () => void {
   const doc = runtime.document ?? (typeof document !== 'undefined' ? document : null);
   if (!doc) return () => {};
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === ',') {
-      event.preventDefault();
-      window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
-    }
+    if (isEditableKeyboardTarget(event?.target)) return;
+    if (event.shiftKey) return;
+    const isPrimaryShortcut = (event.metaKey || event.ctrlKey) && !event.altKey && event.key === ',';
+    const isAltFallback = event.altKey && !event.metaKey && !event.ctrlKey && event.key === ',';
+    if (!isPrimaryShortcut && !isAltFallback) return;
+    event.preventDefault();
+    window.dispatchEvent(new CustomEvent('piclaw:open-settings'));
   };
 
   doc.addEventListener('keydown', onKeyDown as EventListener);

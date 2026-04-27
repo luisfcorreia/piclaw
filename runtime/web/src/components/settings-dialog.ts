@@ -7,21 +7,83 @@
  */
 import { html, useState, useEffect, useCallback, useRef } from '../vendor/preact-htm.js';
 import { BodyPortal } from './body-portal.js';
-import { GeneralSection } from './settings/general.js';
-import { ProvidersSection } from './settings/providers.js';
-import { ModelsSection } from './settings/models.js';
-import { ThemeSection } from './settings/appearance.js';
-import { ToolsSection } from './settings/tools.js';
-import { KeychainSection } from './settings/keychain.js';
-import { QuickActionsSection } from './settings/quick-actions.js';
-import { AddonsSection } from './settings/addons.js';
 import { getRegisteredSettingsPanes } from './settings/pane-registry.js';
 
-// Import extension panes (self-register on import)
-import './settings/editor-settings.js';
-import './settings/kanban-settings.js';
-import './settings/mindmap-settings.js';
-import './settings/developer-settings.js';
+type SettingsSectionComponent = unknown;
+type BuiltinSectionId = 'general' | 'providers' | 'models' | 'theme' | 'quick-actions' | 'keychain' | 'tools' | 'addons';
+
+const builtinSectionComponentCache = new Map<BuiltinSectionId, SettingsSectionComponent>();
+const builtinSectionLoadPromiseCache = new Map<BuiltinSectionId, Promise<SettingsSectionComponent>>();
+let extensionSettingsPanesReady = false;
+let extensionSettingsPanesPromise: Promise<void> | null = null;
+
+const BUILTIN_SECTION_LOADERS: Record<BuiltinSectionId, () => Promise<SettingsSectionComponent>> = {
+    general: () => import('./settings/general.js').then(mod => mod.GeneralSection),
+    providers: () => import('./settings/providers.js').then(mod => mod.ProvidersSection),
+    models: () => import('./settings/models.js').then(mod => mod.ModelsSection),
+    theme: () => import('./settings/appearance.js').then(mod => mod.ThemeSection),
+    'quick-actions': () => import('./settings/quick-actions.js').then(mod => mod.QuickActionsSection),
+    keychain: () => import('./settings/keychain.js').then(mod => mod.KeychainSection),
+    tools: () => import('./settings/tools.js').then(mod => mod.ToolsSection),
+    addons: () => import('./settings/addons.js').then(mod => mod.AddonsSection),
+};
+
+const EXTENSION_SETTINGS_PANE_LOADERS = [
+    () => import('./settings/editor-settings.js'),
+    () => import('./settings/kanban-settings.js'),
+    () => import('./settings/mindmap-settings.js'),
+    () => import('./settings/developer-settings.js'),
+];
+
+function loadBuiltinSection(id) {
+    const cached = builtinSectionComponentCache.get(id);
+    if (cached) return Promise.resolve(cached);
+
+    const inflight = builtinSectionLoadPromiseCache.get(id);
+    if (inflight) return inflight;
+
+    const promise = BUILTIN_SECTION_LOADERS[id]()
+        .then((component) => {
+            builtinSectionComponentCache.set(id, component);
+            builtinSectionLoadPromiseCache.delete(id);
+            return component;
+        })
+        .catch((error) => {
+            builtinSectionLoadPromiseCache.delete(id);
+            throw error;
+        });
+
+    builtinSectionLoadPromiseCache.set(id, promise);
+    return promise;
+}
+
+function ensureExtensionSettingsPanesLoaded() {
+    if (extensionSettingsPanesReady) return Promise.resolve();
+    if (extensionSettingsPanesPromise) return extensionSettingsPanesPromise;
+
+    extensionSettingsPanesPromise = Promise.all(
+        EXTENSION_SETTINGS_PANE_LOADERS.map((load) => load()),
+    )
+        .then(() => {
+            extensionSettingsPanesReady = true;
+            extensionSettingsPanesPromise = null;
+        })
+        .catch((error) => {
+            extensionSettingsPanesPromise = null;
+            throw error;
+        });
+
+    return extensionSettingsPanesPromise;
+}
+
+function renderSectionLoading(label = 'Loading…') {
+    return html`
+        <div class="settings-loading settings-loading-pane" role="status" aria-live="polite">
+            <span class="settings-spinner"></span>
+            <span>${label}</span>
+        </div>
+    `;
+}
 
 // ── SVG nav icons ───────────────────────────────────────────────────────────
 // All icons: 24×24 viewBox, 16×16 rendered, stroke-based, stroke-width 2, round caps/joins.
@@ -38,12 +100,12 @@ const iconAddons = html`<svg viewBox="0 0 24 24" width="16" height="16" fill="no
 const BUILTIN_SECTIONS = [
     { id: 'general', label: 'General', icon: iconGeneral, searchable: false, order: 10 },
     { id: 'providers', label: 'Providers', icon: iconProviders, searchable: false, order: 20 },
-    { id: 'models', label: 'Models', icon: iconModels, searchable: true, placeholder: 'Filter models\u2026', order: 30 },
+    { id: 'models', label: 'Models', icon: iconModels, searchable: true, placeholder: 'Filter models…', order: 30 },
     { id: 'theme', label: 'Appearance', icon: iconAppearance, searchable: false, order: 40 },
-    { id: 'quick-actions', label: 'Quick Actions', icon: iconQuickActions, searchable: true, placeholder: 'Filter quick actions\u2026', order: 70 },
-    { id: 'keychain', label: 'Keychain', icon: iconKeychain, searchable: true, placeholder: 'Filter entries\u2026', order: 75 },
-    { id: 'tools', label: 'Tools', icon: iconTools, searchable: true, placeholder: 'Filter tools\u2026', order: 80 },
-    { id: 'addons', label: 'Add-ons', icon: iconAddons, searchable: true, placeholder: 'Filter add-ons\u2026', order: 90 },
+    { id: 'quick-actions', label: 'Quick Actions', icon: iconQuickActions, searchable: true, placeholder: 'Filter quick actions…', order: 70 },
+    { id: 'keychain', label: 'Keychain', icon: iconKeychain, searchable: true, placeholder: 'Filter entries…', order: 75 },
+    { id: 'tools', label: 'Tools', icon: iconTools, searchable: true, placeholder: 'Filter tools…', order: 80 },
+    { id: 'addons', label: 'Add-ons', icon: iconAddons, searchable: true, placeholder: 'Filter add-ons…', order: 90 },
 ];
 
 function SettingsDialogContent({ onClose }) {
@@ -52,6 +114,9 @@ function SettingsDialogContent({ onClose }) {
     const [statusMessage, setStatusMessage] = useState(null);
     const [filter, setFilter] = useState('');
     const [, forceUpdate] = useState(0);
+    const [builtinSectionComponents, setBuiltinSectionComponents] = useState(() => Object.fromEntries(builtinSectionComponentCache.entries()));
+    const [loadingSectionId, setLoadingSectionId] = useState('general');
+    const [extensionPanesLoaded, setExtensionPanesLoaded] = useState(extensionSettingsPanesReady);
     const filterRef = useRef(null);
 
     useEffect(() => {
@@ -59,6 +124,17 @@ function SettingsDialogContent({ onClose }) {
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
+
+    useEffect(() => {
+        ensureExtensionSettingsPanesLoaded()
+            .then(() => {
+                setExtensionPanesLoaded(true);
+                forceUpdate(n => n + 1);
+            })
+            .catch((error) => {
+                console.error('[settings-dialog] Failed to register extension settings panes.', error);
+            });
+    }, []);
 
     // Re-render when extension panes register
     useEffect(() => {
@@ -71,17 +147,7 @@ function SettingsDialogContent({ onClose }) {
         fetch('/agent/settings-data').then(r => r.json()).then(setSettingsData).catch(() => setSettingsData({}));
     }, []);
 
-    const setStatus = useCallback((text, type = 'info') => {
-        setStatusMessage(text ? { text, type } : null);
-    }, []);
-
-    const switchSection = useCallback((id) => {
-        setActiveSection(id);
-        setFilter('');
-    }, []);
-
-    // Merge built-in + extension panes, sorted by order
-    const extensionPanes = getRegisteredSettingsPanes();
+    const extensionPanes = extensionPanesLoaded ? getRegisteredSettingsPanes() : [];
     const allSections = [
         ...BUILTIN_SECTIONS,
         ...extensionPanes.map(p => ({
@@ -96,7 +162,7 @@ function SettingsDialogContent({ onClose }) {
         })),
     ].sort((a, b) => (a.order ?? 500) - (b.order ?? 500));
 
-    const activeMeta = allSections.find(s => s.id === activeSection);
+    const activeMeta = allSections.find(s => s.id === activeSection) || BUILTIN_SECTIONS.find(s => s.id === activeSection);
 
     useEffect(() => {
         if (activeMeta?.searchable) {
@@ -104,28 +170,71 @@ function SettingsDialogContent({ onClose }) {
         }
     }, [activeSection]);
 
+    useEffect(() => {
+        if (activeMeta?.isExtension) {
+            setLoadingSectionId(null);
+            return;
+        }
+        let cancelled = false;
+        if (builtinSectionComponents[activeSection]) {
+            setLoadingSectionId(null);
+            return;
+        }
+        setLoadingSectionId(activeSection);
+        loadBuiltinSection(activeSection)
+            .then((component) => {
+                if (cancelled) return;
+                setBuiltinSectionComponents(prev => prev?.[activeSection] ? prev : { ...(prev || {}), [activeSection]: component });
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                console.error(`[settings-dialog] Failed to lazy-load section "${activeSection}".`, error);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingSectionId(current => current === activeSection ? null : current);
+            });
+        return () => { cancelled = true; };
+    }, [activeSection, activeMeta?.isExtension, builtinSectionComponents]);
+
+    const setStatus = useCallback((text, type = 'info') => {
+        setStatusMessage(text ? { text, type } : null);
+    }, []);
+
+    const switchSection = useCallback((id) => {
+        setActiveSection(id);
+        setFilter('');
+    }, []);
+
     const mergeSettingsData = useCallback((patch) => {
         setSettingsData(prev => ({ ...(prev || {}), ...(patch || {}) }));
     }, []);
 
     const renderSection = () => {
-        // Check extension panes first
-        if (activeMeta?.isExtension && activeMeta.component) {
+        if (activeMeta?.isExtension) {
+            if (!activeMeta.component) return renderSectionLoading('Loading pane…');
             const Comp = activeMeta.component;
             return html`<${Comp} filter=${filter} />`;
         }
+
+        const Comp = builtinSectionComponents[activeSection];
+        if (!Comp || loadingSectionId === activeSection) {
+            return renderSectionLoading(`Loading ${activeMeta?.label || 'settings'}…`);
+        }
+
         switch (activeSection) {
-            case 'general': return html`<${GeneralSection} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
-            case 'providers': return html`<${ProvidersSection} providers=${settingsData?.providers} setStatus=${setStatus} />`;
-            case 'models': return html`<${ModelsSection} filter=${filter} />`;
-            case 'theme': return html`<${ThemeSection} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
-            case 'quick-actions': return html`<${QuickActionsSection} filter=${filter} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
-            case 'keychain': return html`<${KeychainSection} filter=${filter} />`;
-            case 'tools': return html`<${ToolsSection} toolsets=${settingsData?.toolsets} filter=${filter} settingsData=${settingsData} mergeSettingsData=${mergeSettingsData} />`;
-            case 'addons': return html`<${AddonsSection} setStatus=${setStatus} filter=${filter} />`;
-            default: return null;
+            case 'general': return html`<${Comp} settingsData=${settingsData} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
+            case 'providers': return html`<${Comp} providers=${settingsData?.providers} setStatus=${setStatus} />`;
+            case 'models': return html`<${Comp} filter=${filter} />`;
+            case 'theme': return html`<${Comp} themes=${settingsData?.themes} colorKeys=${settingsData?.colorKeys} />`;
+            case 'quick-actions': return html`<${Comp} filter=${filter} setStatus=${setStatus} mergeSettingsData=${mergeSettingsData} />`;
+            case 'keychain': return html`<${Comp} filter=${filter} />`;
+            case 'tools': return html`<${Comp} toolsets=${settingsData?.toolsets} filter=${filter} settingsData=${settingsData} mergeSettingsData=${mergeSettingsData} />`;
+            case 'addons': return html`<${Comp} setStatus=${setStatus} filter=${filter} />`;
+            default: return renderSectionLoading('Loading settings…');
         }
     };
+
+    const showRootLoading = settingsData === null || !activeMeta;
 
     return html`
         <div class="settings-dialog-backdrop" onClick=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -134,10 +243,10 @@ function SettingsDialogContent({ onClose }) {
                     <span class="settings-dialog-title">Settings</span>
                     ${activeMeta?.searchable && html`
                         <input ref=${filterRef} type="text" class="settings-header-filter"
-                            placeholder=${activeMeta.placeholder || 'Filter\u2026'}
+                            placeholder=${activeMeta.placeholder || 'Filter…'}
                             value=${filter} onInput=${e => setFilter(e.target.value)} />
                     `}
-                    <button class="settings-dialog-close" onClick=${onClose} title="Close (Esc)">\u2715</button>
+                    <button class="settings-dialog-close" onClick=${onClose} title="Close (Esc)">✕</button>
                 </div>
                 <div class="settings-dialog-body">
                     <nav class="settings-nav">
@@ -154,14 +263,14 @@ function SettingsDialogContent({ onClose }) {
                         })}
                     </nav>
                     <main class="settings-content">
-                        ${settingsData === null ? html`<div class="settings-loading">Loading\u2026</div>` : renderSection()}
+                        ${showRootLoading ? renderSectionLoading('Loading settings…') : renderSection()}
                     </main>
                 </div>
                 ${statusMessage && html`
                     <div class=${`settings-status-bar settings-status-bar-${statusMessage.type}`}>
                         ${statusMessage.type === 'info' && html`<span class="settings-spinner"></span>`}
                         <span>${statusMessage.text}</span>
-                        ${statusMessage.type !== 'info' && html`<button class="settings-status-dismiss" onClick=${() => setStatusMessage(null)}>\u2715</button>`}
+                        ${statusMessage.type !== 'info' && html`<button class="settings-status-dismiss" onClick=${() => setStatusMessage(null)}>✕</button>`}
                     </div>
                 `}
             </div>
