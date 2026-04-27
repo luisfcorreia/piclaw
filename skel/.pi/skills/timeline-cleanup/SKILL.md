@@ -6,22 +6,16 @@ distribution: private
 
 # Timeline Cleanup
 
-Delete messages from the web chat timeline that match keyword patterns, then optionally vacuum the database to reclaim space.
+Delete low-value timeline messages by pattern, with attachment protection by default.
 
-## How It Works
+Default chat scope:
 
-1. Query the messages DB (from `PICLAW_STORE/messages.db`) for rows matching the given patterns
-2. Resolve the full session scope — for `web:*` chats, this includes all session trees and branches
-3. Exclude messages that have media attachments — unless `--include-media` is passed
-4. Delete matching messages via the `/post/{id}?cascade=true` HTTP API
-5. Optionally vacuum the database (requires a brief piclaw restart)
+- if `chatJid` is omitted, the cleanup targets `web:default`
+- for `web:*` chats, the helper resolves the **full web session scope** (root chat plus branches)
 
 ## Usage
 
-Run cleanup by importing the helper or using the CLI.
-
-Defaults include a throttled delete loop (1100ms delay) with retries on
-HTTP 429 responses to avoid server-side rate limits.
+Cleanup is available both as an import and as a CLI.
 
 ### Import
 
@@ -30,16 +24,16 @@ import { cleanupTimeline } from "/workspace/.pi/skills/timeline-cleanup/cleanup.
 
 const result = await cleanupTimeline({
   patterns: ["reload", "compaction"],
-  // dryRun: true,           // Preview only
-  // includeMedia: false,    // Skip messages with attachments (default)
-  // vacuum: false,          // Vacuum DB after (causes restart)
-  // beforeRowid: 99999,     // Only match messages before this rowid
-  // chatJid: "web:default", // Target chat
-  // maxLength: 300,         // Only match messages shorter than this
-  // senderFilter: "web-agent", // Only match this sender
-  // throttleMs: 1100,       // Delay between deletes (avoid rate limits)
-  // retryOn429: true,       // Retry if rate limited
-  // maxRetries: 2,          // Max retries for rate limits
+  // dryRun: true,
+  // includeMedia: false,
+  // vacuum: false,
+  // beforeRowid: 99999,
+  // chatJid: "web:default",
+  // maxLength: 300,
+  // senderFilter: "web-agent",
+  // throttleMs: 1100,
+  // retryOn429: true,
+  // maxRetries: 2,
 });
 ```
 
@@ -52,16 +46,31 @@ bun run /workspace/.pi/skills/timeline-cleanup/cleanup.ts \
   --dry-run
 ```
 
-## Built-in Pattern Groups
+## Result shape
 
-The `cleanupAll()` function runs all standard pattern groups in sequence. Use it for a full housekeeping pass:
+`cleanupTimeline()` returns a `CleanupResult` shaped like:
+
+```ts
+{
+  matched: number,
+  skipped: number,
+  deleted: number,
+  failed: number,
+  dbSizeBefore: string,
+  dbSizeAfter: string
+}
+```
+
+`cleanupAll()` returns a record of those per built-in pattern group.
+
+## Built-in pattern groups
+
+Use `cleanupAll()` for a full housekeeping pass:
 
 ```typescript
 import { cleanupAll } from "/workspace/.pi/skills/timeline-cleanup/cleanup.ts";
 const results = await cleanupAll({ beforeRowid: 5000, dryRun: true });
 ```
-
-### Pattern groups
 
 | Group | Patterns | Sender | Max length |
 |---|---|---|---|
@@ -78,23 +87,22 @@ const results = await cleanupAll({ beforeRowid: 5000, dryRun: true });
 | **Git operations** | `git add`, `git commit -m`, `git push`, `git status` | any | 200 |
 | **Package installs** | `bun install`, `bun add`, `bun update`, `packages installed` | any | 300 |
 
+## Behaviour
+
+- delete operations are throttled by default (`1100ms`) with optional retry on HTTP 429 responses
+- media-bearing messages are skipped unless `--include-media` is set
+- vacuuming is optional and only makes sense after actual deletions
+
 ## Vacuum
 
-Vacuuming requires exclusive DB access. The cleanup function can:
-1. Copy the DB to `/tmp`
-2. Vacuum the copy
-3. Stop piclaw, swap the file, start piclaw
-
-This causes a brief (~5s) interruption. Only use when significant space can be reclaimed.
+Vacuuming requires exclusive DB access. The helper can copy the DB to `/tmp`, vacuum the copy, swap it in, and restart piclaw briefly.
 
 ## Environment
 
-- `PICLAW_STORE` — message DB parent directory (default: `/workspace/.piclaw/store`)
-- `PICLAW_WEB_PORT` — web server port (default: 8080)
+- `PICLAW_STORE` — message DB parent directory (default `/workspace/.piclaw/store`)
+- `PICLAW_WEB_PORT` — web server port (default `8080`)
 - `PICLAW_INTERNAL_SECRET` / `PICLAW_WEB_INTERNAL_SECRET` — internal API auth
 
 ## Related
 
-- `close-of-day` invokes the same cleanup strategy as an end-of-day sweep.
-- New end-of-day flow uses the unified `messages` tool actions (`search`, `delete`) for cleanup semantics where available.
-
+- `close-of-day` uses the same cleanup strategy as part of end-of-day maintenance.

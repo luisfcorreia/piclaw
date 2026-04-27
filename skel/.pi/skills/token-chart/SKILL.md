@@ -6,35 +6,61 @@ distribution: public
 
 # Token chart
 
-Generate a 7-day token usage chart (all chats) and post it to the web UI timeline as a message.
+Generate token-usage charts from the database or from session files.
 
-## Steps
+## Modes
 
-1. Run the standard chart script (default mode):
-   ```bash
-   bun /workspace/.pi/skills/token-chart/token-chart.ts
-   ```
+- `default` — daily stacked token-usage bars across the last N days
+- `provider-model` — stacked usage grouped by provider + model for attribution by model family
+- `provider-model-cost` — estimated cost grouped by provider + model using the pricing reference bundled with the script
 
-2. Run the **alternative provider+model mode** (stacked by provider + model):
-   ```bash
-   bun /workspace/.pi/skills/token-chart/token-chart.ts --mode provider-model
-   ```
+## Examples
 
-3. Post safely to the web chat (JSON-encoded, no Pushover nudge):
-   ```bash
-   bun /workspace/.pi/skills/token-chart/token-chart.ts --ipc
-   ```
+Default chart:
 
-4. If you explicitly want a Pushover nudge as well:
-   ```bash
-   bun /workspace/.pi/skills/token-chart/token-chart.ts --ipc --nudge
-   ```
+```bash
+bun /workspace/.pi/skills/token-chart/token-chart.ts
+```
+
+Provider + model chart:
+
+```bash
+bun /workspace/.pi/skills/token-chart/token-chart.ts --mode provider-model
+```
+
+Estimated provider + model cost chart:
+
+```bash
+bun /workspace/.pi/skills/token-chart/token-chart.ts --mode provider-model-cost
+```
+
+Post to the web chat via IPC:
+
+```bash
+bun /workspace/.pi/skills/token-chart/token-chart.ts --ipc
+```
+
+Post via IPC and allow a Pushover nudge:
+
+```bash
+bun /workspace/.pi/skills/token-chart/token-chart.ts --ipc --nudge
+```
+
+## Data sources
+
+- default source: `token_usage` rows in `${PICLAW_STORE}/messages.db`
+- `--source sessions`: read usage from session files under `${PICLAW_DATA}/sessions` instead of SQLite
+- `--sessions-dir <dir>`: override the session-file location explicitly
+
+Use `--source sessions` when DB-backed token usage is unavailable or when you want to inspect raw session-file history directly.
+
+## Output behaviour
+
+- `--ipc` writes an IPC message JSON file and, if needed, an SVG media file so piclaw posts the chart to the web timeline.
+- without `--ipc`, the script writes markdown to stdout with an embedded SVG data URL plus summary text.
+- `--output-svg <path>` writes the SVG to a file in either mode.
 
 ## Notes
 
-- `--ipc` posts the chart as an inline SVG attachment via the IPC media mechanism.
-- Non-IPC output renders as embedded SVG via markdown image syntax.
-- Numbers are formatted using K/M in labels and summaries.
-- Uses the `token_usage` table in `${PICLAW_STORE}/messages.db` by default; pass `--source sessions` (or `--sessions-dir`) to read session JSONL files.
-- `--mode provider-model` is an alternative mode that groups by provider + model and renders a stacked series chart.
-- Use this on demand (not scheduled yet).
+- Numbers are formatted with compact `K` / `M` labels.
+- Use this on demand unless you intentionally wire it into a scheduled task.

@@ -6,12 +6,12 @@ distribution: public
 
 # Send a Message
 
-Write a JSON file to the piclaw IPC directory to send a message right away.
+Write an IPC JSON file so piclaw sends a message immediately.
 
 ## Usage
 
 ```bash
-cat > "$PICLAW_DATA/ipc/messages/msg_$(date +%s).json" <<EOF
+cat > "$PICLAW_DATA/ipc/messages/msg_$(date +%s)_$$_send.json" <<EOF
 {
   "type": "message",
   "chatJid": "$PICLAW_CHAT_JID",
@@ -27,24 +27,31 @@ cat > "$PICLAW_DATA/ipc/messages/msg_$(date +%s).json" <<EOF
 EOF
 ```
 
-## When to Use
+## When to use
 
-- Acknowledge a request before starting longer work: "On it, this might take a minute..."
-- Send progress updates during a multi-step task
-- Deliver partial results while continuing to work
+- acknowledge a request before longer work starts
+- send progress updates during a multi-step task
+- deliver partial results while continuing to work
+
+Example progress message:
+
+```text
+Processing 3/10 files, ~30s remaining…
+```
 
 ## Notes
 
-- Messages are picked up by piclaw within ~1 second
-- The IPC file is deleted after the message is sent
-- Use WhatsApp-compatible formatting: *bold*, _italic_, • bullets, ```code```
-- You can attach local media files by adding an optional `media` array
-  - Each item: `{ path, content_type?, filename?, inline? }`
-  - `path` is filesystem path to an existing file
+- Messages are usually picked up within ~1 second.
+- The IPC file is deleted after successful delivery.
+- Use WhatsApp-compatible formatting for WhatsApp-bound chats: `*bold*`, `_italic_`, `• bullets`, and fenced code blocks.
+- You can attach local media files with an optional `media` array.
+  - each item is `{ path, content_type?, filename?, inline? }`
+  - `path` must point to an existing readable file
   - `content_type` and `filename` override detected values
-  - `inline: true` hints image rendering inside the message card
-- Missing/unreadable media paths generate an inline warning, and message delivery continues for remaining files
-- Do NOT use this for your final response — just return that normally
+  - `inline: true` hints inline rendering for supported images
+- Missing or unreadable media paths generate an inline warning and do not block delivery of the remaining files.
+- Do **not** use this for your final conversational response.
+- Edge case: if the main deliverable is a file or image, send it via IPC if needed, then still return a brief normal response confirming what was sent.
 
 ## Environment
 
