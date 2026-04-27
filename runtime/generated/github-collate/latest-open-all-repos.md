@@ -1,6 +1,6 @@
 # GitHub issues + PR digest
 
-Generated: 2026-04-26T18:19:05.781Z
+Generated: 2026-04-26T22:00:51.214Z
 
 ## Recently changed star counts
 
@@ -13,9 +13,9 @@ No repository changed star count in this run.
 - Repos scanned: **18**
 - Included private repos: **yes**
 - Repos with items: **2**
-- Total items: **11**
+- Total items: **10**
 - Issues: **10**
-- Pull requests: **1**
+- Pull requests: **0**
 - Repos with star movement: **0**
 - Repos with new stars: **0**
 
@@ -23,7 +23,7 @@ No repository changed star count in this run.
 
 | Repo | Stars | Issues | PRs | Total |
 |---|---:|---:|---:|---:|
-| rcarmo/piclaw | 590 | 9 | 1 | 10 |
+| rcarmo/piclaw | 590 | 9 | 0 | 9 |
 | rcarmo/piclaw-addons | 1 | 1 | 0 | 1 |
 
 ## Collated items
@@ -43,12 +43,6 @@ No repository changed star count in this run.
 | 2026-04-25T22:45:28Z | 346 | Adopt pi-coding-agent 0.70.x follow-ups and web progress mapping | piclaw-bot | area:extensions, area:runtime, area:web, priority:high | [#346](https://github.com/rcarmo/piclaw/issues/346) |
 | 2026-04-25T22:45:16Z | 347 | Audit built-in extensions for Pi 0.70.x adoption | piclaw-bot | area:extensions, area:runtime, priority:high, type:audit | [#347](https://github.com/rcarmo/piclaw/issues/347) |
 | 2026-04-25T22:44:59Z | 353 | Plan and sequence the Pi 0.70.x follow-up rollout | piclaw-bot | priority:medium | [#353](https://github.com/rcarmo/piclaw/issues/353) |
-
-#### Pull requests
-
-| Updated | # | Title | Author | Labels | URL |
-|---|---:|---|---|---|---|
-| 2026-04-25T18:23:06Z | 452 | fix: correct .gitignore typo — workspaces/ → workspace/ | lmqferreira | — | [#452](https://github.com/rcarmo/piclaw/pull/452) |
 
 ### [rcarmo/piclaw-addons](https://github.com/rcarmo/piclaw-addons)
 

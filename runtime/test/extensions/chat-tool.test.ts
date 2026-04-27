@@ -64,8 +64,9 @@ describe("chat tool extension", () => {
     try {
       const module = await importFresh<typeof import("../src/extensions/chat-tool.js")>("../src/extensions/chat-tool.js");
       module.setChatToolRelayFn(undefined);
-    } catch {
+    } catch (e) {
       // ignore cleanup import failures in teardown
+      void e;
     }
     restoreEnv?.();
     restoreEnv = null;

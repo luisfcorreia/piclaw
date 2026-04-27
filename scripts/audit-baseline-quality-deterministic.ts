@@ -447,6 +447,7 @@ const groupDefinitions: GroupDefinition[] = [
           "post-copy-markdown.test.ts",
           "post-recovery-chip.test.ts",
           "post-runtime-safety.test.ts",
+          "post-peer-message.test.ts",
           "addons-handler.test.ts",
           "addon-web-extensions.test.ts",
           "general-settings-handler.test.ts",
