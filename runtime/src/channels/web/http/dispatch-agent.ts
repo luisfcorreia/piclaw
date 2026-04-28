@@ -25,6 +25,7 @@ import {
   listKeychainEntries,
   setKeychainEntry,
   deleteKeychainEntry,
+  getKeychainEntry,
   listInjectableKeychainEntries,
   type KeychainEntryMetadata,
 } from "../../../secure/keychain.js";
@@ -447,6 +448,38 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         }
         const removed = deleteKeychainEntry(name);
         return channel.json({ ok: true, removed });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message }, 400);
+      }
+    },
+  },
+  {
+    method: "POST",
+    path: "/agent/keychain/reveal",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          return channel.json({ error: "Provide name." }, 400);
+        }
+        // If TOTP is configured, require a valid code
+        const { getWebRuntimeConfig } = await import("../../../core/config.js");
+        const { verifyTotp } = await import("../auth/auth.js");
+        const webConfig = getWebRuntimeConfig();
+        const totpSecret = (webConfig.totpSecret || "").trim();
+        if (totpSecret) {
+          const code = typeof body.totp_code === "string" ? body.totp_code.trim() : "";
+          if (!code) {
+            return channel.json({ error: "TOTP code required.", needs_totp: true }, 401);
+          }
+          if (!verifyTotp(totpSecret, code, webConfig.totpWindow)) {
+            return channel.json({ error: "Invalid TOTP code.", needs_totp: true }, 401);
+          }
+        }
+        const entry = await getKeychainEntry(name);
+        return channel.json({ ok: true, name: entry.name, secret: entry.secret, username: entry.username ?? null });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message }, 400);

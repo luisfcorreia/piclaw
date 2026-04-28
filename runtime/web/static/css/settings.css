@@ -1827,3 +1827,120 @@
     font-size: 1em;
     padding: 0 4px;
 }
+
+/* ── Keychain reveal ──────────────────────────────────────────────── */
+.settings-keychain-reveal-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 2px 6px;
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+.settings-keychain-reveal-btn:hover,
+.settings-keychain-reveal-btn.active {
+    opacity: 1;
+}
+.settings-keychain-reveal-row td {
+    padding: 0 10px 8px !important;
+    border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.1));
+}
+.settings-keychain-reveal-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--bg-secondary, rgba(0,0,0,0.08));
+}
+.settings-keychain-reveal-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.settings-keychain-reveal-label {
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    min-width: 60px;
+}
+.settings-keychain-reveal-value {
+    flex: 1;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.84em;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color, rgba(128,128,128,0.2));
+    word-break: break-all;
+    white-space: pre-wrap;
+    user-select: all;
+}
+.settings-keychain-copy-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    opacity: 0.5;
+    padding: 4px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+.settings-keychain-copy-btn:hover {
+    opacity: 1;
+}
+
+/* ── Keychain TOTP prompt ─────────────────────────────────────────── */
+.settings-keychain-totp-row td {
+    padding: 0 10px 8px !important;
+    border-bottom: none;
+}
+.settings-keychain-totp-prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--bg-secondary, rgba(0,0,0,0.08));
+}
+.settings-keychain-totp-label {
+    font-size: 0.84em;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    white-space: nowrap;
+}
+.settings-keychain-totp-input {
+    width: 90px;
+    padding: 5px 8px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono, monospace);
+    font-size: 1em;
+    text-align: center;
+    letter-spacing: 0.15em;
+}
+.settings-keychain-totp-submit,
+.settings-keychain-totp-cancel {
+    padding: 5px 12px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.84em;
+}
+.settings-keychain-totp-submit {
+    background: var(--accent-color, #4a9eff);
+    color: #fff;
+    border-color: transparent;
+}
+.settings-keychain-totp-submit:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.settings-keychain-totp-error {
+    font-size: 0.82em;
+    color: var(--error-color, #e55);
+}
