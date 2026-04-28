@@ -71,10 +71,6 @@ const EXPECTED_BUILTIN_TOOL_NAMES = [
   "env",
   // exit-process
   "exit_process",
-  // autoresearch-supervisor
-  "start_autoresearch",
-  "stop_autoresearch",
-  "autoresearch_status",
   // image-processing
   "image_process",
 ];
@@ -205,6 +201,7 @@ describe("built-in extension tool catalog regression", () => {
       "cdp_browser",                                  // packaged browser extension
       "open_office_viewer",                            // packaged viewer extensions
       "office_read", "office_write",                  // packaged office tools
+      "start_autoresearch", "stop_autoresearch", "autoresearch_status", // addon-provided experiment tools
       "schedule_task",                                // registered by task scheduler, not extension factory
     ]);
 

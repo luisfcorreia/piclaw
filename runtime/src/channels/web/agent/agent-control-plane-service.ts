@@ -18,6 +18,10 @@ import type { QueuedFollowupItem } from "../runtime/followup-placeholders.js";
 import { parseJsonObjectRequest } from "../json-body.js";
 import type { QueuedFollowupLifecycleService } from "../runtime/queued-followup-lifecycle-service.js";
 import { completeOobeForInstance, isProviderReadyOobeCompletedForInstance } from "../oobe-instance-state.js";
+import {
+  getAddonStatusPanelPayload,
+  runAddonStatusPanelAction,
+} from "../../../addons/runtime-contributions.js";
 
 const log = createLogger("web");
 
@@ -116,9 +120,10 @@ export class WebAgentControlPlaneService {
     const url = new URL(req.url);
     const chatJid = this.resolveChatJid(url.searchParams.get("chat_jid"));
     try {
-      const getAutoresearchWidgetPayload = this.options.getAutoresearchWidgetPayload
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).getAutoresearchWidgetPayload;
-      return this.options.json(getAutoresearchWidgetPayload(chatJid));
+      if (this.options.getAutoresearchWidgetPayload) {
+        return this.options.json(this.options.getAutoresearchWidgetPayload(chatJid));
+      }
+      return this.options.json(await getAddonStatusPanelPayload("autoresearch", chatJid));
     } catch (error) {
       log.warn("Failed to read autoresearch status", {
         operation: "handle_autoresearch_status",
@@ -135,12 +140,15 @@ export class WebAgentControlPlaneService {
     const payload = parsed.payload as { chat_jid?: string; generate_report?: boolean };
     const chatJid = this.resolveChatJid(payload.chat_jid);
     try {
-      const stopAutoresearchFromWeb = this.options.stopAutoresearchFromWeb
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).stopAutoresearchFromWeb;
-      const result = await stopAutoresearchFromWeb({
-        chat_jid: chatJid,
-        generate_report: payload.generate_report !== false,
-      });
+      const result = this.options.stopAutoresearchFromWeb
+        ? await this.options.stopAutoresearchFromWeb({
+            chat_jid: chatJid,
+            generate_report: payload.generate_report !== false,
+          })
+        : await runAddonStatusPanelAction("autoresearch", "stop", {
+            chat_jid: chatJid,
+            generate_report: payload.generate_report !== false,
+          });
       return this.options.json({
         status: "ok",
         chat_jid: chatJid,
@@ -159,10 +167,13 @@ export class WebAgentControlPlaneService {
     const payload = parsed.payload as { chat_jid?: string };
     const chatJid = this.resolveChatJid(payload.chat_jid);
     try {
-      const dismissAutoresearchWidget = this.options.dismissAutoresearchWidget
-        ?? (await import("../../../extensions/autoresearch-supervisor.js")).dismissAutoresearchWidget;
+      const result = this.options.dismissAutoresearchWidget
+        ? this.options.dismissAutoresearchWidget(chatJid)
+        : await runAddonStatusPanelAction("autoresearch", "dismiss", {
+            chat_jid: chatJid,
+          });
       return this.options.json({
-        status: dismissAutoresearchWidget(chatJid) ? "ok" : "noop",
+        status: result ? "ok" : "noop",
         chat_jid: chatJid,
       });
     } catch (error) {

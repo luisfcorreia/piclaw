@@ -321,6 +321,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         ...getGeneralSettingsData(),
         quickActions: getQuickActionsSettingsData(),
         workspaceSettings: getWorkspaceSettingsData(),
+        runtimePlatform: process.platform,
         providers,
         themes,
         colorKeys: [...THEME_LIST_COLOR_KEYS],

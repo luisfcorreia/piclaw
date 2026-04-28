@@ -40,6 +40,7 @@ import { builtinExtensionFactories } from "../extensions/index.js";
 import { bindImmediateToolActivation } from "./tool-activation-live-update.js";
 import { ensureExtensionNodeModulesLink } from "./session-node-modules-link.js";
 import { createLogger, debugSuppressedError } from "../utils/logger.js";
+import { installAddonRuntimeApi } from "../addons/runtime-contributions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_DIR = getAgentDir();
@@ -60,6 +61,7 @@ const SESSION_TOOL_RESULT_PREVIEW_CHARS = parsePositiveInt(
 const CHANNEL_SYSTEM_PROMPT_APPENDIX_CACHE = new Map<string, string>();
 const APPEND_SYSTEM_PROMPT_OVERRIDE_CACHE = new Map<string, (base: string[]) => string[]>();
 let cachedExtensionNodeModulesDir: string | null | undefined;
+installAddonRuntimeApi();
 let ensuredExtensionNodeModulesLinkTarget: string | null | undefined;
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {

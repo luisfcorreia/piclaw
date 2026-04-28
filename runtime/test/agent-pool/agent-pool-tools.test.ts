@@ -3,7 +3,7 @@
  *
  * Verifies that builtinExtensionFactories register the expected tools
  * (attach_file, messages, model control, tool discovery + activation, SQL introspection, workspace search,
- * adaptive cards, dashboard widget posting, graceful exit, and autoresearch controls).
+ * adaptive cards, dashboard widget posting, graceful exit, and bundled core controls).
  * bun_run, keychain, ssh, and proxmox are provided by packaged runtime extensions rather than builtin factories.
  * and slash commands (/tasks, /scheduled, /theme, /tint) on a mock ExtensionAPI.
  */
@@ -86,9 +86,6 @@ describe("builtin extension factories", () => {
     expect(fake.tools.has("exit_process")).toBe(true);
     expect(fake.tools.has("scheduled_tasks")).toBe(true);
     expect(fake.tools.has("open_workspace_file")).toBe(true);
-    expect(fake.tools.has("start_autoresearch")).toBe(true);
-    expect(fake.tools.has("stop_autoresearch")).toBe(true);
-    expect(fake.tools.has("autoresearch_status")).toBe(true);
 
     // Commands from scheduled-tasks + ui-theme extensions
     expect(fake.commands.has("tasks")).toBe(true);
@@ -98,7 +95,7 @@ describe("builtin extension factories", () => {
   });
 
   test("factories array has expected length", () => {
-    expect(builtinExtensionFactories.length).toBe(23);
+    expect(builtinExtensionFactories.length).toBe(22);
   });
 
   test("scheduled_tasks unifies create pause resume and delete", async () => {

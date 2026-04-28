@@ -13,11 +13,13 @@ import {
   getToolUseMessageBudget,
   getWebRuntimeConfig,
   getSearchMatchMode,
+  getUiThemeConfig,
   setAssistantAvatar,
   setAssistantName,
   setSessionStorageConfig,
   setToolUseMessageBudget,
   setSearchMatchMode,
+  setUiThemeConfig,
   setUserAvatar,
   setUserAvatarBackground,
   setUserName,
@@ -51,6 +53,8 @@ export interface GeneralSettingsData {
   };
   sessionIsolation: "none" | "summary" | "full";
   searchMatchMode: "or" | "and";
+  uiTheme: string;
+  uiTint: string | null;
 }
 
 export interface GeneralSettingsInput {
@@ -133,6 +137,8 @@ export function getGeneralSettingsData(): GeneralSettingsData {
     instanceTotp: buildTotpSettingsData(),
     sessionIsolation: getSessionIsolationLevel(),
     searchMatchMode: getSearchMatchMode(),
+    uiTheme: getUiThemeConfig().theme,
+    uiTint: getUiThemeConfig().tint,
   };
 }
 

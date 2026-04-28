@@ -244,6 +244,12 @@ export function handleAppSseEvent(
     if (handleUiVersionDrift(data?.app_asset_version)) {
       return;
     }
+    // Apply server-persisted theme on connect (instance-wide setting)
+    if (data?.ui_theme) {
+      const serverTheme = data.ui_theme.theme || 'default';
+      const serverTint = data.ui_theme.tint || null;
+      applyThemeFromEvent({ theme: serverTheme, tint: serverTint });
+    }
     const resyncGeneration = previewResyncGenerationRef.current + 1;
     previewResyncGenerationRef.current = resyncGeneration;
     previewResyncPendingRef.current = true;

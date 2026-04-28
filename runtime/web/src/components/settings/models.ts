@@ -74,8 +74,9 @@ export function ModelsSection({ filter = '' }) {
 
     return html`
         <div class="settings-models-split">
+            <div class="settings-models-summary settings-hint">Model and provider names may wrap in narrow panes to avoid clipping.</div>
             <div class="settings-models-list">
-                <table class="settings-table settings-borderless">
+                <table class="settings-table settings-borderless settings-models-table">
                     <thead><tr><th style="width:32px"></th><th>Model</th><th>Provider</th><th>Context</th><th style="text-align:center">Reasoning</th></tr></thead>
                     <tbody>
                         ${filtered.map(m => html`

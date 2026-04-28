@@ -126,8 +126,10 @@ export interface SshConfig {
   strict_host_key_checking: "yes" | "accept-new" | "no";
   /** Creation timestamp. */
   created_at: string;
-  /** Last update timestamp. */
+  /** Last config update timestamp. */
   updated_at: string;
+  /** Last observed activity timestamp while this SSH profile was in use. */
+  last_used_at: string;
 }
 
 /** When an SSH config change takes effect for a chat session. */

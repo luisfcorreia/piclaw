@@ -32,6 +32,9 @@ mkdir -p "$OUTPUT_DIR" "$NOTES_DIR"
 tmp_json="$(mktemp "$OUTPUT_DIR/latest-open-all-repos.XXXXXX.json")"
 tmp_md="$(mktemp "$OUTPUT_DIR/latest-open-all-repos.XXXXXX.md")"
 tmp_history="$(mktemp "$NOTES_DIR/github-repo-metrics-history.XXXXXX.yml")"
+if [[ -f "$LATEST_HISTORY" ]]; then
+  cp "$LATEST_HISTORY" "$tmp_history"
+fi
 cleanup() {
   rm -f "$tmp_json" "$tmp_md" "$tmp_history"
 }

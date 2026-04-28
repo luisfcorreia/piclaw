@@ -7,16 +7,18 @@ import {
   getAddonAttachmentPreviewNote,
   registerAddonAttachmentPreview,
   registerAddonPane,
+  registerAddonSettingsPane,
   registerAddonStandaloneTabUrlResolver,
   resolveAddonStandaloneTabUrl,
   resetAddonWebRegistriesForTests,
 } from '../../web/src/ui/addon-web-extensions.ts';
+import { getRegisteredSettingsPanes } from '../../web/src/components/settings/pane-registry.js';
 
 afterEach(() => {
   resetAddonWebRegistriesForTests();
 });
 
-test('addon web registries support pane, standalone URL, and attachment preview registration', () => {
+test('addon web registries support workspace panes, settings panes, standalone URLs, and attachment previews', () => {
   registerAddonPane({
     id: 'example-addon-pane',
     label: 'Example Addon Pane',
@@ -31,6 +33,13 @@ test('addon web registries support pane, standalone URL, and attachment preview 
         dispose() {},
       };
     },
+  });
+  registerAddonSettingsPane({
+    id: 'example-addon-settings',
+    label: 'Example Addon Settings',
+    icon: '⚙️',
+    component() { return null; },
+    order: 210,
   });
   registerAddonStandaloneTabUrlResolver((path, { hasPopOutTab } = {}) => {
     if (!/\.example$/i.test(String(path || '')) || hasPopOutTab) return null;
@@ -49,6 +58,7 @@ test('addon web registries support pane, standalone URL, and attachment preview 
   });
 
   expect(paneRegistry.get('example-addon-pane')).toBeTruthy();
+  expect(getRegisteredSettingsPanes().some((pane) => pane.id === 'example-addon-settings')).toBe(true);
   expect(resolveAddonStandaloneTabUrl('/workspace/sample.example', { hasPopOutTab: false })).toBe('/example-addon/view?path=%2Fworkspace%2Fsample.example');
   expect(resolveAddonStandaloneTabUrl('/workspace/sample.example', { hasPopOutTab: true })).toBeNull();
   expect(getAttachmentPreviewKind('application/x-example', 'sample.example')).toBe('example-preview');

@@ -42,7 +42,7 @@ function KanbanSettingsSection() {
                 <input type="checkbox" checked=${showArchived}
                     onChange=${() => { const v = !showArchived; setShowArchived(v); setBool('piclaw_kanban_show_archived', v); }} />
             </div>
-            <p class="settings-hint">Opens <code>.kanban.md</code> files. Changes take effect on the next board open.</p>
+            <p class="settings-hint settings-local-only-hint">This browser only. Opens <code>.kanban.md</code> files. Changes take effect on the next board open.</p>
         </div>
     `;
 }

@@ -986,6 +986,46 @@ export function setSearchMatchMode(mode: SearchMatchMode): SearchMatchMode {
   return SEARCH_MATCH_MODE;
 }
 
+// ---------------------------------------------------------------------------
+// UI theme – persisted instance-wide theme + tint.
+// ---------------------------------------------------------------------------
+
+export interface UiThemeConfig {
+  theme: string;
+  tint: string | null;
+}
+
+const uiSection =
+  piclawConfig.ui && typeof piclawConfig.ui === "object"
+    ? (piclawConfig.ui as Record<string, unknown>)
+    : {};
+
+let UI_THEME: string = typeof uiSection.theme === "string" ? uiSection.theme.trim() : "default";
+let UI_TINT: string | null = typeof uiSection.tint === "string" && uiSection.tint.trim() ? uiSection.tint.trim() : null;
+
+export function getUiThemeConfig(): UiThemeConfig {
+  return { theme: UI_THEME, tint: UI_TINT };
+}
+
+export function setUiThemeConfig(patch: { theme?: string; tint?: string | null }): UiThemeConfig {
+  const config = readJsonConfig(getConfigPath());
+  const ui =
+    config.ui && typeof config.ui === "object"
+      ? { ...(config.ui as Record<string, unknown>) }
+      : {};
+  if (typeof patch.theme === "string") {
+    ui.theme = patch.theme.trim() || "default";
+    UI_THEME = ui.theme as string;
+  }
+  if (patch.tint !== undefined) {
+    ui.tint = typeof patch.tint === "string" && patch.tint.trim() ? patch.tint.trim() : null;
+    UI_TINT = ui.tint as string | null;
+  }
+  config.ui = ui;
+  writeJsonConfig(getConfigPath(), config);
+  return { theme: UI_THEME, tint: UI_TINT };
+}
+
 /** Return grouped tool-activation config for runtime wiring and tests. */
 export function getToolActivationConfig(): Readonly<ToolActivationConfig> {
   return TOOL_ACTIVATION_CONFIG;

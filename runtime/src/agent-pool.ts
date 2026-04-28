@@ -533,7 +533,7 @@ export class AgentPool {
 
   async setSshConfig(
     chatJid: string,
-    config: Omit<SshConfig, "chat_jid" | "created_at" | "updated_at">,
+    config: Omit<SshConfig, "chat_jid" | "created_at" | "updated_at" | "last_used_at">,
   ): Promise<SshConfigSetResult> {
     const apply_timing: SshConfigApplyTiming = hasLiveChatSshSession(chatJid) ? "immediate" : "next_session";
     if (apply_timing === "immediate") {

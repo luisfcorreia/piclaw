@@ -60,7 +60,8 @@ export function ThemeSection({ themes, colorKeys }) {
                 </thead>
                 <tbody>
                     ${presets.filter(t => t.name !== 'default').map(t => html`
-                        <tr class=${t.name === currentTheme ? 'settings-row-active' : ''}>
+                        <tr class=${t.name === currentTheme ? 'settings-row-active' : ''}
+                            style="cursor:pointer" onClick=${() => apply(t.name, '')}>
                             <td><input type="radio" name="settings-theme" checked=${t.name === currentTheme} onChange=${() => apply(t.name, '')} /></td>
                             <td><strong>${t.label}</strong></td>
                             <td>${t.mode}</td>

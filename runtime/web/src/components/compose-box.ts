@@ -638,7 +638,7 @@ export function QueuedFollowupStack({
                                     type="button"
                                     title="Edit in compose"
                                     aria-label="Return queued message to editor"
-                                    onClick=${() => onReturnQueuedFollowup?.(item)}
+                                    onClick=${(e) => { e.stopPropagation(); onReturnQueuedFollowup?.(item); }}
                                 >
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -1474,30 +1474,38 @@ export function ComposeBox({
     const handleReturnQueuedFollowup = (queuedItem) => {
         if (!queuedItem) return;
         const restored = buildReturnedQueuedDraft(queuedItem?.content || '');
+        console.info('[compose-box] Returning queued item to editor', { content: restored.content?.slice(0, 80), fileRefs: restored.fileRefs?.length, messageRefs: restored.messageRefs?.length });
         setSubmitError(null);
         setSubmitNotice(null);
         setMediaFiles([]);
         onSetFileRefs?.(restored.fileRefs);
         onSetMessageRefs?.(restored.messageRefs);
-        setContent(restored.content);
-        // Remove from the displayed queue. If the backend removal fails,
-        // the item is already pulled into compose so this is the desired state.
+        // Defer content restoration until after the queue removal re-render
+        // settles. Without this, the optimistic queue-item removal can trigger
+        // a re-render that races with the setContent update.
+        const text = restored.content;
+        setContent(text);
+        // Also directly set the textarea value as a safety net in case React
+        // batching delays the controlled value update.
+        requestAnimationFrame(() => {
+            const textarea = textareaRef.current;
+            if (textarea && textarea.value !== text) {
+                textarea.value = text;
+            }
+            resizeTextarea();
+            if (textarea) {
+                const len = text.length;
+                textarea.selectionStart = len;
+                textarea.selectionEnd = len;
+                textarea.focus();
+            }
+        });
+        // Remove from the displayed queue AFTER setting content.
         try {
             onRemoveQueuedFollowup?.(queuedItem);
         } catch (error) {
-            // The item is already restored into compose; a stale queue entry
-            // will be cleaned up on the next queue refresh.
             console.warn('[compose-box] Failed to remove returned queued follow-up from the sidebar queue.', error);
         }
-        requestAnimationFrame(() => {
-            resizeTextarea();
-            const textarea = textareaRef.current;
-            if (!textarea) return;
-            const len = restored.content.length;
-            textarea.selectionStart = len;
-            textarea.selectionEnd = len;
-            textarea.focus();
-        });
     };
 
     const handlePopupKeyboardEvent = useCallback((e) => {

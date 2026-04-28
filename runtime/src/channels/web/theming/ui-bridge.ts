@@ -12,6 +12,7 @@
 import type { AgentSessionRuntime, ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 
 import { createLogger, debugSuppressedError } from "../../../utils/logger.js";
+import { setUiThemeConfig } from "../../../core/config.js";
 import { createFallbackTheme } from "./theme.js";
 
 const log = createLogger("web.ui-bridge");
@@ -284,6 +285,8 @@ export class UiBridge {
         const payload = normalizeThemePayload(nextTheme);
         if (!payload) return { success: false, error: "Invalid theme payload" };
         this.themeByChat.set(chatJid, payload);
+        // Persist instance-wide so the theme survives restarts and applies to all clients.
+        setUiThemeConfig({ theme: payload.theme, tint: payload.tint ?? null });
         this.channel.broadcastEvent("ui_theme", { chat_jid: chatJid, ...payload });
         return { success: true };
       },

@@ -79,13 +79,19 @@ export function isPendingShutdown(): boolean {
 }
 
 /**
- * Check if a pending shutdown was requested. If so, execute it immediately.
- * Called from finalizeSuccessfulRun() after the response is committed to the DB
- * and broadcast to connected clients.
+ * Check if a pending shutdown was requested. If so, execute it after a brief
+ * delay. Called from finalizeSuccessfulRun() after the response is committed
+ * to the DB and broadcast to connected clients.
+ *
+ * The delay gives the SSE transport time to flush the final "done" status and
+ * stored message events to connected web clients before the server tears down.
+ * Without it the client may miss the agent's final reply even though it is
+ * already persisted in the DB.
  */
 export function checkPendingShutdown(): void {
   if (!pendingShutdownReason) return;
   const reason = pendingShutdownReason;
   pendingShutdownReason = null;
-  requestGracefulShutdown(reason);
+  log.info("Pending shutdown: delaying 1.5s for SSE flush", { operation: "check_pending.delay", reason });
+  setTimeout(() => requestGracefulShutdown(reason), 1500);
 }

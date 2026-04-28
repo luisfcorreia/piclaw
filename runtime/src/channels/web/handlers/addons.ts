@@ -10,7 +10,7 @@
  * spec is unavailable or package install fails.
  */
 
-import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, unlinkSync, writeFileSync, renameSync } from "fs";
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
@@ -274,7 +274,13 @@ export function parseCatalogUrlList(values: Array<string | null | undefined>): s
 
 export function resolveRequestedCatalogUrls(url?: URL): string[] {
   const requested = parseCatalogUrlList(url?.searchParams.getAll("catalog_url") || []);
-  return requested.length > 0 ? requested : [...DEFAULT_CATALOG_URLS];
+  if (requested.length === 0) return [...DEFAULT_CATALOG_URLS];
+  // Always include the default catalog; additional URLs are merged on top.
+  const merged: string[] = [...DEFAULT_CATALOG_URLS];
+  for (const u of requested) {
+    if (!merged.includes(u)) merged.push(u);
+  }
+  return merged;
 }
 
 async function fetchCatalog(catalogUrl: string): Promise<CatalogData | null> {
@@ -364,23 +370,127 @@ export function resolveAddonInstallSpec(addon: Pick<CatalogAddon, "name" | "vers
 }
 
 async function runBunCommand(args: string[], cwd: string): Promise<{ ok: boolean; exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(args, {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env, BUN_INSTALL: undefined },
-  });
-  const [exitCode, stdout, stderr] = await Promise.all([
-    proc.exited,
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-  return {
-    ok: exitCode === 0,
-    exitCode,
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-  };
+  try {
+    const proc = Bun.spawn(args, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, BUN_INSTALL: undefined },
+    });
+    const [exitCode, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    return {
+      ok: exitCode === 0,
+      exitCode,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      exitCode: -1,
+      stdout: "",
+      stderr: String((error as { message?: string })?.message || error),
+    };
+  }
+}
+
+function getRuntimePlatform(): NodeJS.Platform {
+  const override = process.env.PICLAW_TEST_PLATFORM;
+  return (override || process.platform) as NodeJS.Platform;
+}
+
+export function isAddonFsLockError(error: unknown): boolean {
+  const code = String((error as { code?: string })?.code || '').toUpperCase();
+  const message = String((error as { message?: string })?.message || error || '').toLowerCase();
+  return code === 'EBUSY'
+    || code === 'EPERM'
+    || code === 'ENOTEMPTY'
+    || message.includes('resource busy')
+    || message.includes('operation not permitted')
+    || message.includes('permission denied')
+    || message.includes('access is denied')
+    || message.includes('directory not empty');
+}
+
+type AddonFsOps = {
+  existsSync?: typeof existsSync;
+  rmSync?: typeof rmSync;
+  mkdirSync?: typeof mkdirSync;
+  renameSync?: typeof renameSync;
+  sleep?: (ms: number) => Promise<unknown>;
+  now?: () => number;
+  platform?: NodeJS.Platform;
+};
+
+export async function removeAddonDirRobustly(
+  targetDir: string,
+  addonsDir: string,
+  ops: AddonFsOps = {},
+): Promise<{ removed: boolean; deferred: boolean; movedTo?: string }> {
+  const pathExists = ops.existsSync || existsSync;
+  const removePath = ops.rmSync || rmSync;
+  const makeDir = ops.mkdirSync || mkdirSync;
+  const renamePath = ops.renameSync || renameSync;
+  const sleep = ops.sleep || ((ms: number) => Bun.sleep(ms));
+  const now = ops.now || (() => Date.now());
+  const platform = ops.platform || getRuntimePlatform();
+
+  if (!pathExists(targetDir)) {
+    return { removed: false, deferred: false };
+  }
+
+  const delays = [40, 120, 260];
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      removePath(targetDir, { recursive: true, force: true });
+      return { removed: true, deferred: false };
+    } catch (error) {
+      lastError = error;
+      if (!(platform === 'win32' && isAddonFsLockError(error)) || attempt === delays.length) break;
+      await sleep(delays[attempt]!);
+    }
+  }
+
+  if (platform === 'win32' && lastError && isAddonFsLockError(lastError) && pathExists(targetDir)) {
+    const quarantineDir = join(addonsDir, '.trash');
+    makeDir(quarantineDir, { recursive: true });
+    const movedTo = join(quarantineDir, `${getPathLeaf(targetDir)}-${now()}`);
+    renamePath(targetDir, movedTo);
+    return { removed: true, deferred: true, movedTo };
+  }
+
+  throw lastError;
+}
+
+function getPathLeaf(input: string): string {
+  return String(input || '').split(/[\\/]+/).filter(Boolean).at(-1) || 'addon';
+}
+
+function cleanupAddonDependencyRecord(addonsDir: string, addonName: string): { cleaned: boolean; error?: string } {
+  const pkgJsonPath = join(addonsDir, 'package.json');
+  try {
+    const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
+    if (!pkg.dependencies || !(addonName in pkg.dependencies)) return { cleaned: false };
+    delete pkg.dependencies[addonName];
+    writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
+    return { cleaned: true };
+  } catch (error) {
+    return { cleaned: false, error: String((error as { message?: string })?.message || error) };
+  }
+}
+
+function describeAddonOperationFailure(action: 'install' | 'uninstall', error: unknown): string {
+  const message = String((error as { message?: string })?.message || error || 'unknown error');
+  if (getRuntimePlatform() === 'win32' && isAddonFsLockError(error)) {
+    const verb = action === 'install' ? 'install' : 'remove';
+    return `Windows file locking blocked the add-on ${verb}. Restart piclaw (or close panes using the add-on) and try again. Raw error: ${message}`;
+  }
+  return message;
 }
 
 /** Fetch the file tree for an addon path via GitHub Contents API (legacy fallback). */
@@ -469,7 +579,11 @@ export async function handleAddonAssetRequest(
 
   const resolvedPath = resolve(packageDir, parsed.relativePath);
   const packageRoot = resolve(packageDir);
-  if (resolvedPath !== packageRoot && !resolvedPath.startsWith(`${packageRoot}/`)) {
+  const relativeFromRoot = resolvedPath.slice(packageRoot.length);
+  const insidePackageRoot = resolvedPath === packageRoot
+    || relativeFromRoot.startsWith('/')
+    || relativeFromRoot.startsWith('\\');
+  if (!insidePackageRoot) {
     return new Response('Not Found', { status: 404 });
   }
   if (!existsSync(resolvedPath)) {
@@ -545,45 +659,60 @@ export async function handleInstallAddon(
       return json({ error: `Install failed via ${installPlan.kind}: ${detail}` }, 500);
     }
 
-    if (existsSync(destDir)) rmSync(destDir, { recursive: true, force: true });
-    mkdirSync(destDir, { recursive: true });
+    const stagingRoot = join(addonsDir, '.staging');
+    const stagingDir = join(stagingRoot, `${addon.name}-${Date.now()}`);
+    mkdirSync(stagingDir, { recursive: true });
 
     let downloaded = 0;
-    for (const filePath of files) {
-      const relativePath = filePath.slice(addonPath.length + 1);
-      if (!relativePath) continue;
-      await downloadFile(filePath, join(destDir, relativePath));
-      downloaded++;
-    }
-
-    const pkgJsonPath = join(addonsDir, "package.json");
     try {
-      const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-      if (!pkg.dependencies) pkg.dependencies = {};
-      pkg.dependencies[addon.name] = addon.version || "*";
-      writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-    } catch (e) { console.debug('[addons] failed to write package.json stub', e); }
+      for (const filePath of files) {
+        const relativePath = filePath.slice(addonPath.length + 1);
+        if (!relativePath) continue;
+        await downloadFile(filePath, join(stagingDir, relativePath));
+        downloaded++;
+      }
 
-    const addonPkg = join(destDir, "package.json");
-    if (existsSync(addonPkg)) {
-      await runBunCommand(["bun", "install", "--force"], destDir);
+      const pkgJsonPath = join(addonsDir, "package.json");
+      try {
+        const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+        if (!pkg.dependencies) pkg.dependencies = {};
+        pkg.dependencies[addon.name] = addon.version || "*";
+        writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
+      } catch (e) { console.debug('[addons] failed to write package.json stub', e); }
+
+      const addonPkg = join(stagingDir, "package.json");
+      if (existsSync(addonPkg)) {
+        await runBunCommand(["bun", "install", "--force"], stagingDir);
+      }
+
+      const cleanup = await removeAddonDirRobustly(destDir, addonsDir);
+      mkdirSync(dirname(destDir), { recursive: true });
+      renameSync(stagingDir, destDir);
+
+      const installedVersion = getInstalledVersion(addon.name);
+      const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
+      const warnings = [`Package install via ${installPlan.kind} failed first: ${detail}`];
+      if (cleanup.deferred) warnings.push('Existing add-on files were moved aside for cleanup on restart because Windows kept them locked.');
+      return json({
+        ok: true,
+        slug,
+        name: addon.name,
+        installedVersion,
+        filesDownloaded: downloaded,
+        installKind: "legacy-download",
+        installSpec: installPlan.spec,
+        message: `Installed ${addon.name}@${installedVersion || "?"} via legacy package download fallback. Restart required to load.`,
+        warning: warnings.join(' '),
+      });
+    } finally {
+      try {
+        if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        console.debug('[addons] failed to clean staging dir', cleanupError);
+      }
     }
-
-    const installedVersion = getInstalledVersion(addon.name);
-    const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
-    return json({
-      ok: true,
-      slug,
-      name: addon.name,
-      installedVersion,
-      filesDownloaded: downloaded,
-      installKind: "legacy-download",
-      installSpec: installPlan.spec,
-      message: `Installed ${addon.name}@${installedVersion || "?"} via legacy package download fallback. Restart required to load.`,
-      warning: `Package install via ${installPlan.kind} failed first: ${detail}`,
-    });
   } catch (e) {
-    return json({ error: `Install failed: ${String(e)}` }, 500);
+    return json({ error: `Install failed: ${describeAddonOperationFailure('install', e)}` }, 500);
   }
 }
 
@@ -620,14 +749,24 @@ export async function handleUninstallAddon(
 
   try {
     const removal = await runBunCommand(["bun", "remove", addon.name], addonsDir);
+    let cleanup = { removed: false, deferred: false };
+    let dependencyCleanup: { cleaned: boolean; error?: string } = { cleaned: false };
+    if (!removal.ok) {
+      cleanup = await removeAddonDirRobustly(destDir, addonsDir);
+      dependencyCleanup = cleanupAddonDependencyRecord(addonsDir, addon.name);
+    }
+
     if (!removal.ok && existsSync(destDir)) {
-      rmSync(destDir, { recursive: true, force: true });
-      const pkgJsonPath = join(addonsDir, "package.json");
-      try {
-        const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-        if (pkg.dependencies) delete pkg.dependencies[addon.name];
-        writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-      } catch (e) { console.debug('[addons] cleanup failed', e); }
+      const detail = removal.stderr || removal.stdout || `bun remove exited ${removal.exitCode}`;
+      return json({ error: `Uninstall failed via bun remove: ${detail}` }, 500);
+    }
+
+    const warnings: string[] = [];
+    if (!removal.ok) {
+      const detail = removal.stderr || removal.stdout || `bun remove exited ${removal.exitCode}`;
+      warnings.push(`bun remove failed first: ${detail}`);
+      if (cleanup.deferred) warnings.push('Locked files were moved aside for cleanup on restart.');
+      if (dependencyCleanup.error) warnings.push(`package.json cleanup failed: ${dependencyCleanup.error}`);
     }
 
     return json({
@@ -635,8 +774,9 @@ export async function handleUninstallAddon(
       slug,
       name: addon.name,
       message: `Removed ${addon.name}. Restart required to unload.`,
+      ...(warnings.length ? { warning: warnings.join(' ') } : {}),
     });
   } catch (e) {
-    return json({ error: `Uninstall failed: ${String(e)}` }, 500);
+    return json({ error: `Uninstall failed: ${describeAddonOperationFailure('uninstall', e)}` }, 500);
   }
 }
