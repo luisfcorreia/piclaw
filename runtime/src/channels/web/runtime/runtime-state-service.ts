@@ -10,6 +10,7 @@
 import type { WebAgentBufferEntry } from "../agent/agent-buffers.js";
 
 const RECOVERY_REPLAY_DELAY_MS = 2000;
+import { registerPreShutdownHook } from "../../../runtime/shutdown-registry.js";
 import { AgentBuffers } from "../agent/agent-buffers.js";
 import { AgentStatusStore } from "../agent/agent-status-store.js";
 import { WebChannelState } from "./channel-state.js";
@@ -66,6 +67,7 @@ interface AgentStatusStoreLike {
   load(): void;
   update(chatJid: string, status: Record<string, unknown>): void;
   get(chatJid: string): Record<string, unknown> | null;
+  clearPersistedStatuses(): void;
 }
 
 interface AgentBuffersLike {
@@ -104,6 +106,9 @@ export class WebChannelRuntimeStateService {
     this.pendingSteeringStore = deps.pendingSteeringStore ?? new PendingSteeringStore();
     this.agentStatusStore = deps.agentStatusStore ?? new AgentStatusStore(this.state);
     this.agentBuffers = deps.agentBuffers ?? new AgentBuffers();
+    registerPreShutdownHook(() => {
+      this.agentStatusStore.clearPersistedStatuses();
+    });
   }
 
   private getResumeChatContext(): ResumeChatContext {

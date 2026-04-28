@@ -171,3 +171,59 @@ test("treats partial-output interruptions as transient retry candidates", () => 
   expect(decision.classifier).toBe("transient");
   expect(decision.strategy).toBe("retry");
 });
+
+test("retries a thinking-only stop once before escalating", () => {
+  const first = decideAutomaticRecovery({
+    config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
+    errorText: "Prompt completed without emitting an assistant reply before finalization (provider stopped after emitting thinking without a final assistant reply, last stop reason: stop, session delta: 2 appended entries).",
+    recoveryAttemptsUsed: 0,
+    elapsedMs: 1000,
+    snapshot: {
+      hadToolActivity: false,
+      hadPartialOutput: false,
+      hadCompletedTurnOutput: false,
+      sawThinkingOnlyStop: true,
+    },
+  });
+
+  expect(first.recover).toBe(true);
+  expect(first.classifier).toBe("thinking_only_stop");
+  expect(first.strategy).toBe("retry");
+
+  const second = decideAutomaticRecovery({
+    config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
+    errorText: "Prompt completed without emitting an assistant reply before finalization (provider stopped after emitting thinking without a final assistant reply, last stop reason: stop, session delta: 2 appended entries).",
+    recoveryAttemptsUsed: 1,
+    elapsedMs: 3000,
+    snapshot: {
+      hadToolActivity: false,
+      hadPartialOutput: false,
+      hadCompletedTurnOutput: false,
+      sawThinkingOnlyStop: true,
+    },
+  });
+
+  expect(second.recover).toBe(false);
+  expect(second.classifier).toBe("thinking_only_stop");
+  expect(second.strategy).toBeNull();
+});
+
+test("escalates repeated thinking-only stop to compact-then-retry when context pressure is flagged", () => {
+  const decision = decideAutomaticRecovery({
+    config: DEFAULT_AUTOMATIC_RECOVERY_CONFIG,
+    errorText: "Prompt completed without emitting an assistant reply before finalization (provider stopped after emitting thinking without a final assistant reply, last stop reason: stop, session delta: 2 appended entries).",
+    recoveryAttemptsUsed: 1,
+    elapsedMs: 3000,
+    snapshot: {
+      hadToolActivity: false,
+      hadPartialOutput: false,
+      hadCompletedTurnOutput: false,
+      sawThinkingOnlyStop: true,
+      sawCompactionIntent: true,
+    },
+  });
+
+  expect(decision.recover).toBe(true);
+  expect(decision.classifier).toBe("context_pressure");
+  expect(decision.strategy).toBe("compact_then_retry");
+});

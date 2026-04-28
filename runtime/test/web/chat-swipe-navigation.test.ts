@@ -91,7 +91,8 @@ test('isEligibleChatSwipeTarget ignores compose, post content, and other interac
 
   expect(isEligibleChatSwipeTarget(allowedTarget)).toBe(true);
   expect(isEligibleChatSwipeTarget(blockedComposeTarget)).toBe(false);
-  expect(isEligibleChatSwipeTarget(blockedPostContentTarget)).toBe(false);
+  // post-content no longer blocks swipe — text selection guard handles it
+  expect(isEligibleChatSwipeTarget(blockedPostContentTarget)).toBe(true);
 });
 
 test('isEligibleChatSwipeTarget allows swipe on agent-thinking buttons', () => {

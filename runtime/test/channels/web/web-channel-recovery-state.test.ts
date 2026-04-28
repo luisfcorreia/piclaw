@@ -34,24 +34,29 @@ async function initWebChannelFixture(chatJids: string[] = ["web:default"]) {
   return { db, webMod };
 }
 
-test("web channel loadState clears stale statuses but preserves restart-restorable compaction status", async () => {
-  const { webMod } = await initWebChannelFixture(["web:default", "web:compact"]);
+test("web channel loadState clears stale persisted statuses when there is no inflight durable state", async () => {
+  const { db, webMod } = await initWebChannelFixture(["web:default", "web:compact"]);
 
-  const first = new (webMod.WebChannel as any)({
-    queue: { enqueue: () => {} },
-    agentPool: { runAgent: async () => ({ status: "success", result: "ok" }), getContextUsageForChat: async () => null },
-  });
-
-  const compactionStatus = {
-    type: "intent",
-    intent_key: "compaction",
-    title: "Compacting context",
-    started_at: "2026-03-14T14:00:00.000Z",
-    turn_id: "turn-42",
-  };
-
-  first.updateAgentStatus("web:default", { type: "tool_call", title: "Running tool", turn_id: "turn-stale" });
-  first.updateAgentStatus("web:compact", compactionStatus);
+  db.setRouterState("last_agent_timestamp_web", JSON.stringify({
+    agentStatuses: {
+      "web:default": {
+        type: "tool_call",
+        title: "Running tool",
+        turn_id: "turn-stale",
+        runtime_generation: "old-runtime",
+      },
+      "web:compact": {
+        type: "intent",
+        intent_key: "compaction",
+        title: "Compacting context",
+        started_at: "2026-03-14T14:00:00.000Z",
+        turn_id: "turn-42",
+        runtime_generation: "old-runtime",
+      },
+    },
+    contextUsages: {},
+    draftRecoveries: {},
+  }));
 
   const second = new (webMod.WebChannel as any)({
     queue: { enqueue: () => {} },
@@ -60,7 +65,58 @@ test("web channel loadState clears stale statuses but preserves restart-restorab
   second.loadState();
 
   expect(second.getAgentStatus("web:default")).toBeNull();
-  expect(second.getAgentStatus("web:compact")).toEqual(compactionStatus);
+  expect(second.getAgentStatus("web:compact")).toBeNull();
+});
+
+test("web channel derives a recovery status from inflight chat cursors instead of trusting persisted compaction state", async () => {
+  const { db, webMod } = await initWebChannelFixture(["web:compact"]);
+
+  const userTs = new Date(Date.now() - 5_000).toISOString();
+  const messageId = `msg-${Math.random()}`;
+  db.storeMessage({
+    id: messageId,
+    chat_jid: "web:compact",
+    sender: "user",
+    sender_name: "User",
+    content: "/compact",
+    timestamp: userTs,
+    is_from_me: false,
+    is_bot_message: false,
+  });
+  db.beginChatRun("web:compact", userTs, {
+    prevTs: "",
+    messageId,
+    startedAt: "2026-03-14T14:00:00.000Z",
+  });
+
+  db.setRouterState("last_agent_timestamp_web", JSON.stringify({
+    agentStatuses: {
+      "web:compact": {
+        type: "intent",
+        intent_key: "compaction",
+        title: "Compacting context",
+        started_at: "2026-03-14T14:00:00.000Z",
+        turn_id: "turn-42",
+        runtime_generation: "old-runtime",
+      },
+    },
+    contextUsages: {},
+    draftRecoveries: {},
+  }));
+
+  const second = new (webMod.WebChannel as any)({
+    queue: { enqueue: () => {} },
+    agentPool: { runAgent: async () => ({ status: "success", result: "ok" }), getContextUsageForChat: async () => null },
+  });
+  second.loadState();
+
+  expect(second.getAgentStatus("web:compact")).toMatchObject({
+    type: "intent",
+    intent_key: "recovery",
+    title: "Recovering interrupted response",
+    started_at: "2026-03-14T14:00:00.000Z",
+    source: "startup_recovery",
+  });
 });
 
 test("recoverInflightRuns persists buffered draft text across restart instead of showing an interrupted marker", async () => {
@@ -218,22 +274,22 @@ test("recoverInflightRuns clears no-output inflight chats without replay while p
 
   web.recoverInflightRuns();
 
-  expect(db.getInflightRuns().length).toBe(0);
+  expect(db.getInflightRuns()).toEqual([]);
   expect(db.getChatCursor("web:rollback")).toBe(rollbackTs);
   expect(db.getChatCursor("web:partial")).toBe(partialTs);
+  expect(db.getChatCursor("web:older-terminal")).toBe(currentUserTs);
 
   const rollbackTimeline = db.getTimeline("web:rollback", 10);
-  const partialTimeline = db.getTimeline("web:partial", 10);
-  const olderTimeline = db.getTimeline("web:older-terminal", 10);
-  const rollbackContents = rollbackTimeline.map((item: any) => item.data.content);
-  const partialContents = partialTimeline.map((item: any) => item.data.content);
-  const olderContents = olderTimeline.map((item: any) => item.data.content);
+  expect(rollbackTimeline.some((item: any) => Array.isArray(item.data.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && block?.kind === "interrupted"))).toBe(true);
 
-  expect(rollbackContents).not.toContain("unexpected recovery replay");
-  expect(partialContents).toContain("partial reply");
-  expect(partialContents).not.toContain("unexpected recovery replay");
-  expect(olderContents).toContain("previous final");
-  expect(olderContents).not.toContain("unexpected recovery replay");
-  expect(rollbackTimeline.some((item: any) => item.data.content_blocks?.some((block: any) => block?.type === "turn_outcome_marker" && block?.kind === "interrupted" && block?.title === "Turn interrupted"))).toBe(true);
-  expect(olderTimeline.some((item: any) => item.data.content_blocks?.some((block: any) => block?.type === "turn_outcome_marker" && block?.kind === "interrupted" && block?.title === "Turn interrupted"))).toBe(true);
+  const partialTimeline = db.getTimeline("web:partial", 10);
+  expect(partialTimeline.some((item: any) => String(item.data.content || "") === "partial reply")).toBe(true);
+  expect(partialTimeline.some((item: any) => Array.isArray(item.data.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && block?.kind === "interrupted"))).toBe(false);
+
+  const olderTimeline = db.getTimeline("web:older-terminal", 10);
+  const currentInterruptedMarkers = olderTimeline.filter((item: any) => Array.isArray(item.data.content_blocks)
+    && item.data.content_blocks.some((block: any) => block?.type === "turn_outcome_marker" && block?.kind === "interrupted"));
+  expect(currentInterruptedMarkers.length).toBe(1);
 });

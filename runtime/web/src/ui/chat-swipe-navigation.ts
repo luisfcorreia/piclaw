@@ -88,8 +88,6 @@ const INTERACTIVE_SELECTOR = [
   '.attachment-preview-modal',
   '.rename-branch-overlay',
   '.agent-request-modal',
-  '.post-content',
-  '.post-file-refs',
   '.adaptive-card-container',
   '.adaptive-card-container input',
   '.adaptive-card-container textarea',

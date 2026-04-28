@@ -133,9 +133,10 @@ export async function withTempWorkspaceEnv<T>(
 }
 
 /** Import a module with a cache-busting suffix to bypass Bun's module cache. */
-export async function importFresh<T = any>(modulePath: string): Promise<T> {
-  const suffix = `?t=${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  return import(`${modulePath}${suffix}`) as Promise<T>;
+export async function importFresh<T = any>(modulePath: string, baseUrl: string = import.meta.url): Promise<T> {
+  const resolved = new URL(modulePath, baseUrl);
+  resolved.searchParams.set("t", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  return import(resolved.href) as Promise<T>;
 }
 
 /** Poll a predicate until it returns true, or throw after timeoutMs. */

@@ -1,14 +1,24 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 
 import "../helpers.js";
-import { importFresh, withTempWorkspaceEnv } from "../helpers.js";
+import { createTempWorkspace, importFresh, withTempWorkspaceEnv } from "../helpers.js";
 
 type ConfigModule = typeof import("../../src/core/config.js");
 
+function writeWorkspaceConfig(workspace: string, config: Record<string, unknown>): string {
+  const configDir = join(workspace, ".piclaw");
+  mkdirSync(configDir, { recursive: true });
+  const configPath = join(configDir, "config.json");
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  return configPath;
+}
+
 const originalCwd = process.cwd();
 const originalArgv = [...process.argv];
+const RUNTIME_DIR = resolve(import.meta.dir, "../..");
+const CONFIG_SUBPROCESS = join(RUNTIME_DIR, "test", "config", "config-subprocess.ts");
 
 afterEach(() => {
   process.chdir(originalCwd);
@@ -42,6 +52,37 @@ async function withFreshConfig(
   });
 }
 
+function loadConfigInSubprocess(
+  workspace: { workspace: string; store: string; data: string },
+  exports: string[],
+  options: { args?: string[]; env?: Record<string, string | undefined> } = {},
+): Record<string, any> {
+  const proc = Bun.spawnSync({
+    cmd: ["bun", CONFIG_SUBPROCESS, ...(options.args || [])],
+    cwd: workspace.workspace,
+    env: {
+      PATH: process.env.PATH || "",
+      HOME: process.env.HOME || "/tmp",
+      TMPDIR: process.env.TMPDIR || "/tmp",
+      TMP: process.env.TMP || "/tmp",
+      TEMP: process.env.TEMP || "/tmp",
+      USER: process.env.USER || "agent",
+      PICLAW_WORKSPACE: workspace.workspace,
+      PICLAW_STORE: workspace.store,
+      PICLAW_DATA: workspace.data,
+      PICLAW_DB_IN_MEMORY: "1",
+      PICLAW_CONFIG_EXPORTS: exports.join(","),
+      ...(options.env || {}),
+    },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = proc.stdout.toString().trim();
+  const stderr = proc.stderr.toString().trim();
+  expect(proc.exitCode, stderr || stdout).toBe(0);
+  return JSON.parse(stdout || "{}");
+}
+
 describe("core config", () => {
   test("platform helpers expose the documented default remote-surface policy", async () => {
     await withFreshConfig({}, async ({ config }) => {
@@ -54,9 +95,29 @@ describe("core config", () => {
     });
   });
 
-  test("loads grouped settings from env, .env, and config file using the documented precedence", async () => {
-    await withFreshConfig(
-      {
+  test("loads grouped settings from env, .env, and config file using the documented precedence", () => {
+    const workspace = createTempWorkspace("piclaw-config-");
+    try {
+      writeWorkspaceConfig(workspace.workspace, {
+        assistant: { assistantName: "Config Assistant", assistantAvatar: "https://config.example/avatar.png" },
+        user: { userName: "Config User", userAvatar: "https://config.example/user.png", userAvatarBackground: "#123456" },
+        web: { passkeyMode: "passkey-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: true, vncAllowDirect: false, trustProxy: true },
+        debugCardSubmissions: true,
+        tools: { additionalDefaultTools: ["search_workspace", "introspect_sql"], workspaceSearchRoots: ["notes", ".pi/skills", "docs"] },
+        remoteInteropEnabled: true,
+        remoteInteropAllowHttp: true,
+        remoteInteropShortCircuitEnabled: true,
+        remoteInstanceName: "relay",
+        remoteInteropDecisionModel: "openai/gpt-4o",
+      });
+      writeFileSync(join(workspace.workspace, ".env"), [
+        "PICLAW_LOG_LEVEL=debug",
+        "PICLAW_ASSISTANT_AVATAR=https://env-file.example/avatar.png",
+      ].join("\n"), "utf8");
+      const snapshot = loadConfigInSubprocess(workspace, [
+        "WORKSPACE_DIR", "STORE_DIR", "DATA_DIR",
+        "call:getIdentityConfig", "call:getLoggingConfig", "call:getWebRuntimeConfig", "call:getToolActivationConfig", "call:getWorkspaceSearchConfig", "call:getRemoteInteropConfig",
+      ], {
         env: {
           PICLAW_ASSISTANT_NAME: "Env Assistant",
           PICLAW_WEB_PASSKEY_MODE: "totp-only",
@@ -68,7 +129,6 @@ describe("core config", () => {
           PICLAW_WEB_COMPOSE_UPLOAD_LIMIT_MB: undefined,
           PICLAW_WEB_WORKSPACE_UPLOAD_LIMIT_MB: undefined,
           PICLAW_TRUST_PROXY: "0",
-          // Unset remote interop env vars so the config file values are authoritative
           PICLAW_REMOTE_INTEROP_ENABLED: undefined,
           PICLAW_REMOTE_INTEROP_ALLOW_HTTP: undefined,
           PICLAW_REMOTE_INTEROP_ALLOW_PRIVATE_NETWORK: undefined,
@@ -76,90 +136,25 @@ describe("core config", () => {
           PICLAW_REMOTE_INSTANCE_NAME: undefined,
           PICLAW_REMOTE_INTEROP_DECISION_MODEL: undefined,
         },
-        dotEnv: [
-          "PICLAW_LOG_LEVEL=debug",
-          "PICLAW_ASSISTANT_AVATAR=https://env-file.example/avatar.png",
-        ].join("\n"),
-        config: {
-          assistant: {
-            assistantName: "Config Assistant",
-            assistantAvatar: "https://config.example/avatar.png",
-          },
-          user: {
-            userName: "Config User",
-            userAvatar: "https://config.example/user.png",
-            userAvatarBackground: "#123456",
-          },
-          web: {
-            passkeyMode: "passkey-only",
-            sessionTtl: 99,
-            totpWindow: 3,
-            internalSecret: "cfg-secret",
-            terminalEnabled: true,
-            vncAllowDirect: false,
-            trustProxy: true,
-          },
-          debugCardSubmissions: true,
-          tools: {
-            additionalDefaultTools: ["search_workspace", "introspect_sql"],
-            workspaceSearchRoots: ["notes", ".pi/skills", "docs"],
-          },
-          remoteInteropEnabled: true,
-          remoteInteropAllowHttp: true,
-          remoteInteropShortCircuitEnabled: true,
-          remoteInstanceName: "relay",
-          remoteInteropDecisionModel: "openai/gpt-4o",
-        },
-      },
-      async ({ workspace, config }) => {
-        expect(config.WORKSPACE_DIR).toBe(workspace.workspace);
-        expect(config.STORE_DIR).toBe(workspace.store);
-        expect(config.DATA_DIR).toBe(workspace.data);
-
-        expect(config.getIdentityConfig()).toEqual({
-          assistantName: "Env Assistant",
-          assistantAvatar: "https://env-file.example/avatar.png",
-          userName: "Config User",
-          userAvatar: "https://config.example/user.png",
-          userAvatarBackground: "#123456",
-        });
-
-        expect(config.getLoggingConfig().level).toBe("debug");
-        expect(config.getWebRuntimeConfig()).toMatchObject({
-          passkeyMode: "totp-only",
-          sessionTtl: 99,
-          totpWindow: 3,
-          internalSecret: "cfg-secret",
-          terminalEnabled: false,
-          vncAllowDirect: false,
-          vncTargetsRaw: "",
-          debugCardSubmissions: true,
-          trustProxy: false,
-          composeUploadLimitMb: 32,
-          workspaceUploadLimitMb: 256,
-        });
-        expect(config.getToolActivationConfig()).toEqual({
-          additionalDefaultTools: ["search_workspace", "introspect_sql"],
-        });
-        expect(config.getWorkspaceSearchConfig()).toEqual({
-          roots: ["notes", ".pi/skills", "docs"],
-          extraExtensions: [],
-        });
-        expect(config.getRemoteInteropConfig()).toEqual({
-          enabled: true,
-          allowHttp: true,
-          allowPrivateNetwork: false,
-          shortCircuitEnabled: true,
-          instanceName: "relay",
-          decisionModel: "openai/gpt-4o",
-        });
-      },
-    );
+      });
+      expect(snapshot.WORKSPACE_DIR).toBe(workspace.workspace);
+      expect(snapshot.STORE_DIR).toBe(workspace.store);
+      expect(snapshot.DATA_DIR).toBe(workspace.data);
+      expect(snapshot["call:getIdentityConfig"]).toEqual({ assistantName: "Env Assistant", assistantAvatar: "https://env-file.example/avatar.png", userName: "Config User", userAvatar: "https://config.example/user.png", userAvatarBackground: "#123456" });
+      expect(snapshot["call:getLoggingConfig"]).toEqual({ level: "debug" });
+      expect(snapshot["call:getWebRuntimeConfig"]).toMatchObject({ passkeyMode: "totp-only", sessionTtl: 99, totpWindow: 3, internalSecret: "cfg-secret", terminalEnabled: false, vncAllowDirect: false, vncTargetsRaw: "", debugCardSubmissions: true, trustProxy: false, composeUploadLimitMb: 32, workspaceUploadLimitMb: 256 });
+      expect(snapshot["call:getToolActivationConfig"]).toEqual({ additionalDefaultTools: ["search_workspace", "introspect_sql"] });
+      expect(snapshot["call:getWorkspaceSearchConfig"]).toEqual({ roots: ["notes", ".pi/skills", "docs"], extraExtensions: [] });
+      expect(snapshot["call:getRemoteInteropConfig"]).toEqual({ enabled: true, allowHttp: true, allowPrivateNetwork: false, shortCircuitEnabled: true, instanceName: "relay", decisionModel: "openai/gpt-4o" });
+    } finally {
+      workspace.cleanup();
+    }
   });
 
-  test("CLI flags override env-derived web server settings", async () => {
-    await withFreshConfig(
-      {
+  test("CLI flags override env-derived web server settings", () => {
+    const workspace = createTempWorkspace("piclaw-config-");
+    try {
+      const snapshot = loadConfigInSubprocess(workspace, ["call:getWebServerConfig"], {
         env: {
           PICLAW_WEB_PORT: "8080",
           PICLAW_WEB_HOST: "0.0.0.0",
@@ -167,27 +162,12 @@ describe("core config", () => {
           PICLAW_WEB_TLS_CERT: "/env/cert.pem",
           PICLAW_WEB_TLS_KEY: "/env/key.pem",
         },
-        argv: [
-          "--port",
-          "9090",
-          "--host=127.0.0.1",
-          "--idle-timeout",
-          "45",
-          "--tls-cert",
-          "/cli/cert.pem",
-          "--tls-key=/cli/key.pem",
-        ],
-      },
-      async ({ config }) => {
-        expect(config.getWebServerConfig()).toEqual({
-          port: 9090,
-          host: "127.0.0.1",
-          idleTimeout: 45,
-          tlsCert: "/cli/cert.pem",
-          tlsKey: "/cli/key.pem",
-        });
-      },
-    );
+        args: ["--port", "9090", "--host=127.0.0.1", "--idle-timeout", "45", "--tls-cert", "/cli/cert.pem", "--tls-key=/cli/key.pem"],
+      });
+      expect(snapshot["call:getWebServerConfig"]).toEqual({ port: 9090, host: "127.0.0.1", idleTimeout: 45, tlsCert: "/cli/cert.pem", tlsKey: "/cli/key.pem" });
+    } finally {
+      workspace.cleanup();
+    }
   });
 
   test("identity setters keep exported values and routing config in sync", async () => {

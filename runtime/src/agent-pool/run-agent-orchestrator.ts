@@ -631,6 +631,12 @@ async function runPromptAttempt(
   const finalAttachments = options.takeAttachments(chatJid);
   const timedOut = timedOutRef.value;
   const lastAssistantState = tracker.getLastAssistantState();
+  const sawThinkingOnlyStop = Boolean(
+    lastAssistantState?.stopReason === "stop"
+      && lastAssistantState?.hadThinkingContent
+      && !lastAssistantState?.hadTextContent
+      && !lastAssistantState?.hadToolCallContent
+  );
   const latentStateError = !finalText ? getSessionStateErrorMessage(session) : null;
 
   let output: AgentOutput;
@@ -676,6 +682,7 @@ async function runPromptAttempt(
             && lastAssistantState?.stopReason === "stop"
             && !lastAssistantState?.hadTextContent;
           detail = [
+            sawThinkingOnlyStop ? "provider stopped after emitting thinking without a final assistant reply" : null,
             providerStoppedAfterToolUse ? "provider stopped after tool use without a final assistant reply" : null,
             hadPartialOutput ? "partial output seen" : null,
             hadToolActivity ? "tool activity seen" : null,
@@ -696,7 +703,7 @@ async function runPromptAttempt(
         // signal, this is a tool-only completion — not an error worth alarming about.
         const isToolOnlyCompletion = hadToolActivity
           && !hadPartialOutput
-          && !blankTurnDelta
+          && !isBlankTurnSessionDelta(blankTurnDelta)
           && detail.includes("provider stopped after tool use");
         output = isToolOnlyCompletion
           ? {
@@ -739,6 +746,7 @@ async function runPromptAttempt(
       compactionErrorMessage,
       sawCompactionIntent,
       sawAssistantToolCall: sawAssistantToolCallMessage,
+      sawThinkingOnlyStop,
       onlyReadOnlyToolActivity,
       toolUseBudgetExceeded,
       assistantToolUseMessageCount,

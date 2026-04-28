@@ -2,6 +2,7 @@
  * runtime/shutdown.ts – Graceful shutdown orchestration helpers.
  */
 
+import { runPreShutdownHooksOnce } from "./shutdown-registry.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("runtime.shutdown");
@@ -51,6 +52,7 @@ export function createShutdownHandler(deps: ShutdownDeps): (signal: string) => P
     shuttingDown = true;
 
     log.info("Shutdown signal received", { operation: "handle_signal", signal });
+    await runPreShutdownHooksOnce();
     const forceExit = setTimeout(() => {
       log.warn("Forcing shutdown after timeout", { operation: "force_exit", timeoutMs: 15000 });
       process.exit(0);

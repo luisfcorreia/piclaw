@@ -5,11 +5,10 @@
  * DB table (db/chat-cursors.ts), this class is responsible only for
  * transient per-chat agent status payloads that the UI polls for.
  *
- * Most persisted agentStatuses are cleared on startup because they are just
- * ephemeral UI hints from the previous process. The one intentional exception
- * is the restart-restorable compaction indicator, whose original started_at
- * timestamp lets the web UI keep showing a meaningful elapsed timer while
- * recovery resumes the interrupted turn.
+ * Persisted agentStatuses are treated as transient UI hints, not durable
+ * truth. On startup, stale previous-process entries are discarded and any
+ * needed recovery status is re-derived from durable inflight markers in
+ * `chat_cursors`.
  *
  * Consumers: channels/web.ts reads/writes state during agent run
  *            orchestration and SSE broadcasting.

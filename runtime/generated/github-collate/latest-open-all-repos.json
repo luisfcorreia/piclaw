@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-27T18:00:29.792Z",
+  "generated_at": "2026-04-28T06:00:24.928Z",
   "state": "open",
   "include_archived": false,
   "include_forks": false,
@@ -7,13 +7,13 @@
   "owner_filters": [],
   "recent_activity_hours": 24,
   "totals": {
-    "repos_scanned": 18,
-    "repos_with_items": 1,
-    "total_items": 2,
-    "total_issues": 0,
+    "repos_scanned": 21,
+    "repos_with_items": 3,
+    "total_items": 5,
+    "total_issues": 3,
     "total_pull_requests": 2,
-    "repos_with_star_changes": 0,
-    "repos_with_star_gains": 0
+    "repos_with_star_changes": 2,
+    "repos_with_star_gains": 2
   },
   "repos": [
     {
@@ -23,13 +23,57 @@
       "archived": false,
       "fork": false,
       "default_branch": "main",
-      "stars": 595,
-      "issues": 0,
-      "pull_requests": 2,
+      "stars": 596,
+      "issues": 1,
+      "pull_requests": 1,
       "total": 2
+    },
+    {
+      "full_name": "rcarmo/pve-microvm",
+      "html_url": "https://github.com/rcarmo/pve-microvm",
+      "private": false,
+      "archived": false,
+      "fork": false,
+      "default_branch": "main",
+      "stars": 43,
+      "issues": 1,
+      "pull_requests": 1,
+      "total": 2
+    },
+    {
+      "full_name": "rcarmo/piclaw-addons",
+      "html_url": "https://github.com/rcarmo/piclaw-addons",
+      "private": false,
+      "archived": false,
+      "fork": false,
+      "default_branch": "main",
+      "stars": 1,
+      "issues": 1,
+      "pull_requests": 0,
+      "total": 1
     }
   ],
   "items": [
+    {
+      "repo": "rcarmo/pve-microvm",
+      "repo_url": "https://github.com/rcarmo/pve-microvm",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "pull_request",
+      "number": 4,
+      "title": "Fix download link for pve-microvm installation",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/pve-microvm/pull/4",
+      "author": "HeMan",
+      "created_at": "2026-04-27T19:26:51Z",
+      "updated_at": "2026-04-27T19:26:51Z",
+      "labels": [],
+      "assignees": [],
+      "body_preview": "",
+      "head_ref": "patch-1",
+      "base_ref": "main"
+    },
     {
       "repo": "rcarmo/piclaw",
       "repo_url": "https://github.com/rcarmo/piclaw",
@@ -43,7 +87,7 @@
       "url": "https://github.com/rcarmo/piclaw/pull/457",
       "author": "CodeEagle",
       "created_at": "2026-04-27T10:24:52Z",
-      "updated_at": "2026-04-27T15:23:04Z",
+      "updated_at": "2026-04-27T18:41:31Z",
       "labels": [],
       "assignees": [],
       "body_preview": "## Summary - keep provider card headers and expanded setup forms on separate rows - make the expanded setup pane fill the card width so it no longer collides w…",
@@ -51,24 +95,60 @@
       "base_ref": "main"
     },
     {
+      "repo": "rcarmo/pve-microvm",
+      "repo_url": "https://github.com/rcarmo/pve-microvm",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "issue",
+      "number": 3,
+      "title": "SmolBSD",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/pve-microvm/issues/3",
+      "author": "flenalio",
+      "created_at": "2026-04-27T11:22:42Z",
+      "updated_at": "2026-04-27T15:41:40Z",
+      "labels": [],
+      "assignees": [],
+      "body_preview": "Hello o/ Could you add SmolBSD to the test matrix? https://github.com/NetBSDfr/smolBSD It is a minimal NetBSD system with very fast boot times (~10ms). It coul…"
+    },
+    {
       "repo": "rcarmo/piclaw",
       "repo_url": "https://github.com/rcarmo/piclaw",
       "repo_private": false,
       "repo_archived": false,
-      "type": "pull_request",
-      "number": 456,
-      "title": "fix(entrypoint): ensure /workspace/logs exists and is writable by agent",
+      "type": "issue",
+      "number": 472,
+      "title": "Skip bun add for peer-only extension addons to avoid ~400MB redundant node_modules",
       "state": "open",
       "draft": false,
-      "url": "https://github.com/rcarmo/piclaw/pull/456",
-      "author": "pablopunk",
-      "created_at": "2026-04-27T07:47:51Z",
-      "updated_at": "2026-04-27T08:14:03Z",
+      "url": "https://github.com/rcarmo/piclaw/issues/472",
+      "author": "cjnova",
+      "created_at": "2026-04-27T14:11:36Z",
+      "updated_at": "2026-04-27T14:11:36Z",
       "labels": [],
       "assignees": [],
-      "body_preview": "Fixes #455 by creating `/workspace/logs` and chowning it to the `agent` usr before supervisord starts, matching the existing pattern for other workspace subdir…",
-      "head_ref": "fix/workspace-logs-permission",
-      "base_ref": "main"
+      "body_preview": "### Problem When installing an extension addon via the web Settings UI, `handleInstallAddon` runs `bun add --force <spec>` which creates a full `node_modules` …"
+    },
+    {
+      "repo": "rcarmo/piclaw-addons",
+      "repo_url": "https://github.com/rcarmo/piclaw-addons",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "issue",
+      "number": 4,
+      "title": "Hero buttons vertically misaligned on catalog site",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/piclaw-addons/issues/4",
+      "author": "cjnova",
+      "created_at": "2026-04-27T13:40:12Z",
+      "updated_at": "2026-04-27T13:40:12Z",
+      "labels": [
+        "bug"
+      ],
+      "assignees": [],
+      "body_preview": "On the catalog site at https://rcarmo.github.io/piclaw-addons/, the two action buttons (\"View on GitHub\" and \"↓ Packages\") in the hero section are vertically m…"
     }
   ]
 }

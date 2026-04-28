@@ -17,13 +17,49 @@ function serialize(value: unknown): unknown {
   return value;
 }
 
-const output = Object.fromEntries(
-  requested.map((name) => {
-    if (!(name in values)) {
-      throw new Error(`Unknown config export requested: ${name}`);
+function resolveRequestedValue(name: string): unknown {
+  if (name.startsWith("call:")) {
+    const fnName = name.slice(5);
+    const fn = values[fnName];
+    if (typeof fn !== "function") {
+      throw new Error(`Unknown config getter requested: ${fnName}`);
     }
-    return [name, serialize(values[name])];
-  })
+    return serialize(fn.call(config));
+  }
+
+  if (name.startsWith("same:")) {
+    const [fnName, exportName] = name.slice(5).split(":");
+    const fn = values[fnName];
+    if (typeof fn !== "function" || !(exportName in values)) {
+      throw new Error(`Unknown config identity check requested: ${name}`);
+    }
+    return fn.call(config) === values[exportName];
+  }
+
+  if (name.startsWith("frozen:")) {
+    const exportName = name.slice(7);
+    if (!(exportName in values)) {
+      throw new Error(`Unknown config freeze check requested: ${exportName}`);
+    }
+    return Object.isFrozen(values[exportName]);
+  }
+
+  if (name.startsWith("sealed:")) {
+    const exportName = name.slice(7);
+    if (!(exportName in values)) {
+      throw new Error(`Unknown config seal check requested: ${exportName}`);
+    }
+    return Object.isSealed(values[exportName]);
+  }
+
+  if (!(name in values)) {
+    throw new Error(`Unknown config export requested: ${name}`);
+  }
+  return serialize(values[name]);
+}
+
+const output = Object.fromEntries(
+  requested.map((name) => [name, resolveRequestedValue(name)])
 );
 
 console.log(JSON.stringify(output));

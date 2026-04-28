@@ -1582,14 +1582,23 @@ export async function processChat(
   if (output.status === "tool_complete") {
     // Provider stopped cleanly after tool use with no closing text reply.
     // This is not an error — emit a muted "done" pill and finalise normally.
+    // If there is a draft buffer (partial streamed text), surface it so the user
+    // sees the work that was done even though the model didn't emit a final reply.
+    const toolCompleteDraft = channel.getBuffer(turnId, "draft");
+    const toolCompleteDraftText = typeof toolCompleteDraft?.text === "string" ? toolCompleteDraft.text.trim() : "";
     const marker = buildTurnOutcomeMarker({
       kind: "tool_complete",
       label: "done",
       title: "Completed via tools",
-      detail: "Turn finished after tool use — no closing reply was emitted.",
+      detail: toolCompleteDraftText
+        ? "Turn finished after tool use — showing recovered draft."
+        : "Turn finished after tool use — no closing reply was emitted.",
       severity: "info",
+      draftRecovered: Boolean(toolCompleteDraftText),
     });
-    const persisted = persistVisibleFailureOutcome(marker);
+    const persisted = toolCompleteDraftText
+      ? persistTerminalOutcome(toolCompleteDraftText, marker)
+      : persistVisibleFailureOutcome(marker);
     if (persisted) {
       await finalizeSuccessfulRun();
     } else {

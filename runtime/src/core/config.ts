@@ -135,7 +135,11 @@ export function getRuntimeTimingConfig(): Readonly<RuntimeTimingConfig> {
 // ---------------------------------------------------------------------------
 
 /** Root of the persistent workspace (bind-mounted volume). */
-export const WORKSPACE_DIR = resolve(CLI_WORKSPACE || process.env.PICLAW_WORKSPACE || "/workspace");
+export function getWorkspaceDir(): string {
+  return resolve(CLI_WORKSPACE || process.env.PICLAW_WORKSPACE || "/workspace");
+}
+
+export const WORKSPACE_DIR = getWorkspaceDir();
 /** Directory for the SQLite database and related state. */
 export const STORE_DIR = resolve(
   CLI_WORKSPACE ? `${WORKSPACE_DIR}/.piclaw/store` : (process.env.PICLAW_STORE || `${WORKSPACE_DIR}/.piclaw/store`)

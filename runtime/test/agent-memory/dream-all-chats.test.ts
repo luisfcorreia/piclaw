@@ -3,12 +3,13 @@ import "../helpers.js";
 import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 
-import { WORKSPACE_DIR } from "../../src/core/config.js";
+import { getWorkspaceDir } from "../../src/core/config.js";
 import { getDb, initDatabase } from "../../src/db.js";
 import { runDreamMaintenance } from "../../src/dream.js";
 
 test("Dream refreshes daily notes from all chats, not just the current chat context", async () => {
-  rmSync(join(WORKSPACE_DIR, "notes"), { recursive: true, force: true });
+  const workspaceDir = getWorkspaceDir();
+  rmSync(join(workspaceDir, "notes"), { recursive: true, force: true });
 
   initDatabase();
   const conn = getDb();
@@ -43,7 +44,7 @@ test("Dream refreshes daily notes from all chats, not just the current chat cont
     days: 7,
   });
 
-  const dailyNotePath = join(WORKSPACE_DIR, "notes", "daily", `${day}.md`);
+  const dailyNotePath = join(workspaceDir, "notes", "daily", `${day}.md`);
   expect(existsSync(dailyNotePath)).toBe(true);
 
   const dailyNote = readFileSync(dailyNotePath, "utf8");

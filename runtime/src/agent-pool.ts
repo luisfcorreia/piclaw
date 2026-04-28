@@ -124,31 +124,43 @@ function parseNonNegativeInt(value: string | undefined, fallback: number): numbe
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-const MAIN_IDLE_TTL = parsePositiveMs(
-  process.env.PICLAW_MAIN_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
-  DEFAULT_MAIN_IDLE_TTL,
-);
-const SIDE_IDLE_TTL = parsePositiveMs(
-  process.env.PICLAW_SIDE_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
-  DEFAULT_SIDE_IDLE_TTL,
-);
-const CLEANUP_INTERVAL = parsePositiveMs(process.env.PICLAW_SESSION_CLEANUP_INTERVAL_MS, DEFAULT_CLEANUP_INTERVAL);
-const MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(
-  process.env.PICLAW_MAIN_SESSION_POOL_MAX_SIZE ?? process.env.PICLAW_SESSION_POOL_MAX_SIZE,
-  DEFAULT_MAIN_SESSION_POOL_MAX_SIZE,
-);
-const MEMORY_PRESSURE_RSS_BYTES = parseNonNegativeInt(
-  process.env.PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES,
-  DEFAULT_MEMORY_PRESSURE_RSS_BYTES,
-);
-const MEMORY_PRESSURE_MAIN_IDLE_TTL = parsePositiveMs(
-  process.env.PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS,
-  DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL,
-);
-const MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE = parseNonNegativeInt(
-  process.env.PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE,
-  DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE,
-);
+function loadAgentPoolConfig() {
+  const mainIdleTtlMs = parsePositiveMs(
+    process.env.PICLAW_MAIN_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
+    DEFAULT_MAIN_IDLE_TTL,
+  );
+  const sideIdleTtlMs = parsePositiveMs(
+    process.env.PICLAW_SIDE_SESSION_IDLE_TTL_MS ?? process.env.PICLAW_SESSION_IDLE_TTL_MS,
+    DEFAULT_SIDE_IDLE_TTL,
+  );
+  const cleanupIntervalMs = parsePositiveMs(process.env.PICLAW_SESSION_CLEANUP_INTERVAL_MS, DEFAULT_CLEANUP_INTERVAL);
+  const mainSessionPoolMaxSize = parseNonNegativeInt(
+    process.env.PICLAW_MAIN_SESSION_POOL_MAX_SIZE ?? process.env.PICLAW_SESSION_POOL_MAX_SIZE,
+    DEFAULT_MAIN_SESSION_POOL_MAX_SIZE,
+  );
+  const memoryPressureRssBytes = parseNonNegativeInt(
+    process.env.PICLAW_MAIN_SESSION_PRESSURE_RSS_BYTES,
+    DEFAULT_MEMORY_PRESSURE_RSS_BYTES,
+  );
+  const memoryPressureMainIdleTtlMs = parsePositiveMs(
+    process.env.PICLAW_MAIN_SESSION_PRESSURE_IDLE_TTL_MS,
+    DEFAULT_MEMORY_PRESSURE_MAIN_IDLE_TTL,
+  );
+  const memoryPressureMainSessionPoolMaxSize = parseNonNegativeInt(
+    process.env.PICLAW_MAIN_SESSION_PRESSURE_POOL_MAX_SIZE,
+    DEFAULT_MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE,
+  );
+
+  return {
+    mainIdleTtlMs,
+    sideIdleTtlMs,
+    cleanupIntervalMs,
+    mainSessionPoolMaxSize,
+    memoryPressureRssBytes,
+    memoryPressureMainIdleTtlMs,
+    memoryPressureMainSessionPoolMaxSize,
+  };
+}
 const DEFAULT_PROVIDER_RATE_LIMIT_MAX_RETRIES = 5;
 const DEFAULT_PROVIDER_RATE_LIMIT_BASE_DELAY_MS = 5000;
 
@@ -188,6 +200,7 @@ export class AgentPool {
   private branchManager: AgentPoolServices["branchManager"];
   private runtimeFacade: AgentPoolServices["runtimeFacade"];
   private sideStreamSimple?: NonNullable<AgentPoolOptions["sideStreamSimple"]>;
+  private readonly config = loadAgentPoolConfig();
 
   constructor(options: AgentPoolOptions = {}) {
     this.createSession = options.createSession;
@@ -211,7 +224,7 @@ export class AgentPool {
       modelRegistry: this.modelRegistry,
       settingsManager: this.settingsManager,
       workspaceDir: WORKSPACE_DIR,
-      mainSessionMaxSize: MAIN_SESSION_POOL_MAX_SIZE,
+      mainSessionMaxSize: this.config.mainSessionPoolMaxSize,
       bashOperations: this.bashOperations,
       createSession: this.createSession,
       createSideSession: this.createSideSession,
@@ -238,7 +251,7 @@ export class AgentPool {
     mkdirSync(this.logsDir, { recursive: true });
     this.cleanupTimer = setInterval(
       () => this.evictIdle(),
-      CLEANUP_INTERVAL,
+      this.config.cleanupIntervalMs,
     );
   }
 
@@ -575,8 +588,9 @@ export class AgentPool {
     if (pressure.active && !this.shuttingDown) {
       this.sessionManager.evictIdle({
         mainIdleTtlMs: pressure.mainIdleTtlMs,
-        sideIdleTtlMs: SIDE_IDLE_TTL,
+        sideIdleTtlMs: this.config.sideIdleTtlMs,
         mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
+        protectedChatJids: [chatJid],
       });
     }
     return runtime;
@@ -596,22 +610,22 @@ export class AgentPool {
 
   private getMemoryPressureMode(): { active: boolean; mainIdleTtlMs: number; mainSessionMaxSizeOverride: number | undefined } {
     const rssBytes = process.memoryUsage.rss();
-    const active = MEMORY_PRESSURE_RSS_BYTES > 0 && rssBytes >= MEMORY_PRESSURE_RSS_BYTES;
+    const active = this.config.memoryPressureRssBytes > 0 && rssBytes >= this.config.memoryPressureRssBytes;
     if (this.memoryPressureActive !== active) {
       this.memoryPressureActive = active;
       log.info(active ? "Memory pressure mode enabled" : "Memory pressure mode cleared", {
         operation: "memory_pressure.mode_change",
         rssBytes,
-        thresholdBytes: MEMORY_PRESSURE_RSS_BYTES,
-        mainIdleTtlMs: active ? MEMORY_PRESSURE_MAIN_IDLE_TTL : MAIN_IDLE_TTL,
-        mainSessionPoolMaxSize: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : MAIN_SESSION_POOL_MAX_SIZE,
+        thresholdBytes: this.config.memoryPressureRssBytes,
+        mainIdleTtlMs: active ? this.config.memoryPressureMainIdleTtlMs : this.config.mainIdleTtlMs,
+        mainSessionPoolMaxSize: active ? this.config.memoryPressureMainSessionPoolMaxSize : this.config.mainSessionPoolMaxSize,
       });
     }
 
     return {
       active,
-      mainIdleTtlMs: active ? Math.min(MAIN_IDLE_TTL, MEMORY_PRESSURE_MAIN_IDLE_TTL) : MAIN_IDLE_TTL,
-      mainSessionMaxSizeOverride: active ? MEMORY_PRESSURE_MAIN_SESSION_POOL_MAX_SIZE : undefined,
+      mainIdleTtlMs: active ? Math.min(this.config.mainIdleTtlMs, this.config.memoryPressureMainIdleTtlMs) : this.config.mainIdleTtlMs,
+      mainSessionMaxSizeOverride: active ? this.config.memoryPressureMainSessionPoolMaxSize : undefined,
     };
   }
 
@@ -619,7 +633,7 @@ export class AgentPool {
     const pressure = this.getMemoryPressureMode();
     this.sessionManager.evictIdle({
       mainIdleTtlMs: pressure.mainIdleTtlMs,
-      sideIdleTtlMs: SIDE_IDLE_TTL,
+      sideIdleTtlMs: this.config.sideIdleTtlMs,
       mainSessionMaxSizeOverride: pressure.mainSessionMaxSizeOverride,
     });
   }

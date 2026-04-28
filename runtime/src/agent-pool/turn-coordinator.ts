@@ -36,6 +36,7 @@ export interface AgentTerminalAssistantState {
   errorMessage: string | null;
   hadTextContent: boolean;
   hadToolCallContent: boolean;
+  hadThinkingContent: boolean;
 }
 
 export interface AgentTurnTracker {
@@ -228,11 +229,13 @@ export class AgentTurnCoordinator {
           const extracted = extractAssistantTextFromContent(message.content);
           const hadTextContent = contentBlocks.some((block) => block?.type === "text" && typeof block.text === "string" && block.text.trim().length > 0);
           const hadToolCallContent = contentBlocks.some((block) => block?.type === "toolCall");
+          const hadThinkingContent = contentBlocks.some((block: any) => block?.type === "thinking" && typeof block?.thinking === "string" && block.thinking.trim().length > 0);
           lastAssistantState = {
             stopReason: typeof message.stopReason === "string" && message.stopReason.trim() ? message.stopReason : null,
             errorMessage: typeof message.errorMessage === "string" && message.errorMessage.trim() ? message.errorMessage.trim() : null,
             hadTextContent,
             hadToolCallContent,
+            hadThinkingContent,
           };
           if (!messageHasDelta) {
             currentTurnText = extracted.text;
@@ -258,6 +261,7 @@ export class AgentTurnCoordinator {
             currentTurnTextLength: currentTurnText.length,
             hadTextContent,
             hadToolCallContent,
+            hadThinkingContent,
           });
         }
         messageHasDelta = false;

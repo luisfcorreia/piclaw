@@ -157,6 +157,10 @@ describe("web runtime state service", () => {
         statusMap.set(chatJid, status);
       },
       get: (chatJid: string) => statusMap.get(chatJid) ?? null,
+      clearPersistedStatuses: () => {
+        calls.push("status.clearPersisted");
+        statusMap.clear();
+      },
     };
     const pendingSteeringStore = {
       queue: (chatJid: string, timestamp: string | undefined) => {

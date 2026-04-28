@@ -1391,6 +1391,96 @@ test("runAgentPrompt retries when provider stops after a read-only tool call wit
   }
 });
 
+test("runAgentPrompt retries once when the provider stops after emitting thinking only", async () => {
+  const restoreEnv = setEnv({
+    PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",
+    PICLAW_TURN_AUTO_RECOVERY_MAX_ATTEMPTS: "2",
+    PICLAW_TURN_AUTO_RECOVERY_TOTAL_BUDGET_MS: "30000",
+  });
+
+  class StubSession {
+    private listeners: Array<(event: any) => void> = [];
+    sessionManager = { getLeafId: () => "leaf-1" };
+    isStreaming = false;
+    isCompacting = false;
+    isRetrying = false;
+    promptCalls = 0;
+    subscribe(listener: (event: any) => void) {
+      this.listeners.push(listener);
+      return () => {
+        this.listeners = this.listeners.filter((entry) => entry !== listener);
+      };
+    }
+    async prompt() {
+      this.promptCalls += 1;
+      if (this.promptCalls === 1) {
+        for (const listener of this.listeners) {
+          listener({
+            type: "message_end",
+            message: {
+              role: "assistant",
+              stopReason: "stop",
+              content: [{ type: "thinking", thinking: "Planning document updates" }],
+            },
+          });
+        }
+        return;
+      }
+      for (const listener of this.listeners) {
+        listener({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "final answer after retry" } });
+      }
+    }
+    async abort() {}
+  }
+
+  try {
+    const session = new StubSession();
+    const recoveryEvents: Array<{ type: string; classifier?: string; delayMs?: number }> = [];
+    const turnCoordinator = new AgentTurnCoordinator({
+      takeAttachments: () => [],
+      touchSession: () => {},
+      recordMessageUsage: () => {},
+    });
+
+    const result = await runAgentPrompt("update docs", "web:default", {
+      timeoutMs: 0,
+      onEvent: (event) => {
+        if (event.type === "recovery_start" || event.type === "recovery_end") {
+          recoveryEvents.push({
+            type: String(event.type),
+            classifier: typeof (event as any).classifier === "string" ? (event as any).classifier : undefined,
+            delayMs: typeof (event as any).delayMs === "number" ? (event as any).delayMs : undefined,
+          });
+        }
+      },
+    }, {
+      getOrCreateRuntime: async () => createRuntime(session, { maxRetries: 5, baseDelayMs: 1, maxDelayMs: 60000 }) as any,
+      turnCoordinator,
+      clearAttachments: () => {},
+      takeAttachments: () => [],
+      logsDir: createTestLogsDir(),
+      setActiveForkBaseLeaf: () => {},
+      clearActiveForkBaseLeaf: () => {},
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.result).toBe("final answer after retry");
+    expect(result.recovery).toEqual(expect.objectContaining({
+      attemptsUsed: 1,
+      recovered: true,
+      lastClassifier: "thinking_only_stop",
+      strategyHistory: ["retry"],
+    }));
+    expect(session.promptCalls).toBe(2);
+    expect(recoveryEvents).toEqual([
+      { type: "recovery_start", classifier: "thinking_only_stop", delayMs: 1 },
+      { type: "recovery_end", classifier: "thinking_only_stop", delayMs: undefined },
+    ]);
+  } finally {
+    restoreEnv();
+  }
+});
+
 test("runAgentPrompt uses existing retry settings for automatic recovery attempts", async () => {
   const restoreEnv = setEnv({
     PICLAW_TURN_AUTO_RECOVERY_ENABLED: "1",

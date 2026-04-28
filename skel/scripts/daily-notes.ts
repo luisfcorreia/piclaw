@@ -53,6 +53,7 @@ const FORCE     = args.force!;
 const NOTES_DIR = "/workspace/notes/daily";
 const SUMMARY_MARKER = "<!-- NEEDS_SUMMARY -->";
 const SUMMARY_UPDATE_MARKER = "<!-- NEEDS_SUMMARY_UPDATE -->";
+const INCOMPLETE_WARNING_TITLE = "> ⚠ **Incomplete daily note**";
 
 mkdirSync(NOTES_DIR, { recursive: true });
 
@@ -159,6 +160,48 @@ function appendSummaryUpdate(body: string, lastTs: string): string {
   const heading = `## Summary update (${time(lastTs)} UTC)`;
   const suffix = `\n\n${heading}\n\n${SUMMARY_UPDATE_MARKER}\n`;
   return body.trimEnd() + suffix;
+}
+
+function stripIncompleteWarning(body: string): string {
+  const lines = body.split("\n");
+  const output: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    if (!skipping && line.trim() === INCOMPLETE_WARNING_TITLE) {
+      skipping = true;
+      continue;
+    }
+    if (skipping) {
+      if (line.startsWith("> ") || line.trim() === ">" || line.trim() === "") continue;
+      skipping = false;
+    }
+    output.push(line);
+  }
+
+  return output.join("\n").replace(/^\n+/, "");
+}
+
+function buildIncompleteWarning(options: { summarisedUntil?: string; lastTimestamp: string; needsSummaryUpdate?: boolean }): string {
+  const lines = [INCOMPLETE_WARNING_TITLE];
+  if (options.needsSummaryUpdate && options.summarisedUntil) {
+    lines.push(`> Summary currently covers messages only through \`${options.summarisedUntil}\`.`);
+  }
+  lines.push(`> Latest message currently on file: \`${options.lastTimestamp}\`.`);
+  return `${lines.join("\n")}\n`;
+}
+
+function upsertIncompleteWarning(body: string, options: { summarisedUntil?: string; lastTimestamp: string; needsSummaryUpdate?: boolean } | null): string {
+  const cleaned = stripIncompleteWarning(body).trimStart();
+  if (!options) return cleaned;
+  const warning = buildIncompleteWarning(options).trimEnd();
+  const summaryIndex = cleaned.indexOf("\n## Summary");
+  if (summaryIndex >= 0) {
+    const before = cleaned.slice(0, summaryIndex).trimEnd();
+    const after = cleaned.slice(summaryIndex + 1).trimStart();
+    return `${before}\n\n${warning}\n\n${after}`;
+  }
+  return `${warning}\n\n${cleaned}`;
 }
 
 // ── Query ───────────────────────────────────────────────────────────────
@@ -279,6 +322,14 @@ for (const day of sortedDays) {
       body = appendSummaryUpdate(body, lastTimestamp);
     }
 
+    body = upsertIncompleteWarning(body, !summary
+      ? { lastTimestamp }
+      : needsPartialUpdate
+        ? { summarisedUntil: existingWm, lastTimestamp, needsSummaryUpdate: true }
+        : !hasWm
+          ? { lastTimestamp }
+          : null);
+
     const nextFields: Record<string, string> = {
       ...fields,
       date: frontMatterDate,
@@ -307,6 +358,9 @@ for (const day of sortedDays) {
   lines.push(`← ${sortedDays[sortedDays.indexOf(day) - 1] ? `[[${sortedDays[sortedDays.indexOf(day) - 1]}]]` : "—"} | ${sortedDays[sortedDays.indexOf(day) + 1] ? `[[${sortedDays[sortedDays.indexOf(day) + 1]}]]` : "—"} →`);
   lines.push("");
   lines.push("---");
+  lines.push("");
+  lines.push(INCOMPLETE_WARNING_TITLE);
+  lines.push(`> Latest message currently on file: \`${lastTimestamp}\`.`);
   lines.push("");
   lines.push("## Summary");
   lines.push("");

@@ -28,6 +28,7 @@ export type RecoveryClassifier =
   | "completed_turn_output"
   | "context_pressure"
   | "tool_history_pressure"
+  | "thinking_only_stop"
   | "transient"
   | "compaction_failure"
   | "unknown";
@@ -39,6 +40,7 @@ export interface RecoveryAttemptSnapshot {
   compactionErrorMessage?: string | null;
   sawCompactionIntent?: boolean;
   sawAssistantToolCall?: boolean;
+  sawThinkingOnlyStop?: boolean;
   onlyReadOnlyToolActivity?: boolean;
   toolUseBudgetExceeded?: boolean;
   assistantToolUseMessageCount?: number;
@@ -234,6 +236,31 @@ export function decideAutomaticRecovery(input: RecoveryDecisionInput): RecoveryD
       classifier: "completed_turn_output",
       strategy: null,
       reason: "Automatic recovery skipped because a completed assistant turn was already emitted during the failed run.",
+    };
+  }
+
+  if (input.snapshot.sawThinkingOnlyStop && !input.snapshot.hadToolActivity) {
+    if (input.recoveryAttemptsUsed === 0) {
+      return {
+        recover: true,
+        classifier: "thinking_only_stop",
+        strategy: "retry",
+        reason: "Provider stopped after emitting thinking only; retrying once before escalating.",
+      };
+    }
+    if (input.snapshot.sawCompactionIntent) {
+      return {
+        recover: true,
+        classifier: "context_pressure",
+        strategy: "compact_then_retry",
+        reason: "Thinking-only stop repeated under context pressure; compacting before one more retry.",
+      };
+    }
+    return {
+      recover: false,
+      classifier: "thinking_only_stop",
+      strategy: null,
+      reason: "Provider stopped after emitting thinking only again after a bounded retry.",
     };
   }
 

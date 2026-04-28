@@ -7,6 +7,7 @@ import { getDb } from "../db.js";
 export const DAILY_NOTES_DIR = resolve(WORKSPACE_DIR, "notes/daily");
 const SUMMARY_MARKER = "<!-- NEEDS_SUMMARY -->";
 const SUMMARY_UPDATE_MARKER = "<!-- NEEDS_SUMMARY_UPDATE -->";
+const INCOMPLETE_WARNING_TITLE = "> ⚠ **Incomplete daily note**";
 
 interface FrontMatter {
   fields: Record<string, string>;
@@ -38,6 +39,10 @@ export interface DailyNoteSummaryBacklog {
   partial: number;
   missing_watermark: number;
   dates: string[];
+}
+
+function getDailyNotesDir(): string {
+  return resolve(process.env.PICLAW_WORKSPACE || WORKSPACE_DIR, "notes/daily");
 }
 
 function formatDateLong(iso: string): string {
@@ -125,6 +130,53 @@ function appendSummaryUpdate(body: string, lastTs: string): string {
   return `${body.trimEnd()}\n\n${heading}\n\n${SUMMARY_UPDATE_MARKER}\n`;
 }
 
+function stripIncompleteWarning(body: string): string {
+  const lines = body.split("\n");
+  const output: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    if (!skipping && line.trim() === INCOMPLETE_WARNING_TITLE) {
+      skipping = true;
+      continue;
+    }
+    if (skipping) {
+      if (line.startsWith("> ") || line.trim() === ">" || line.trim() === "") {
+        continue;
+      }
+      skipping = false;
+    }
+    output.push(line);
+  }
+
+  return output.join("\n").replace(/^\n+/, "");
+}
+
+function buildIncompleteWarning(options: { summarisedUntil?: string; lastTimestamp: string; needsSummaryUpdate?: boolean }): string {
+  const lines = [INCOMPLETE_WARNING_TITLE];
+  if (options.needsSummaryUpdate && options.summarisedUntil) {
+    lines.push(`> Summary currently covers messages only through \`${options.summarisedUntil}\`.`);
+  }
+  lines.push(`> Latest message currently on file: \`${options.lastTimestamp}\`.`);
+  return `${lines.join("\n")}\n`;
+}
+
+function upsertIncompleteWarning(
+  body: string,
+  options: { summarisedUntil?: string; lastTimestamp: string; needsSummaryUpdate?: boolean } | null,
+): string {
+  const cleaned = stripIncompleteWarning(body).trimStart();
+  if (!options) return cleaned;
+  const warning = buildIncompleteWarning(options).trimEnd();
+  const summaryIndex = cleaned.indexOf("\n## Summary");
+  if (summaryIndex >= 0) {
+    const before = cleaned.slice(0, summaryIndex).trimEnd();
+    const after = cleaned.slice(summaryIndex + 1).trimStart();
+    return `${before}\n\n${warning}\n\n${after}`;
+  }
+  return `${warning}\n\n${cleaned}`;
+}
+
 function resolveScope(chatJid: string): { clause: string; params: string[]; mode: string; anchor: string } {
   const normalized = String(chatJid || '').trim();
   if (normalized === '*' || normalized.toLowerCase() === 'all') {
@@ -187,7 +239,8 @@ export function refreshDailyNotesFromMessages(options?: { days?: number; chatJid
   const chatJid = typeof options?.chatJid === "string" && options.chatJid.trim() ? options.chatJid.trim() : "web:default";
   const force = Boolean(options?.force);
 
-  mkdirSync(DAILY_NOTES_DIR, { recursive: true });
+  const dailyNotesDir = getDailyNotesDir();
+  mkdirSync(dailyNotesDir, { recursive: true });
   const db = getDb();
   const scope = resolveScope(chatJid);
   const params: any[] = [...scope.params];
@@ -219,7 +272,7 @@ export function refreshDailyNotesFromMessages(options?: { days?: number; chatJid
   let skipped = 0;
 
   for (const day of sortedDays) {
-    const filePath = `${DAILY_NOTES_DIR}/${day}.md`;
+    const filePath = `${dailyNotesDir}/${day}.md`;
     const messages = dayMap.get(day)!;
     const firstTimestamp = messages[0].timestamp;
     const lastTimestamp = messages[messages.length - 1].timestamp;
@@ -251,6 +304,14 @@ export function refreshDailyNotesFromMessages(options?: { days?: number; chatJid
         body = appendSummaryUpdate(body, lastTimestamp);
       }
 
+      body = upsertIncompleteWarning(body, !summary
+        ? { lastTimestamp }
+        : needsPartialUpdate
+          ? { summarisedUntil: existingWm, lastTimestamp, needsSummaryUpdate: true }
+          : !hasWm
+            ? { lastTimestamp }
+            : null);
+
       const nextFields: Record<string, string> = {
         ...fields,
         date: fields.date || day,
@@ -277,6 +338,9 @@ export function refreshDailyNotesFromMessages(options?: { days?: number; chatJid
     lines.push(`← ${sortedDays[sortedDays.indexOf(day) - 1] ? `[[${sortedDays[sortedDays.indexOf(day) - 1]}]]` : "—"} | ${sortedDays[sortedDays.indexOf(day) + 1] ? `[[${sortedDays[sortedDays.indexOf(day) + 1]}]]` : "—"} →`);
     lines.push("");
     lines.push("---");
+    lines.push("");
+    lines.push(INCOMPLETE_WARNING_TITLE);
+    lines.push(`> Latest message currently on file: \`${lastTimestamp}\`.`);
     lines.push("");
     lines.push("## Summary");
     lines.push("");

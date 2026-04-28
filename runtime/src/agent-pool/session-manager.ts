@@ -26,6 +26,13 @@ export interface PoolEntry {
   lastUsed: number;
 }
 
+/**
+ * Protect freshly touched sessions from immediate timer-based eviction.
+ * This avoids create→idle-cleanup→dispose churn when the cleanup loop runs
+ * right after a session was created or used.
+ */
+const RECENT_USE_EVICTION_GRACE_MS = 1_000;
+
 /** Dependencies required to manage AgentPool session lifecycles. */
 export interface AgentSessionManagerOptions {
   pool: Map<string, PoolEntry>;
@@ -369,11 +376,31 @@ export class AgentSessionManager {
     }
   }
 
-  evictIdle(options: { mainIdleTtlMs: number; sideIdleTtlMs: number; mainSessionMaxSizeOverride?: number | null }): void {
+  evictIdle(options: { mainIdleTtlMs: number; sideIdleTtlMs: number; mainSessionMaxSizeOverride?: number | null; protectedChatJids?: string[] }): void {
     const now = Date.now();
     const { mainIdleTtlMs, sideIdleTtlMs, mainSessionMaxSizeOverride } = options;
+    const explicitProtectedChatJids = new Set(
+      Array.isArray(options.protectedChatJids)
+        ? options.protectedChatJids.map((chatJid) => String(chatJid || "").trim()).filter(Boolean)
+        : [],
+    );
+    let protectedRecentMainChatJid: string | null = null;
+    let protectedRecentMainLastUsed = -Infinity;
+    for (const [jid, entry] of this.options.pool) {
+      if (explicitProtectedChatJids.has(jid)) continue;
+      if (entry.lastUsed > protectedRecentMainLastUsed || (entry.lastUsed === protectedRecentMainLastUsed && protectedRecentMainChatJid !== jid)) {
+        protectedRecentMainChatJid = jid;
+        protectedRecentMainLastUsed = entry.lastUsed;
+      }
+    }
+    if (protectedRecentMainChatJid && now - protectedRecentMainLastUsed > RECENT_USE_EVICTION_GRACE_MS) {
+      protectedRecentMainChatJid = null;
+    }
 
     for (const [jid, entry] of this.options.pool) {
+      if (explicitProtectedChatJids.has(jid) || jid === protectedRecentMainChatJid) {
+        continue;
+      }
       if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
         continue;
       }
@@ -382,7 +409,10 @@ export class AgentSessionManager {
       }
     }
 
-    this.enforceMainSessionPoolLimit({ maxSizeOverride: mainSessionMaxSizeOverride });
+    this.enforceMainSessionPoolLimit({
+      protectedChatJids: [...explicitProtectedChatJids],
+      maxSizeOverride: mainSessionMaxSizeOverride,
+    });
 
     for (const [jid, entry] of this.options.sidePool) {
       if (this.shouldKeepSessionCached(entry.runtime.session, now, entry)) {
