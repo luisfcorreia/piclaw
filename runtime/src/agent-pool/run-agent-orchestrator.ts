@@ -506,11 +506,25 @@ async function runPromptAttempt(
       const e = event as { toolCallId?: string; toolName?: string; args?: unknown };
       if (e.toolCallId && e.toolName) {
         trackToolStartActivity(chatJid, e.toolCallId, e.toolName, e.args);
+        options.onInfo?.("Tool execution started", {
+          operation: "tool.call.start",
+          chatJid,
+          toolName: e.toolName,
+          toolCallId: e.toolCallId,
+        });
       }
     }
     if (event.type === "tool_execution_end") {
-      const e = event as { toolCallId?: string };
+      const e = event as { toolCallId?: string; toolName?: string; isError?: boolean; durationMs?: number };
       if (e.toolCallId) trackToolEndActivity(chatJid, e.toolCallId);
+      options.onInfo?.("Tool execution ended", {
+        operation: "tool.call.end",
+        chatJid,
+        toolName: e.toolName ?? null,
+        toolCallId: e.toolCallId ?? null,
+        isError: Boolean(e.isError),
+        durationMs: typeof e.durationMs === "number" ? e.durationMs : null,
+      });
     }
 
     if (event.type === "message_update") {
@@ -765,7 +779,7 @@ export async function runAgentPrompt(
   const startTime = Date.now();
   options.clearAttachments(chatJid);
   updateSessionStreaming(chatJid, true);
-  const sessionModel = runOptions.onEvent ? null : null; // model tracked via session below
+  let modelLabel: string | null = null;
 
   // Tool-cap and tool-ceiling state – declared outside try so cleanup
   // can run in finally regardless of how the try exits.
@@ -783,7 +797,7 @@ export async function runAgentPrompt(
     const runtime = await options.getOrCreateRuntime(chatJid);
     let session = runtime.session;
     session = await maybeAutoRotateSession(session, runtime, chatJid, options);
-    const modelLabel = session.model ? `${session.model.provider}/${session.model.id}` : null;
+    modelLabel = session.model ? `${session.model.provider}/${session.model.id}` : null;
     updateSessionModel(chatJid, modelLabel, session.thinkingLevel ?? null);
     await maybeAutoCompactSessionBeforePrompt(session, chatJid, options, runOptions.onEvent);
     pruneOrphanToolResults(session, chatJid);
@@ -794,6 +808,7 @@ export async function runAgentPrompt(
     options.onInfo?.("Prompting session", {
       operation: "run_agent.prompt",
       chatJid,
+      model: modelLabel,
       promptLength: prompt.length,
     });
 
@@ -889,6 +904,7 @@ export async function runAgentPrompt(
           options.onInfo?.("Agent run completed", {
             operation: "run_agent.complete",
             chatJid,
+            model: modelLabel,
             durationMs: duration,
             outputChars: finalText?.length ?? 0,
             recoveryAttemptsUsed,
@@ -1086,6 +1102,7 @@ export async function runAgentPrompt(
     options.onError?.("Agent run failed", {
       operation: "run_agent",
       chatJid,
+      model: modelLabel,
       durationMs: duration,
       errorMessage: errorMsg,
       err,

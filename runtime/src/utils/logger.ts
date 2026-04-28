@@ -9,7 +9,33 @@
 import { getConfiguredLogLevel, shouldLog } from "./log-level.js";
 import type { LogLevel } from "./log-level.js";
 
+export type { LogLevel } from "./log-level.js";
+
 export type LogFields = Record<string, unknown> & { err?: unknown };
+
+/** Structured log record passed to sinks. */
+export interface LogRecord {
+  ts: string;
+  level: LogLevel;
+  module: string;
+  message: string;
+  [key: string]: unknown;
+}
+
+export type LogSink = (record: LogRecord) => void;
+
+const sinks: LogSink[] = [];
+
+/** Register a log sink that receives every structured log record. */
+export function addLogSink(sink: LogSink): void {
+  if (!sinks.includes(sink)) sinks.push(sink);
+}
+
+/** Remove a previously registered log sink. */
+export function removeLogSink(sink: LogSink): void {
+  const idx = sinks.indexOf(sink);
+  if (idx >= 0) sinks.splice(idx, 1);
+}
 
 export interface StructuredLogger {
   child(bindings: Record<string, unknown>): StructuredLogger;
@@ -118,13 +144,16 @@ function writeRecord(
   fields?: LogFields,
 ): void {
   if (!shouldLog(level, getConfiguredLogLevel())) return;
-  const record = buildRecord(level, moduleName, bindings, message, fields);
+  const record = buildRecord(level, moduleName, bindings, message, fields) as LogRecord;
   const line = JSON.stringify(record);
   if (level === "warn" || level === "error") {
     process.stderr.write(line + "\n");
-    return;
+  } else {
+    process.stdout.write(line + "\n");
   }
-  process.stdout.write(line + "\n");
+  for (const sink of sinks) {
+    try { sink(record); } catch { /* sinks must not break logging */ }
+  }
 }
 
 export function createLogger(moduleName: string, bindings: Record<string, unknown> = {}): StructuredLogger {

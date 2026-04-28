@@ -491,6 +491,7 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
   let lockFd: number | null = null;
   let shouldCleanupDreamChat = false;
   const dreamChatJid = buildDreamChatJid(chatJid, mode);
+  const dreamStartTime = Date.now();
   try {
     const lock = acquireDreamLock();
     if (lock.busyReason) {
@@ -547,6 +548,13 @@ export async function runDreamAgentTurn(options: { chatJid: string; days?: numbe
       result: `${(out.result || `${mode === "auto" ? "AutoDream" : "Dream"} complete.`).trimEnd()}\n${suffix}`,
     };
   } finally {
+    log.info("Dream maintenance completed", {
+      operation: "dream.complete",
+      chatJid,
+      mode,
+      days,
+      durationMs: Date.now() - dreamStartTime,
+    });
     if (lockFd !== null) releaseDreamLock(lockFd);
     if (shouldCleanupDreamChat) {
       await cleanupDreamChat(options.agentPool, dreamChatJid);
