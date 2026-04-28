@@ -5,14 +5,13 @@
  * HTTP endpoints from within the same process. Routes are keyed by path
  * prefix and dispatched before the 404 fallback in the request router.
  *
- * Use cases:
- *   - Serve WASM builds with COOP/COEP headers
- *   - Custom webhooks / API endpoints
- *   - Static asset serving with custom caching / headers
- *
- * Security: Routes are served *after* authentication checks, so only
- * authenticated users can access them. Extensions must sanitise paths
- * against traversal attacks themselves.
+ * Security:
+ *   - Routes are served *after* authentication checks, so only
+ *     authenticated users can access them.
+ *   - The registry freezes after startup so late-loaded code cannot
+ *     register new routes after the initial extension load pass.
+ *   - Every registration is logged with the extension path for audit.
+ *   - Extensions must sanitise paths against traversal attacks themselves.
  */
 
 import { createLogger } from "../../../utils/logger.js";
@@ -31,34 +30,73 @@ interface RegisteredRoute {
   prefix: string;
   handler: ExtensionRouteHandler;
   extensionPath: string;
+  registeredAt: string;
 }
 
 const routes: RegisteredRoute[] = [];
+let frozen = false;
+
+/**
+ * Freeze the route registry. After this call, no new routes can be
+ * registered. Called after the initial extension load pass completes.
+ */
+export function freezeExtensionRoutes(): void {
+  if (frozen) return;
+  frozen = true;
+  log.info("Extension route registry frozen", {
+    operation: "web_extension_routes.freeze",
+    routeCount: routes.length,
+    routes: routes.map(r => ({ prefix: r.prefix, extensionPath: r.extensionPath })),
+  });
+}
+
+/** Whether the route registry is currently frozen. */
+export function isExtensionRouteRegistryFrozen(): boolean {
+  return frozen;
+}
 
 /**
  * Register an extension HTTP route handler for a path prefix.
  * @param prefix Path prefix to match (normalized to begin with `/`).
  * @param handler Extension route callback invoked for matching requests.
  * @param extensionPath Extension identifier/path used for diagnostics.
- * @returns Nothing.
+ * @returns "created", "updated", or "rejected" if the registry is frozen.
  */
 export function registerExtensionRoute(
   prefix: string,
   handler: ExtensionRouteHandler,
   extensionPath: string
-): "created" | "updated" {
-  // Normalise: ensure prefix starts with /
+): "created" | "updated" | "rejected" {
   const normalised = prefix.startsWith("/") ? prefix : `/${prefix}`;
+  const now = new Date().toISOString();
+
+  if (frozen) {
+    log.warn("Rejected extension route registration — registry is frozen", {
+      operation: "web_extension_routes.register_rejected",
+      prefix: normalised,
+      extensionPath,
+    });
+    return "rejected";
+  }
+
   const existing = routes.find((route) => route.prefix === normalised && route.extensionPath === extensionPath);
   if (existing) {
     existing.handler = handler;
-    log.debug("Updated existing extension route registration", {
+    existing.registeredAt = now;
+    log.info("Updated extension route", {
+      operation: "web_extension_routes.register_updated",
       prefix: normalised,
       extensionPath,
     });
     return "updated";
   }
-  routes.push({ prefix: normalised, handler, extensionPath });
+
+  routes.push({ prefix: normalised, handler, extensionPath, registeredAt: now });
+  log.info("Registered extension route", {
+    operation: "web_extension_routes.register_created",
+    prefix: normalised,
+    extensionPath,
+  });
   return "created";
 }
 
@@ -100,19 +138,20 @@ export async function handleExtensionRoutes(
 }
 
 /**
- * Remove all registered extension routes (used during extension reload).
+ * Remove all registered extension routes and unfreeze (used during extension reload).
  * @returns Nothing.
  */
 export function clearExtensionRoutes(): void {
   routes.length = 0;
+  frozen = false;
 }
 
 /**
  * Return the currently registered extension route prefixes for diagnostics.
  * @returns A lightweight route listing with prefix and owning extension path.
  */
-export function getRegisteredRoutes(): Array<{ prefix: string; extensionPath: string }> {
-  return routes.map(r => ({ prefix: r.prefix, extensionPath: r.extensionPath }));
+export function getRegisteredRoutes(): Array<{ prefix: string; extensionPath: string; registeredAt: string }> {
+  return routes.map(r => ({ prefix: r.prefix, extensionPath: r.extensionPath, registeredAt: r.registeredAt }));
 }
 
 /**
@@ -127,7 +166,7 @@ export function getRegisteredRoutes(): Array<{ prefix: string; extensionPath: st
   prefix: string,
   handler: ExtensionRouteHandler,
   extensionPath?: string
-): "created" | "updated" => {
+): "created" | "updated" | "rejected" => {
   return registerExtensionRoute(prefix, handler, extensionPath || "unknown");
 };
 
