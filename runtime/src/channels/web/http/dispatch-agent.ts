@@ -23,6 +23,7 @@ import { getQuickActionsSettingsData, saveQuickActionsSettings } from "../handle
 import { getWorkspaceSettingsData, saveWorkspaceSettings } from "../handlers/workspace-settings.js";
 import {
   listKeychainEntries,
+  getKeychainEntry,
   setKeychainEntry,
   deleteKeychainEntry,
   listInjectableKeychainEntries,
@@ -448,7 +449,7 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
       }
     },
   },
-  {
+    {
     method: "DELETE",
     path: "/agent/keychain",
     handle: async (channel, req) => {
@@ -460,6 +461,60 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         }
         const removed = deleteKeychainEntry(name);
         return channel.json({ ok: true, removed });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return channel.json({ error: message }, 400);
+      }
+    },
+  },
+  {
+    method: "POST",
+    path: "/agent/keychain/reveal",
+    handle: async (channel, req) => {
+      try {
+        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
+        const name = typeof body.name === "string" ? body.name.trim() : "";
+        if (!name) {
+          return channel.json({ error: "Provide name." }, 400);
+        }
+        // Gate: TOTP if configured, otherwise master password
+        const { getWebRuntimeConfig } = await import("../../../core/config.js");
+        const { verifyTotp } = await import("../auth/auth.js");
+        const webConfig = getWebRuntimeConfig();
+        const totpSecret = (webConfig.totpSecret || "").trim();
+        if (totpSecret) {
+          // TOTP is configured — use it as the gate
+          const code = typeof body.totp_code === "string" ? body.totp_code.trim() : "";
+          if (!code) {
+            return channel.json({ error: "TOTP code required.", needs_totp: true }, 401);
+          }
+          if (!verifyTotp(totpSecret, code, webConfig.totpWindow)) {
+            return channel.json({ error: "Invalid TOTP code.", needs_totp: true }, 401);
+          }
+        } else {
+          // No TOTP — fall back to master password
+          const masterPassword = typeof body.master_password === "string" ? body.master_password : "";
+          if (!masterPassword) {
+            return channel.json({ error: "Master password required.", needs_master_password: true }, 401);
+          }
+          const configuredKey = process.env.PICLAW_KEYCHAIN_KEY || "";
+          const keyFile = process.env.PICLAW_KEYCHAIN_KEY_FILE;
+          let expectedKey = configuredKey;
+          if (!expectedKey && keyFile) {
+            try {
+              const { readFileSync } = await import("node:fs");
+              expectedKey = readFileSync(keyFile, "utf8").trim();
+            } catch { /* ignore */ }
+          }
+          if (!expectedKey) {
+            return channel.json({ error: "Keychain master key not configured on server." }, 500);
+          }
+          if (masterPassword !== expectedKey) {
+            return channel.json({ error: "Invalid master password.", needs_master_password: true }, 401);
+          }
+        }
+        const entry = await getKeychainEntry(name);
+        return channel.json({ ok: true, name: entry.name, secret: entry.secret, username: entry.username ?? null });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message }, 400);

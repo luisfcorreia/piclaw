@@ -582,7 +582,7 @@ async function handleStep2(
     return { status: "error", message: `OAuth for **${name}** didn't complete yet. Try clicking "Check & Continue" again after completing login in your browser.` };
   }
 
-  if (method === "configure") {
+  if (method === "configure" || method === "custom") {
     if (!def?.customFields) return { status: "error", message: "No configuration fields." };
     const baseUrl = String(data.baseUrl || "").trim();
     const apiKey = String(data.apiKey || "").trim();
