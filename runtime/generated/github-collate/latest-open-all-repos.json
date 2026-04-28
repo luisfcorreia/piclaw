@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-28T06:00:24.928Z",
+  "generated_at": "2026-04-28T10:00:25.924Z",
   "state": "open",
   "include_archived": false,
   "include_forks": false,
@@ -9,11 +9,11 @@
   "totals": {
     "repos_scanned": 21,
     "repos_with_items": 3,
-    "total_items": 5,
-    "total_issues": 3,
-    "total_pull_requests": 2,
-    "repos_with_star_changes": 2,
-    "repos_with_star_gains": 2
+    "total_items": 7,
+    "total_issues": 4,
+    "total_pull_requests": 3,
+    "repos_with_star_changes": 1,
+    "repos_with_star_gains": 1
   },
   "repos": [
     {
@@ -23,10 +23,10 @@
       "archived": false,
       "fork": false,
       "default_branch": "main",
-      "stars": 596,
-      "issues": 1,
-      "pull_requests": 1,
-      "total": 2
+      "stars": 597,
+      "issues": 2,
+      "pull_requests": 2,
+      "total": 4
     },
     {
       "full_name": "rcarmo/pve-microvm",
@@ -54,6 +54,66 @@
     }
   ],
   "items": [
+    {
+      "repo": "rcarmo/piclaw",
+      "repo_url": "https://github.com/rcarmo/piclaw",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "pull_request",
+      "number": 474,
+      "title": "Added opencode zen as LLM provider",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/piclaw/pull/474",
+      "author": "luisfcorreia",
+      "created_at": "2026-04-28T09:38:08Z",
+      "updated_at": "2026-04-28T09:38:08Z",
+      "labels": [],
+      "assignees": [],
+      "body_preview": "(tested working, might have bugs)",
+      "head_ref": "main",
+      "base_ref": "main"
+    },
+    {
+      "repo": "rcarmo/piclaw",
+      "repo_url": "https://github.com/rcarmo/piclaw",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "issue",
+      "number": 381,
+      "title": "Adopt pi-coding-agent 0.70.x and apply Piclaw-side follow-ups",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/piclaw/issues/381",
+      "author": "piclaw-bot",
+      "created_at": "2026-04-23T15:56:50Z",
+      "updated_at": "2026-04-28T07:46:31Z",
+      "labels": [
+        "area:extensions",
+        "area:runtime",
+        "priority:high"
+      ],
+      "assignees": [],
+      "body_preview": "# Adopt pi-coding-agent 0.70.x and apply Piclaw-side follow-ups ## Summary Piclaw is still pinned to `@mariozechner/pi-coding-agent@0.67.6`, while upstream has…"
+    },
+    {
+      "repo": "rcarmo/pve-microvm",
+      "repo_url": "https://github.com/rcarmo/pve-microvm",
+      "repo_private": false,
+      "repo_archived": false,
+      "type": "issue",
+      "number": 3,
+      "title": "SmolBSD",
+      "state": "open",
+      "draft": false,
+      "url": "https://github.com/rcarmo/pve-microvm/issues/3",
+      "author": "flenalio",
+      "created_at": "2026-04-27T11:22:42Z",
+      "updated_at": "2026-04-28T07:42:37Z",
+      "labels": [],
+      "assignees": [],
+      "body_preview": "Hello o/ Could you add SmolBSD to the test matrix? https://github.com/NetBSDfr/smolBSD It is a minimal NetBSD system with very fast boot times (~10ms in best c…"
+    },
     {
       "repo": "rcarmo/pve-microvm",
       "repo_url": "https://github.com/rcarmo/pve-microvm",
@@ -93,24 +153,6 @@
       "body_preview": "## Summary - keep provider card headers and expanded setup forms on separate rows - make the expanded setup pane fill the card width so it no longer collides w…",
       "head_ref": "codex/fix-provider-setup-spacing",
       "base_ref": "main"
-    },
-    {
-      "repo": "rcarmo/pve-microvm",
-      "repo_url": "https://github.com/rcarmo/pve-microvm",
-      "repo_private": false,
-      "repo_archived": false,
-      "type": "issue",
-      "number": 3,
-      "title": "SmolBSD",
-      "state": "open",
-      "draft": false,
-      "url": "https://github.com/rcarmo/pve-microvm/issues/3",
-      "author": "flenalio",
-      "created_at": "2026-04-27T11:22:42Z",
-      "updated_at": "2026-04-27T15:41:40Z",
-      "labels": [],
-      "assignees": [],
-      "body_preview": "Hello o/ Could you add SmolBSD to the test matrix? https://github.com/NetBSDfr/smolBSD It is a minimal NetBSD system with very fast boot times (~10ms). It coul…"
     },
     {
       "repo": "rcarmo/piclaw",

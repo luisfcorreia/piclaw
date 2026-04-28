@@ -92,11 +92,30 @@ export function AddonsSection({ setStatus, filter = '' }) {
             const data = await resp.json();
             if (data.error) { setStatus?.(data.error, 'error'); setBusy(null); return; }
             setStatus?.(data.message || 'Restarting piclaw\u2026', 'success');
+            setRestartRequired(false);
+            // Poll until backend is back, then refresh the addon list
+            const pollUntilReady = async (maxAttempts = 30, intervalMs = 2000) => {
+                for (let i = 0; i < maxAttempts; i++) {
+                    await new Promise(r => setTimeout(r, intervalMs));
+                    try {
+                        const probe = await fetch('/agent/addons', { signal: AbortSignal.timeout(3000) });
+                        if (probe.ok) {
+                            await loadAddons();
+                            setBusy(null);
+                            setStatus?.('Restart complete \u2014 add-ons refreshed.', 'success');
+                            return;
+                        }
+                    } catch { /* backend not ready yet */ }
+                }
+                setBusy(null);
+                setStatus?.('Backend did not return in time. Reload the page manually.', 'warning');
+            };
+            void pollUntilReady();
         } catch (e) {
             setStatus?.(String(e.message || e), 'error');
             setBusy(null);
         }
-    }, [busy, setStatus]);
+    }, [busy, setStatus, loadAddons]);
 
     if (loading) return html`<div class="settings-loading">Fetching add-ons\u2026</div>`;
     if (!addons) return html`<div class="settings-section"><p class="settings-hint">Could not load add-ons.</p></div>`;

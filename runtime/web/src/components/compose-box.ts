@@ -1471,42 +1471,43 @@ export function ComposeBox({
         onInjectQueuedFollowup?.(queuedItem);
     };
 
-    const handleReturnQueuedFollowup = (queuedItem) => {
+    const handleReturnQueuedFollowup = useCallback((queuedItem) => {
         if (!queuedItem) return;
         const restored = buildReturnedQueuedDraft(queuedItem?.content || '');
-        console.info('[compose-box] Returning queued item to editor', { content: restored.content?.slice(0, 80), fileRefs: restored.fileRefs?.length, messageRefs: restored.messageRefs?.length });
-        setSubmitError(null);
-        setSubmitNotice(null);
-        setMediaFiles([]);
-        onSetFileRefs?.(restored.fileRefs);
-        onSetMessageRefs?.(restored.messageRefs);
-        // Defer content restoration until after the queue removal re-render
-        // settles. Without this, the optimistic queue-item removal can trigger
-        // a re-render that races with the setContent update.
         const text = restored.content;
-        setContent(text);
-        // Also directly set the textarea value as a safety net in case React
-        // batching delays the controlled value update.
-        requestAnimationFrame(() => {
-            const textarea = textareaRef.current;
-            if (textarea && textarea.value !== text) {
-                textarea.value = text;
-            }
-            resizeTextarea();
-            if (textarea) {
-                const len = text.length;
-                textarea.selectionStart = len;
-                textarea.selectionEnd = len;
-                textarea.focus();
-            }
-        });
-        // Remove from the displayed queue AFTER setting content.
+        console.info('[compose-box] Returning queued item to editor', { text: text?.slice(0, 80), fileRefs: restored.fileRefs?.length, messageRefs: restored.messageRefs?.length });
+
+        // 1. Remove from queue first (synchronous optimistic update)
         try {
             onRemoveQueuedFollowup?.(queuedItem);
         } catch (error) {
-            console.warn('[compose-box] Failed to remove returned queued follow-up from the sidebar queue.', error);
+            console.warn('[compose-box] Failed to remove returned queued follow-up.', error);
         }
-    };
+
+        // 2. Restore content AFTER removal settles — use setTimeout to escape
+        //    React's batched state update from the queue removal.
+        setTimeout(() => {
+            setSubmitError(null);
+            setSubmitNotice(null);
+            setMediaFiles([]);
+            onSetFileRefs?.(restored.fileRefs);
+            onSetMessageRefs?.(restored.messageRefs);
+            setContent(text);
+
+            // 3. Force the textarea value and focus after the state update renders
+            requestAnimationFrame(() => {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                    textarea.value = text;
+                    resizeTextarea();
+                    const len = text.length;
+                    textarea.selectionStart = len;
+                    textarea.selectionEnd = len;
+                    textarea.focus();
+                }
+            });
+        }, 0);
+    }, [onRemoveQueuedFollowup, onSetFileRefs, onSetMessageRefs]);
 
     const handlePopupKeyboardEvent = useCallback((e) => {
         if (searchMode || (!showModelPopup && !showSessionPopup) || e?.isComposing) return false;

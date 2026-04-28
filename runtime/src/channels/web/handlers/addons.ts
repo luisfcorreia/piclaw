@@ -14,6 +14,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, mkdirSync, un
 import { join, dirname, extname, resolve } from "path";
 import { WORKSPACE_DIR } from "../../../core/config.js";
 import { requestGracefulShutdown } from "../../../runtime/shutdown-registry.js";
+import { createLogger } from "../../../utils/logger.js";
 
 const DEFAULT_CATALOG_URL = "https://raw.githubusercontent.com/rcarmo/piclaw-addons/main/catalog.json";
 const DEFAULT_CATALOG_URLS = [DEFAULT_CATALOG_URL] as const;
@@ -87,7 +88,7 @@ function ensureAddonsDir(): string {
       dependencies: {},
     }, null, 2));
   }
-  // Ensure .npmrc points at GitHub Packages for @rcarmo scoped packages.
+  // Ensure .npmrc routes @rcarmo scoped packages to GitHub Packages.
   // The token is read from the GITHUB_PICLAW_BOT_PAT env var (keychain-injected).
   const npmrcPath = join(addonsDir, ".npmrc");
   const ghToken = process.env.GITHUB_PICLAW_BOT_PAT || process.env.GITHUB_TOKEN || "";
@@ -99,10 +100,12 @@ function ensureAddonsDir(): string {
     try {
       const existing = existsSync(npmrcPath) ? readFileSync(npmrcPath, "utf-8") : "";
       if (existing !== npmrc) writeFileSync(npmrcPath, npmrc);
-    } catch (e) { void e; /* best effort */ }
+    } catch { /* best effort */ }
   }
   return addonsDir;
 }
+
+const addonLog = createLogger("web.handlers.addons");
 
 /**
  * Remove a stale node_modules symlink (created by the session extension-link
@@ -375,7 +378,12 @@ async function runBunCommand(args: string[], cwd: string): Promise<{ ok: boolean
       cwd,
       stdout: "pipe",
       stderr: "pipe",
-      env: { ...process.env, BUN_INSTALL: undefined },
+      env: {
+        ...process.env,
+        BUN_INSTALL: undefined,
+        // Use a writable cache dir to avoid EACCES errors on system bun cache
+        BUN_INSTALL_CACHE_DIR: process.env.BUN_INSTALL_CACHE_DIR || join(cwd, ".cache"),
+      },
     });
     const [exitCode, stdout, stderr] = await Promise.all([
       proc.exited,
@@ -636,6 +644,66 @@ export async function handleInstallAddon(
   const installPlan = resolveAddonInstallSpec(addon);
 
   try {
+    // Primary path: download the addon directly from the catalog repo.
+    // This works for all addons without needing registry auth.
+    const files = await fetchAddonFileTree(addonPath);
+    if (files.length > 0) {
+      const stagingRoot = join(addonsDir, '.staging');
+      const stagingDir = join(stagingRoot, `${addon.name}-${Date.now()}`);
+      mkdirSync(stagingDir, { recursive: true });
+
+      let downloaded = 0;
+      try {
+        for (const filePath of files) {
+          const relativePath = filePath.slice(addonPath.length + 1);
+          if (!relativePath) continue;
+          await downloadFile(filePath, join(stagingDir, relativePath));
+          downloaded++;
+        }
+
+        const pkgJsonPath = join(addonsDir, "package.json");
+        try {
+          const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
+          if (!pkg.dependencies) pkg.dependencies = {};
+          pkg.dependencies[addon.name] = addon.version || "*";
+          writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
+        } catch (e) { void e; }
+
+        const addonPkg = join(stagingDir, "package.json");
+        if (existsSync(addonPkg)) {
+          await runBunCommand(["bun", "install", "--force"], stagingDir);
+        }
+
+        const cleanup = await removeAddonDirRobustly(destDir, addonsDir);
+        mkdirSync(dirname(destDir), { recursive: true });
+        renameSync(stagingDir, destDir);
+
+        const installedVersion = getInstalledVersion(addon.name);
+        return json({
+          ok: true,
+          slug,
+          name: addon.name,
+          installedVersion,
+          filesDownloaded: downloaded,
+          installKind: "direct-download",
+          installSpec: installPlan.spec,
+          message: `Installed ${addon.name}@${installedVersion || addon.version || "?"} from catalog. Restart required to load.`,
+          ...(cleanup.deferred ? { warning: "Existing files were moved aside for cleanup on restart." } : {}),
+        });
+      } finally {
+        try {
+          if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
+        } catch { /* staging cleanup is best-effort */ }
+      }
+    }
+
+    // Fallback: try bun add for addons published to a public npm registry.
+    // This only works for packages on npmjs.org (not GitHub Packages).
+    addonLog.info("No repo files found; falling back to bun add", {
+      operation: "addons.install.bun_add_fallback",
+      slug,
+      spec: installPlan.spec,
+    });
     const packageInstall = await runBunCommand(["bun", "add", "--force", installPlan.spec], addonsDir);
     if (packageInstall.ok) {
       const lookupName = installPlan.scopedName || addon.name;
@@ -651,66 +719,8 @@ export async function handleInstallAddon(
       });
     }
 
-    // Legacy fallback: download the package directory directly when the catalog
-    // still points at repo paths or the package has not been published yet.
-    const files = await fetchAddonFileTree(addonPath);
-    if (files.length === 0) {
-      const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
-      return json({ error: `Install failed via ${installPlan.kind}: ${detail}` }, 500);
-    }
-
-    const stagingRoot = join(addonsDir, '.staging');
-    const stagingDir = join(stagingRoot, `${addon.name}-${Date.now()}`);
-    mkdirSync(stagingDir, { recursive: true });
-
-    let downloaded = 0;
-    try {
-      for (const filePath of files) {
-        const relativePath = filePath.slice(addonPath.length + 1);
-        if (!relativePath) continue;
-        await downloadFile(filePath, join(stagingDir, relativePath));
-        downloaded++;
-      }
-
-      const pkgJsonPath = join(addonsDir, "package.json");
-      try {
-        const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf-8"));
-        if (!pkg.dependencies) pkg.dependencies = {};
-        pkg.dependencies[addon.name] = addon.version || "*";
-        writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2));
-      } catch (e) { console.debug('[addons] failed to write package.json stub', e); }
-
-      const addonPkg = join(stagingDir, "package.json");
-      if (existsSync(addonPkg)) {
-        await runBunCommand(["bun", "install", "--force"], stagingDir);
-      }
-
-      const cleanup = await removeAddonDirRobustly(destDir, addonsDir);
-      mkdirSync(dirname(destDir), { recursive: true });
-      renameSync(stagingDir, destDir);
-
-      const installedVersion = getInstalledVersion(addon.name);
-      const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
-      const warnings = [`Package install via ${installPlan.kind} failed first: ${detail}`];
-      if (cleanup.deferred) warnings.push('Existing add-on files were moved aside for cleanup on restart because Windows kept them locked.');
-      return json({
-        ok: true,
-        slug,
-        name: addon.name,
-        installedVersion,
-        filesDownloaded: downloaded,
-        installKind: "legacy-download",
-        installSpec: installPlan.spec,
-        message: `Installed ${addon.name}@${installedVersion || "?"} via legacy package download fallback. Restart required to load.`,
-        warning: warnings.join(' '),
-      });
-    } finally {
-      try {
-        if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
-      } catch (cleanupError) {
-        console.debug('[addons] failed to clean staging dir', cleanupError);
-      }
-    }
+    const detail = packageInstall.stderr || packageInstall.stdout || `bun add exited ${packageInstall.exitCode}`;
+    return json({ error: `Install failed: ${detail}` }, 500);
   } catch (e) {
     return json({ error: `Install failed: ${describeAddonOperationFailure('install', e)}` }, 500);
   }
