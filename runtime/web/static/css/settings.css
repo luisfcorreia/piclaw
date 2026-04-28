@@ -1713,6 +1713,7 @@
 }
 .settings-keychain-table {
     width: 100%;
+    table-layout: fixed;
 }
 .settings-keychain-table th {
     text-align: left;
@@ -1724,18 +1725,26 @@
     padding: 6px 10px;
     border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.2));
 }
+.settings-keychain-table th:nth-child(1) { width: 28%; }
+.settings-keychain-table th:nth-child(2) { width: 10%; }
+.settings-keychain-table th:nth-child(3) { width: 28%; }
+.settings-keychain-table th:nth-child(4) { width: 16%; }
+.settings-keychain-table th:nth-child(5) { width: 18%; }
 .settings-keychain-table td {
     padding: 7px 10px;
     font-size: 0.88em;
     border-bottom: 1px solid var(--border-color, rgba(128,128,128,0.1));
-    white-space: normal;
-    vertical-align: top;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 .settings-keychain-name {
     font-family: var(--font-mono, monospace);
     font-weight: 500;
-    word-break: break-all;
-    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .settings-keychain-type-badge {
     display: inline-block;
@@ -1760,7 +1769,9 @@
     background: var(--bg-secondary, rgba(128,128,128,0.12));
     white-space: nowrap;
     max-width: 100%;
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 .settings-keychain-date {
     color: var(--text-secondary, #888);
@@ -1768,7 +1779,8 @@
 }
 .settings-keychain-actions {
     text-align: right;
-    min-width: 88px;
+    white-space: nowrap;
+    overflow: visible;
 }
 .settings-keychain-delete-btn {
     border: none;
