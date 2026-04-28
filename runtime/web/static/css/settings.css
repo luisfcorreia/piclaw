@@ -1956,3 +1956,60 @@
     font-size: 0.82em;
     color: var(--error-color, #e55);
 }
+
+/* ── Keychain prompt rows (master password + TOTP) ────────────────── */
+.settings-keychain-prompt-row td {
+    padding: 0 10px 8px !important;
+    border-bottom: none;
+}
+.settings-keychain-prompt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--bg-secondary, rgba(0,0,0,0.08));
+    flex-wrap: wrap;
+}
+.settings-keychain-prompt-label {
+    font-size: 0.84em;
+    font-weight: 600;
+    color: var(--text-secondary, #888);
+    white-space: nowrap;
+}
+.settings-keychain-prompt-input {
+    padding: 5px 8px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.9em;
+    min-width: 180px;
+    flex: 1;
+    max-width: 300px;
+}
+.settings-keychain-prompt-submit,
+.settings-keychain-prompt-cancel {
+    padding: 5px 12px;
+    border: 1px solid var(--border-color, rgba(128,128,128,0.3));
+    border-radius: 6px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.84em;
+    white-space: nowrap;
+}
+.settings-keychain-prompt-submit {
+    background: var(--accent-color, #4a9eff);
+    color: #fff;
+    border-color: transparent;
+}
+.settings-keychain-prompt-submit:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.settings-keychain-prompt-error {
+    font-size: 0.82em;
+    color: var(--error-color, #e55);
+    width: 100%;
+}

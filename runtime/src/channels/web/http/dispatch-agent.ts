@@ -464,18 +464,40 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         if (!name) {
           return channel.json({ error: "Provide name." }, 400);
         }
-        // If TOTP is configured, require a valid code
+        // Gate: TOTP if configured, otherwise master password
         const { getWebRuntimeConfig } = await import("../../../core/config.js");
         const { verifyTotp } = await import("../auth/auth.js");
         const webConfig = getWebRuntimeConfig();
         const totpSecret = (webConfig.totpSecret || "").trim();
         if (totpSecret) {
+          // TOTP is configured — use it as the gate
           const code = typeof body.totp_code === "string" ? body.totp_code.trim() : "";
           if (!code) {
             return channel.json({ error: "TOTP code required.", needs_totp: true }, 401);
           }
           if (!verifyTotp(totpSecret, code, webConfig.totpWindow)) {
             return channel.json({ error: "Invalid TOTP code.", needs_totp: true }, 401);
+          }
+        } else {
+          // No TOTP — fall back to master password
+          const masterPassword = typeof body.master_password === "string" ? body.master_password : "";
+          if (!masterPassword) {
+            return channel.json({ error: "Master password required.", needs_master_password: true }, 401);
+          }
+          const configuredKey = process.env.PICLAW_KEYCHAIN_KEY || "";
+          const keyFile = process.env.PICLAW_KEYCHAIN_KEY_FILE;
+          let expectedKey = configuredKey;
+          if (!expectedKey && keyFile) {
+            try {
+              const { readFileSync } = await import("node:fs");
+              expectedKey = readFileSync(keyFile, "utf8").trim();
+            } catch { /* ignore */ }
+          }
+          if (!expectedKey) {
+            return channel.json({ error: "Keychain master key not configured on server." }, 500);
+          }
+          if (masterPassword !== expectedKey) {
+            return channel.json({ error: "Invalid master password.", needs_master_password: true }, 401);
           }
         }
         const entry = await getKeychainEntry(name);
