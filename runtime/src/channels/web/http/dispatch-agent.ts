@@ -25,7 +25,6 @@ import {
   listKeychainEntries,
   setKeychainEntry,
   deleteKeychainEntry,
-  getKeychainEntry,
   listInjectableKeychainEntries,
   type KeychainEntryMetadata,
 } from "../../../secure/keychain.js";
@@ -280,7 +279,20 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         { id: "antigravity", name: "Antigravity (Google Cloud)", hasOAuth: true, hasApiKey: false },
         { id: "openai-codex", name: "OpenAI Codex", hasOAuth: true, hasApiKey: false },
         { id: "openai", name: "OpenAI", hasOAuth: false, hasApiKey: true, apiKeyHint: "sk-proj-..." },
-        { id: "opencode", name: "OpenCode", hasOAuth: false, hasApiKey: true, apiKeyHint: "OPENCODE_API_KEY" },
+        {
+          id: "opencode-zen",
+          name: "OpenCode ZEN",
+          hasOAuth: false,
+          hasApiKey: true,
+          isCustom: true,
+          customApi: "openai-completions",
+          customFields: [
+            { key: "baseUrl", label: "Base URL", placeholder: "https://opencode.ai/zen", required: true },
+            { key: "apiKey", label: "ZEN API Key", placeholder: "oc-...", required: true },
+            { key: "modelId", label: "Model ID", placeholder: "big-pickle", required: true },
+            { key: "modelIds", label: "Additional models (comma-separated)", placeholder: "gpt-5.4,glm-5,kimi-k2", required: false },
+          ],
+        },
         {
           id: "azure-openai", name: "Azure OpenAI", hasOAuth: false, hasApiKey: false, isCustom: true,
           customFields: [
@@ -448,60 +460,6 @@ const EXACT_AGENT_ROUTES: ExactAgentRoute[] = [
         }
         const removed = deleteKeychainEntry(name);
         return channel.json({ ok: true, removed });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return channel.json({ error: message }, 400);
-      }
-    },
-  },
-  {
-    method: "POST",
-    path: "/agent/keychain/reveal",
-    handle: async (channel, req) => {
-      try {
-        const body = await req.json().catch(() => ({})) as Record<string, unknown>;
-        const name = typeof body.name === "string" ? body.name.trim() : "";
-        if (!name) {
-          return channel.json({ error: "Provide name." }, 400);
-        }
-        // Gate: TOTP if configured, otherwise master password
-        const { getWebRuntimeConfig } = await import("../../../core/config.js");
-        const { verifyTotp } = await import("../auth/auth.js");
-        const webConfig = getWebRuntimeConfig();
-        const totpSecret = (webConfig.totpSecret || "").trim();
-        if (totpSecret) {
-          // TOTP is configured — use it as the gate
-          const code = typeof body.totp_code === "string" ? body.totp_code.trim() : "";
-          if (!code) {
-            return channel.json({ error: "TOTP code required.", needs_totp: true }, 401);
-          }
-          if (!verifyTotp(totpSecret, code, webConfig.totpWindow)) {
-            return channel.json({ error: "Invalid TOTP code.", needs_totp: true }, 401);
-          }
-        } else {
-          // No TOTP — fall back to master password
-          const masterPassword = typeof body.master_password === "string" ? body.master_password : "";
-          if (!masterPassword) {
-            return channel.json({ error: "Master password required.", needs_master_password: true }, 401);
-          }
-          const configuredKey = process.env.PICLAW_KEYCHAIN_KEY || "";
-          const keyFile = process.env.PICLAW_KEYCHAIN_KEY_FILE;
-          let expectedKey = configuredKey;
-          if (!expectedKey && keyFile) {
-            try {
-              const { readFileSync } = await import("node:fs");
-              expectedKey = readFileSync(keyFile, "utf8").trim();
-            } catch { /* ignore */ }
-          }
-          if (!expectedKey) {
-            return channel.json({ error: "Keychain master key not configured on server." }, 500);
-          }
-          if (masterPassword !== expectedKey) {
-            return channel.json({ error: "Invalid master password.", needs_master_password: true }, 401);
-          }
-        }
-        const entry = await getKeychainEntry(name);
-        return channel.json({ ok: true, name: entry.name, secret: entry.secret, username: entry.username ?? null });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return channel.json({ error: message }, 400);

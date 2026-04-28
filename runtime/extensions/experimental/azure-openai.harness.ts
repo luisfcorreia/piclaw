@@ -114,7 +114,7 @@ const SKEW_SECONDS = Number(process.env.AOAI_TOKEN_SKEW_SECONDS || "300");
 // When AOAI_API_KEY is set, use it directly instead of fetching managed-identity tokens.
 // This is used when connecting through a proxy that handles MI auth on our behalf.
 const STATIC_API_KEY = process.env.AOAI_API_KEY || "";
-const TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode", PROVIDER, FOUNDRY_PROVIDER]);
+const TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode-zen", PROVIDER, FOUNDRY_PROVIDER]);
 const ENABLE_EXPERIMENTAL_AZURE_CLIENT_REQUEST_ID = /^(1|true|yes)$/i.test(process.env.AOAI_EXPERIMENT_AZURE_CLIENT_REQUEST_ID || "");
 const DISABLE_TOOLS = /^(1|true|yes)$/i.test(process.env.AOAI_DISABLE_TOOLS || "");
 const DISABLE_REASONING = /^(1|true|yes)$/i.test(process.env.AOAI_DISABLE_REASONING || "");
